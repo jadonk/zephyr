@@ -89,3 +89,7 @@
 	cs-pin = <11>;
 	cs-gpios = <&gpio0 11 0>;
 };
+
+&rtc {
+	status = "okay";
+};

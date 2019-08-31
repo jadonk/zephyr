@@ -1,0 +1,74 @@
+dist: xenial
+sudo: true
+language:
+  - c
+addons:
+  apt:
+    packages:
+    - build-essential
+    - git
+    - autoconf
+    - automake
+    - libtool
+    - pkg-config
+    - python3
+    - python3-pip
+    - curl
+    - gperf
+    - flex
+    - bison
+
+env:
+  - >
+      ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
+      GNUARMEMB_TOOLCHAIN_PATH=/opt/arm/gcc-arm-none-eabi-8-2019-q3-update
+      ZEPHYR_BASE=${TRAVIS_BUILD_DIR}
+      ZEPHYRPROJECT=${ZEPHYR_BASE}/..
+
+before_script:
+  # Zephyr requires a fairly recent version of cmake and Ubuntu only has an older version in their repository
+  # Also, Travis has a bunch of built-in tools in their xenial image, and cmake is one of them. It's incompatible, so is removed too.
+  - sudo rm -Rf /usr/local/cmake-3.12.4/
+  - sudo sh .ci/scripts/install-cmake.sh
+
+  # Zephyr requires a fairly recent version of the Device Tree Compiler and Ubuntu only has an older version in their repository
+  - sudo sh .ci/scripts/build-and-install-dtc.sh
+
+  # Zephyr requires an arm bare-metal toolchain and does not (yet) support the toolchain in Ubuntu's repositories
+  - sudo sh .ci/scripts/install-gnuarmemb.sh
+
+  # For CI, we need to build Zephyr wihtout west. The process is mostly documented here:
+  # https://docs.zephyrproject.org/latest/getting_started/index.html
+  # https://docs.zephyrproject.org/latest/guides/west/without-west.html#no-west
+  # https://docs.zephyrproject.org/latest/guides/modules.html#without-west
+  #
+  # Locally, it's simple (with west):
+  # pip3 install --user west
+  # west init zephyrproject
+  # cd zephyrproject
+  # west update
+  # pip3 install --user -r zephyr/scripts/requirements.txt
+  # cd zephyr
+  # source zephyr-env.sh
+  # export ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
+  # export GNUARMEMB_TOOLCHAIN_PATH=/opt/arm/gcc-arm-none-eabi-8-2019-q3-update
+  # west build -b cc1352r1_launchxl samples/hello_world
+  #
+  # However, without west, there are some tricky parts.
+  # the checkout-modules.py script checks out all of the modules in the west.yml file, and also exports a list of (valid) modules
+  # to ZEPHYR_MODULES.txt.
+  - sudo python3 .ci/scripts/checkout-modules.py ${ZEPHYR_BASE}/west.yml ${ZEPHYRPROJECT} ${ZEPHYR_BASE}/ZEPHYR_MODULES.txt
+  - sudo pip3 install --upgrade pip
+  - pip3 install --user setuptools
+  - pip3 install --user -r scripts/requirements.txt
+
+script:
+  - mkdir build
+  - >
+      export PATH=`pwd`/scripts:`printenv PATH`;
+      printenv PATH;
+      cmake -DZEPHYR_MODULES="`cat ZEPHYR_MODULES.txt`" -B build -DBOARD=cc1352r1_launchxl samples/hello_world;
+      make -j`nproc --all` -C build
+
+notifications:
+  email: false

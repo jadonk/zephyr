@@ -1,4 +1,3 @@
-
 .. raw:: html
 
    <a href="https://www.zephyrproject.org">
@@ -9,8 +8,11 @@
 
    <a href="https://bestpractices.coreinfrastructure.org/projects/74"><img
    src="https://bestpractices.coreinfrastructure.org/projects/74/badge"></a>
-   <img
-   src="https://api.shippable.com/projects/58ffb2b8baa5e307002e1d79/badge?branch=master">
+   <!-- <img
+   src="https://api.shippable.com/projects/58ffb2b8baa5e307002e1d79/badge?branch=master"> -->
+   <a href="https://travis-ci.com/friedtco/zephyr"><img
+   src="https://travis-ci.com/friedtco/zephyr.svg?token=tYzdCS7A2DzjyBybyBVm&branch=feature/1/zephyr-automated-builds">
+   </a>
 
 
 The Zephyr Project is a scalable real-time operating system (RTOS) supporting

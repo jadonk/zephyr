@@ -72,3 +72,17 @@ script:
 
 notifications:
   email: false
+
+deploy:
+  - provider: releases
+    api_key: "${GH_TOKEN}"
+    file:
+      - build/zephyr.bin
+      - build/zephyr.elf
+      - build/zephyr.hex
+      - build/zephyr.lst
+      - build/zephyr.map
+      - build/zephyr.stat
+    skip_cleanup: true
+    on:
+      tags: true

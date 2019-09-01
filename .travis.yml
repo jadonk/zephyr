@@ -65,7 +65,7 @@ before_script:
 
 script:
   - mkdir build
-  - cmake -DZEPHYR_MODULES="`cat ZEPHYR_MODULES.txt`" -B build -DBOARD=cc1352r1_launchxl samples/hello_world
+  - cmake -DZEPHYR_MODULES="`cat ZEPHYR_MODULES.txt`" -B build -DBOARD=cc1352r1_launchxl samples/subsys/greybus
   - make -j`nproc --all` -C build
 
 notifications:

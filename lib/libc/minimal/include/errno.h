@@ -113,6 +113,7 @@ extern "C" {
 
 /* aio errors (should be under posix) */
 #define ECANCELED 72 /* Operation canceled */
+#define EOVERFLOW 73 /* Value too large for defined data type */
 
 #define ERRMAX 81
 

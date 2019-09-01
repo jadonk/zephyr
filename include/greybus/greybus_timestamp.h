@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2014-2015 Google Inc.
+/**
+ * Copyright (c) 2015 Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,58 +26,25 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdarg.h>
-#include <greybus/debug.h>
-//#include <arch/irq.h>
-#include <irq.h>
+#ifndef __CONFIGS_ARA_BRIDGE_INCLUDE_TIMESTAMPS_H
+#define  __CONFIGS_ARA_BRIDGE_INCLUDE_TIMESTAMPS_H
 
-#if defined(CONFIG_GB_LOG_ERROR)
-#define GB_LOG_LEVEL (GB_LOG_ERROR)
-#elif defined(CONFIG_GB_LOG_WARNING)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING)
-#elif defined(CONFIG_GB_LOG_DEBUG)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG)
-#elif defined(CONFIG_GB_LOG_DUMP)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG | \
-                      GB_LOG_DUMP)
-#else
-#define GB_LOG_LEVEL (GB_LOG_INFO)
+#include <nuttx/time.h>
+
+#define GREYBUS_FW_TIMESTAMP_APBRIDGE 0x01
+#define GREYBUS_FW_TIMESTAMP_GPBRDIGE 0x02
+
+struct gb_timestamp {
+    bool tag;
+    struct timeval entry_time;
+    struct timeval exit_time;
+};
+
+void gb_timestamp_tag_entry_time(struct gb_timestamp *ts,
+                                 unsigned int cportid);
+void gb_timestamp_tag_exit_time(struct gb_timestamp *ts,
+                                unsigned int cportid);
+void gb_timestamp_log(struct gb_timestamp *ts, unsigned int cportid,
+                      void *payload, size_t len, int id);
+void gb_timestamp_init(void);
 #endif
-#define GB_DUMP_LINE_LENGTH 16
-
-int gb_log_level = GB_LOG_LEVEL;
-
-void _gb_log(const char *fmt, ...)
-{
-    //irqstate_t flags;
-    va_list ap;
-
-    va_start(ap, fmt);
-    //flags = irqsave();
-    lowvsyslog(fmt, ap);
-    irqrestore(flags);
-    va_end(ap);
-}
-
-void _gb_dump(const char *func, __u8 *buf, size_t size)
-{
-    int i, count;
-    irqstate_t flags;
-
-    flags = irqsave();
-    lowsyslog("%s:\n", func);
-    count = 0;
-    for (i = 0; i < size; i++) {
-        lowsyslog( "%02x ", buf[i]);
-        /**
-         * Add line-breaks every so often to divide the dump into readable rows
-         * of bytes.
-         */
-        if (++count == GB_DUMP_LINE_LENGTH) {
-            lowsyslog("\n");
-            count = 0;
-        }
-    }
-    lowsyslog("\n");
-    irqrestore(flags);
-}

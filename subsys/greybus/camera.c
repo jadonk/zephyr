@@ -30,14 +30,14 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
-#include <queue.h>
+//#include <queue.h>
 
-#include <nuttx/device.h>
-#include <nuttx/device_camera.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/debug.h>
-#include <apps/greybus-utils/utils.h>
-#include <arch/byteorder.h>
+//#include <device.h>
+//#include <device_camera.h>
+#include <greybus/greybus.h>
+#include <greybus/debug.h>
+//#include <apps/greybus-utils/utils.h>
+#include <sys/byteorder.h>
 
 #include "camera-gb.h"
 
@@ -144,6 +144,9 @@ static uint8_t gb_camera_capabilities(struct gb_operation *operation)
     return GB_OP_SUCCESS;
 }
 
+struct csi_bus_config {
+	int fooey;
+};
 /**
  * @brief Configure camera module streams
  *
@@ -213,10 +216,10 @@ static uint8_t gb_camera_configure_streams(struct gb_operation *operation)
     /* convert data for driver */
     for (i = 0; i < num_streams; i++) {
         lldbg("   stream #%d\n", i);
-        cfg_request[i].width = le16_to_cpu(cfg_set_req[i].width);
-        cfg_request[i].height = le16_to_cpu(cfg_set_req[i].height);
-        cfg_request[i].format = le16_to_cpu(cfg_set_req[i].format);
-        cfg_request[i].padding = le16_to_cpu(cfg_set_req[i].padding);
+        cfg_request[i].width = sys_le16_to_cpu(cfg_set_req[i].width);
+        cfg_request[i].height = sys_le16_to_cpu(cfg_set_req[i].height);
+        cfg_request[i].format = sys_le16_to_cpu(cfg_set_req[i].format);
+        cfg_request[i].padding = sys_le16_to_cpu(cfg_set_req[i].padding);
 
         lldbg("    width = %d \n", cfg_request[i].width);
         lldbg("    height = %d \n", cfg_request[i].height);
@@ -266,8 +269,8 @@ static uint8_t gb_camera_configure_streams(struct gb_operation *operation)
     response->flags = res_flags;
     response->num_lanes = csi_cfg.num_lanes;
     response->padding = 0;
-    response->bus_freq = cpu_to_le32(csi_cfg.bus_freq);
-    response->lines_per_second = cpu_to_le32(csi_cfg.lines_per_second);
+    response->bus_freq = sys_cpu_to_le32(csi_cfg.bus_freq);
+    response->lines_per_second = sys_cpu_to_le32(csi_cfg.lines_per_second);
 
     lldbg("flags = 0x%2x\n", response->flags);
     lldbg("lanes = %u\n", response->num_lanes);
@@ -285,9 +288,9 @@ static uint8_t gb_camera_configure_streams(struct gb_operation *operation)
         lldbg("    data_type = %d \n", cfg_answer[i].data_type);
         lldbg("    max_size = %d \n", cfg_answer[i].max_size);
 
-        cfg_ans_resp->width = cpu_to_le16(cfg_answer[i].width);
-        cfg_ans_resp->height = cpu_to_le16(cfg_answer[i].height);
-        cfg_ans_resp->format = cpu_to_le16(cfg_answer[i].format);
+        cfg_ans_resp->width = sys_cpu_to_le16(cfg_answer[i].width);
+        cfg_ans_resp->height = sys_cpu_to_le16(cfg_answer[i].height);
+        cfg_ans_resp->format = sys_cpu_to_le16(cfg_answer[i].format);
         cfg_ans_resp->virtual_channel = cfg_answer[i].virtual_channel;
 
         /*
@@ -301,7 +304,7 @@ static uint8_t gb_camera_configure_streams(struct gb_operation *operation)
         cfg_ans_resp->padding[0] = 0;
         cfg_ans_resp->padding[1] = 0;
         cfg_ans_resp->padding[2] = 0;
-        cfg_ans_resp->max_size = cpu_to_le32(cfg_answer[i].max_size);
+        cfg_ans_resp->max_size = sys_cpu_to_le32(cfg_answer[i].max_size);
     }
 
     ret = GB_OP_SUCCESS;
@@ -354,9 +357,9 @@ static uint8_t gb_camera_capture(struct gb_operation *operation)
         return GB_OP_NO_MEMORY;
     }
 
-    capt_req->request_id = le32_to_cpu(request->request_id);
+    capt_req->request_id = sys_le32_to_cpu(request->request_id);
     capt_req->streams = request->streams;
-    capt_req->num_frames = le32_to_cpu(request->num_frames);
+    capt_req->num_frames = sys_le32_to_cpu(request->num_frames);
     capt_req->settings = request->settings;
     capt_req->settings_size = request_size - sizeof(*request);
 
@@ -415,7 +418,7 @@ static uint8_t gb_camera_flush(struct gb_operation *operation)
         return GB_OP_NO_MEMORY;
     }
 
-    response->request_id = cpu_to_le32(request_id);
+    response->request_id = sys_cpu_to_le32(request_id);
     lldbg("    request_id = %d + \n", request_id);
 
     lldbg("gb_camera_flush() + \n");

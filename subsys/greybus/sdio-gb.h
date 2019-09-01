@@ -29,7 +29,7 @@
 #ifndef _GREYBUS_SDIO_GB_H_
 #define _GREYBUS_SDIO_GB_H_
 
-#include <nuttx/greybus/types.h>
+#include <greybus/types.h>
 
 /* Greybus SDIO Operation Types */
 #define GB_SDIO_TYPE_PROTOCOL_VERSION           0x01

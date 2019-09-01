@@ -33,22 +33,22 @@
 #include <string.h>
 #include <errno.h>
 
-#include <nuttx/config.h>
-#include <nuttx/list.h>
-#include <nuttx/device.h>
-#include <nuttx/device_audio_board.h>
-#include <nuttx/device_codec.h>
-#include <nuttx/device_i2s.h>
-#include <nuttx/ring_buf.h>
-#include <nuttx/util.h>
-#include <nuttx/wdog.h>
-#include <nuttx/list.h>
-#include <nuttx/greybus/types.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/debug.h>
-#include <nuttx/unipro/unipro.h>
+//#include <config.h>
+//#include <list.h>
+#include <device.h>
+//#include <device_audio_board.h>
+//#include <device_codec.h>
+//#include <device_i2s.h>
+//#include <ring_buf.h>
+//#include <util.h>
+//#include <wdog.h>
+//#include <list.h>
+#include <greybus/types.h>
+#include <greybus/greybus.h>
+#include <greybus/debug.h>
+#include <unipro/unipro.h>
 
-#include <arch/byteorder.h>
+#include <sys/byteorder.h>
 
 #include "audio-gb.h"
 
@@ -245,7 +245,7 @@ static uint8_t gb_audio_get_topology_size_handler(
         return gb_errno_to_op_result(ret);
     }
 
-    response->size = cpu_to_le16(size);
+    response->size = sys_cpu_to_le16(size);
 
     return GB_OP_SUCCESS;
 }
@@ -406,7 +406,7 @@ static uint8_t gb_audio_get_pcm_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -420,8 +420,8 @@ static uint8_t gb_audio_get_pcm_handler(struct gb_operation *operation)
         return GB_OP_NO_MEMORY;
     }
 
-    response->format = cpu_to_le32(dai->format);
-    response->rate = cpu_to_le32(dai->rate);
+    response->format = sys_cpu_to_le32(dai->format);
+    response->rate = sys_cpu_to_le32(dai->rate);
     response->channels = dai->channels;
     response->sig_bits = dai->sig_bits;
 
@@ -436,28 +436,28 @@ static int gb_audio_gb_to_i2s_format(uint32_t gb_format, uint32_t *i2s_format,
     switch (gb_format) {
     case GB_AUDIO_PCM_FMT_S8:
     case GB_AUDIO_PCM_FMT_U8:
-        *i2s_format = DEVICE_I2S_PCM_FMT_8;
+        //*i2s_format = DEVICE_I2S_PCM_FMT_8;
         *bytes = 1;
         break;
     case GB_AUDIO_PCM_FMT_S16_LE:
     case GB_AUDIO_PCM_FMT_S16_BE:
     case GB_AUDIO_PCM_FMT_U16_LE:
     case GB_AUDIO_PCM_FMT_U16_BE:
-        *i2s_format = DEVICE_I2S_PCM_FMT_16;
+        //*i2s_format = DEVICE_I2S_PCM_FMT_16;
         *bytes = 2;
         break;
     case GB_AUDIO_PCM_FMT_S24_LE:
     case GB_AUDIO_PCM_FMT_S24_BE:
     case GB_AUDIO_PCM_FMT_U24_LE:
     case GB_AUDIO_PCM_FMT_U24_BE:
-        *i2s_format = DEVICE_I2S_PCM_FMT_24;
+        //*i2s_format = DEVICE_I2S_PCM_FMT_24;
         *bytes = 3;
         break;
     case GB_AUDIO_PCM_FMT_S32_LE:
     case GB_AUDIO_PCM_FMT_S32_BE:
     case GB_AUDIO_PCM_FMT_U32_LE:
     case GB_AUDIO_PCM_FMT_U32_BE:
-        *i2s_format = DEVICE_I2S_PCM_FMT_32;
+        //*i2s_format = DEVICE_I2S_PCM_FMT_32;
         *bytes = 4;
         break;
     default:
@@ -472,55 +472,55 @@ static int gb_audio_convert_rate(uint32_t gb_rate, uint32_t *i2s_rate,
 {
     switch (gb_rate) {
     case GB_AUDIO_PCM_RATE_5512:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_5512;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_5512;
         *freq = 5512;
         break;
     case GB_AUDIO_PCM_RATE_8000:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_8000;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_8000;
         *freq = 8000;
         break;
     case GB_AUDIO_PCM_RATE_11025:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_11025;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_11025;
         *freq = 11025;
         break;
     case GB_AUDIO_PCM_RATE_16000:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_16000;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_16000;
         *freq = 16000;
         break;
     case GB_AUDIO_PCM_RATE_22050:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_22050;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_22050;
         *freq = 22050;
         break;
     case GB_AUDIO_PCM_RATE_32000:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_32000;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_32000;
         *freq = 32000;
         break;
     case GB_AUDIO_PCM_RATE_44100:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_44100;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_44100;
         *freq = 44100;
         break;
     case GB_AUDIO_PCM_RATE_48000:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_48000;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_48000;
         *freq = 48000;
         break;
     case GB_AUDIO_PCM_RATE_64000:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_64000;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_64000;
         *freq = 64000;
         break;
     case GB_AUDIO_PCM_RATE_88200:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_88200;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_88200;
         *freq = 88200;
         break;
     case GB_AUDIO_PCM_RATE_96000:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_96000;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_96000;
         *freq = 96000;
         break;
     case GB_AUDIO_PCM_RATE_176400:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_176400;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_176400;
         *freq = 176400;
         break;
     case GB_AUDIO_PCM_RATE_192000:
-        *i2s_rate = DEVICE_I2S_PCM_RATE_192000;
+        //*i2s_rate = DEVICE_I2S_PCM_RATE_192000;
         *freq = 192000;
         break;
     default:
@@ -533,21 +533,21 @@ static int gb_audio_convert_rate(uint32_t gb_rate, uint32_t *i2s_rate,
 static int gb_audio_determine_protocol(struct device_codec_dai *codec_dai,
                                        struct device_i2s_dai *i2s_dai)
 {
-    if ((codec_dai->protocol & DEVICE_CODEC_PROTOCOL_I2S) &&
-        (i2s_dai->protocol & DEVICE_I2S_PROTOCOL_I2S)) {
-        codec_dai->protocol = DEVICE_CODEC_PROTOCOL_I2S;
-        i2s_dai->protocol = DEVICE_I2S_PROTOCOL_I2S;
-    } else if ((codec_dai->protocol & DEVICE_CODEC_PROTOCOL_LR_STEREO) &&
-               (i2s_dai->protocol & DEVICE_I2S_PROTOCOL_LR_STEREO)) {
-        codec_dai->protocol = DEVICE_CODEC_PROTOCOL_LR_STEREO;
-        i2s_dai->protocol = DEVICE_I2S_PROTOCOL_LR_STEREO;
-    } else if ((codec_dai->protocol & DEVICE_CODEC_PROTOCOL_PCM) &&
-               (i2s_dai->protocol & DEVICE_I2S_PROTOCOL_PCM)) {
-        codec_dai->protocol = DEVICE_CODEC_PROTOCOL_PCM;
-        i2s_dai->protocol = DEVICE_I2S_PROTOCOL_PCM;
-    } else {
-        return -EINVAL;
-    }
+//    if ((codec_dai->protocol & DEVICE_CODEC_PROTOCOL_I2S) &&
+//        (i2s_dai->protocol & DEVICE_I2S_PROTOCOL_I2S)) {
+//        codec_dai->protocol = DEVICE_CODEC_PROTOCOL_I2S;
+//        i2s_dai->protocol = DEVICE_I2S_PROTOCOL_I2S;
+//    } else if ((codec_dai->protocol & DEVICE_CODEC_PROTOCOL_LR_STEREO) &&
+//               (i2s_dai->protocol & DEVICE_I2S_PROTOCOL_LR_STEREO)) {
+//        codec_dai->protocol = DEVICE_CODEC_PROTOCOL_LR_STEREO;
+//        i2s_dai->protocol = DEVICE_I2S_PROTOCOL_LR_STEREO;
+//    } else if ((codec_dai->protocol & DEVICE_CODEC_PROTOCOL_PCM) &&
+//               (i2s_dai->protocol & DEVICE_I2S_PROTOCOL_PCM)) {
+//        codec_dai->protocol = DEVICE_CODEC_PROTOCOL_PCM;
+//        i2s_dai->protocol = DEVICE_I2S_PROTOCOL_PCM;
+//    } else {
+//        return -EINVAL;
+//    }
 
     return 0;
 }
@@ -555,17 +555,17 @@ static int gb_audio_determine_protocol(struct device_codec_dai *codec_dai,
 static int gb_audio_determine_wclk_polarity(struct device_codec_dai *codec_dai,
                                             struct device_i2s_dai *i2s_dai)
 {
-    if ((codec_dai->wclk_polarity & DEVICE_CODEC_POLARITY_NORMAL) &&
-        (i2s_dai->wclk_polarity & DEVICE_I2S_POLARITY_NORMAL)) {
-        codec_dai->wclk_polarity = DEVICE_CODEC_POLARITY_NORMAL;
-        i2s_dai->wclk_polarity = DEVICE_I2S_POLARITY_NORMAL;
-    } else if ((codec_dai->wclk_polarity & DEVICE_CODEC_POLARITY_REVERSED) &&
-               (i2s_dai->wclk_polarity & DEVICE_I2S_POLARITY_REVERSED)) {
-        codec_dai->wclk_polarity = DEVICE_CODEC_POLARITY_REVERSED;
-        i2s_dai->wclk_polarity = DEVICE_I2S_POLARITY_REVERSED;
-    } else {
-        return -EINVAL;
-    }
+//    if ((codec_dai->wclk_polarity & DEVICE_CODEC_POLARITY_NORMAL) &&
+//        (i2s_dai->wclk_polarity & DEVICE_I2S_POLARITY_NORMAL)) {
+//        codec_dai->wclk_polarity = DEVICE_CODEC_POLARITY_NORMAL;
+//        i2s_dai->wclk_polarity = DEVICE_I2S_POLARITY_NORMAL;
+//    } else if ((codec_dai->wclk_polarity & DEVICE_CODEC_POLARITY_REVERSED) &&
+//               (i2s_dai->wclk_polarity & DEVICE_I2S_POLARITY_REVERSED)) {
+//        codec_dai->wclk_polarity = DEVICE_CODEC_POLARITY_REVERSED;
+//        i2s_dai->wclk_polarity = DEVICE_I2S_POLARITY_REVERSED;
+//    } else {
+//        return -EINVAL;
+//    }
 
     return 0;
 }
@@ -574,19 +574,19 @@ static int gb_audio_determine_wclk_change_edge(uint8_t codec_clk_role,
                                             struct device_codec_dai *codec_dai,
                                             struct device_i2s_dai *i2s_dai)
 {
-    if ((codec_clk_role == DEVICE_CODEC_ROLE_MASTER) &&
-        (codec_dai->wclk_change_edge & DEVICE_CODEC_EDGE_FALLING) &&
-        (i2s_dai->wclk_change_edge & DEVICE_I2S_EDGE_RISING)) {
-        codec_dai->wclk_change_edge = DEVICE_CODEC_EDGE_FALLING;
-        i2s_dai->wclk_change_edge = DEVICE_I2S_EDGE_RISING;
-    } if ((codec_clk_role == DEVICE_CODEC_ROLE_SLAVE) &&
-          (codec_dai->wclk_change_edge & DEVICE_CODEC_EDGE_RISING) &&
-          (i2s_dai->wclk_change_edge & DEVICE_I2S_EDGE_FALLING)) {
-          codec_dai->wclk_change_edge = DEVICE_CODEC_EDGE_RISING;
-          i2s_dai->wclk_change_edge = DEVICE_I2S_EDGE_FALLING;
-    } else {
-        return -EINVAL;
-    }
+//    if ((codec_clk_role == DEVICE_CODEC_ROLE_MASTER) &&
+//        (codec_dai->wclk_change_edge & DEVICE_CODEC_EDGE_FALLING) &&
+//        (i2s_dai->wclk_change_edge & DEVICE_I2S_EDGE_RISING)) {
+//        codec_dai->wclk_change_edge = DEVICE_CODEC_EDGE_FALLING;
+//        i2s_dai->wclk_change_edge = DEVICE_I2S_EDGE_RISING;
+//    } if ((codec_clk_role == DEVICE_CODEC_ROLE_SLAVE) &&
+//          (codec_dai->wclk_change_edge & DEVICE_CODEC_EDGE_RISING) &&
+//          (i2s_dai->wclk_change_edge & DEVICE_I2S_EDGE_FALLING)) {
+//          codec_dai->wclk_change_edge = DEVICE_CODEC_EDGE_RISING;
+//          i2s_dai->wclk_change_edge = DEVICE_I2S_EDGE_FALLING;
+//    } else {
+//        return -EINVAL;
+//    }
 
     return 0;
 }
@@ -594,29 +594,29 @@ static int gb_audio_determine_wclk_change_edge(uint8_t codec_clk_role,
 static int gb_audio_determine_data_edges(struct device_codec_dai *codec_dai,
                                          struct device_i2s_dai *i2s_dai)
 {
-    if ((codec_dai->data_tx_edge & DEVICE_CODEC_EDGE_FALLING) &&
-        (i2s_dai->data_rx_edge & DEVICE_I2S_EDGE_RISING)) {
-        codec_dai->data_tx_edge = DEVICE_CODEC_EDGE_FALLING;
-        i2s_dai->data_rx_edge = DEVICE_I2S_EDGE_RISING;
-    } else if ((codec_dai->data_tx_edge & DEVICE_CODEC_EDGE_RISING) &&
-               (i2s_dai->data_rx_edge & DEVICE_I2S_EDGE_FALLING)) {
-        codec_dai->data_tx_edge = DEVICE_CODEC_EDGE_RISING;
-        i2s_dai->data_rx_edge = DEVICE_I2S_EDGE_FALLING;
-    } else {
-        return -EINVAL;
-    }
+//    if ((codec_dai->data_tx_edge & DEVICE_CODEC_EDGE_FALLING) &&
+//        (i2s_dai->data_rx_edge & DEVICE_I2S_EDGE_RISING)) {
+//        codec_dai->data_tx_edge = DEVICE_CODEC_EDGE_FALLING;
+//        i2s_dai->data_rx_edge = DEVICE_I2S_EDGE_RISING;
+//    } else if ((codec_dai->data_tx_edge & DEVICE_CODEC_EDGE_RISING) &&
+//               (i2s_dai->data_rx_edge & DEVICE_I2S_EDGE_FALLING)) {
+//        codec_dai->data_tx_edge = DEVICE_CODEC_EDGE_RISING;
+//        i2s_dai->data_rx_edge = DEVICE_I2S_EDGE_FALLING;
+//    } else {
+//        return -EINVAL;
+//    }
 
-    if ((codec_dai->data_rx_edge & DEVICE_CODEC_EDGE_RISING) &&
-        (i2s_dai->data_tx_edge & DEVICE_I2S_EDGE_FALLING)) {
-        codec_dai->data_rx_edge = DEVICE_CODEC_EDGE_RISING;
-        i2s_dai->data_tx_edge = DEVICE_I2S_EDGE_FALLING;
-    } else if ((codec_dai->data_rx_edge & DEVICE_CODEC_EDGE_FALLING) &&
-               (i2s_dai->data_tx_edge & DEVICE_I2S_EDGE_RISING)) {
-        codec_dai->data_rx_edge = DEVICE_CODEC_EDGE_FALLING;
-        i2s_dai->data_tx_edge = DEVICE_I2S_EDGE_RISING;
-    } else {
-        return -EINVAL;
-    }
+//    if ((codec_dai->data_rx_edge & DEVICE_CODEC_EDGE_RISING) &&
+//        (i2s_dai->data_tx_edge & DEVICE_I2S_EDGE_FALLING)) {
+//        codec_dai->data_rx_edge = DEVICE_CODEC_EDGE_RISING;
+//        i2s_dai->data_tx_edge = DEVICE_I2S_EDGE_FALLING;
+//    } else if ((codec_dai->data_rx_edge & DEVICE_CODEC_EDGE_FALLING) &&
+//               (i2s_dai->data_tx_edge & DEVICE_I2S_EDGE_RISING)) {
+//        codec_dai->data_rx_edge = DEVICE_CODEC_EDGE_FALLING;
+//        i2s_dai->data_tx_edge = DEVICE_I2S_EDGE_RISING;
+//    } else {
+//        return -EINVAL;
+//    }
 
     return 0;
 }
@@ -626,84 +626,84 @@ static int gb_audio_set_config(struct gb_audio_dai_info *dai,
                                struct device_codec_pcm *codec_pcm,
                                struct device_i2s_pcm *i2s_pcm)
 {
-    struct device_codec_dai codec_dai;
-    struct device_i2s_dai i2s_dai;
-    uint8_t i2s_clk_role;
-    int ret;
-
-    if (codec_clk_role == DEVICE_CODEC_ROLE_MASTER) {
-        ret = device_codec_get_caps(dai->info->codec_dev, dai->dai_idx,
-                                    codec_clk_role, codec_pcm, &codec_dai);
-        if (ret) {
-            return ret;
-        }
-
-        /*
-         * When codec_clk_role is DEVICE_CODEC_ROLE_MASTER,
-         * device_codec_get_caps() sets codec_dai.mclk_freq.
-         */
-        i2s_dai.mclk_freq = codec_dai.mclk_freq;
-
-        ret = device_i2s_get_caps(dai->i2s_dev, DEVICE_I2S_ROLE_SLAVE, i2s_pcm,
-                                  &i2s_dai);
-        if (ret) {
-            return ret;
-        }
-
-        i2s_clk_role = DEVICE_I2S_ROLE_SLAVE;
-    } else {
-        ret = device_i2s_get_caps(dai->i2s_dev, DEVICE_I2S_ROLE_MASTER, i2s_pcm,
-                                  &i2s_dai);
-        if (ret) {
-            return ret;
-        }
-
-        /*
-         * When i2s_clk_role is DEVICE_I2S_ROLE_MASTER,
-         * device_i2s_get_caps() sets i2s_dai.mclk_freq.
-         */
-        codec_dai.mclk_freq = i2s_dai.mclk_freq;
-
-        ret = device_codec_get_caps(dai->info->codec_dev, dai->dai_idx,
-                                    codec_clk_role, codec_pcm, &codec_dai);
-        if (ret) {
-            return ret;
-        }
-
-        i2s_clk_role = DEVICE_I2S_ROLE_MASTER;
-    }
-
-    ret = gb_audio_determine_protocol(&codec_dai, &i2s_dai);
-    if (ret) {
-        return ret;
-    }
-
-    ret = gb_audio_determine_wclk_polarity(&codec_dai, &i2s_dai);
-    if (ret) {
-        return ret;
-    }
-
-    ret = gb_audio_determine_wclk_change_edge(codec_clk_role, &codec_dai,
-                                              &i2s_dai);
-    if (ret) {
-        return ret;
-    }
-
-    ret = gb_audio_determine_data_edges(&codec_dai, &i2s_dai);
-    if (ret) {
-        return ret;
-    }
-
-    ret = device_codec_set_config(dai->info->codec_dev, dai->dai_idx,
-                                  codec_clk_role, codec_pcm, &codec_dai);
-    if (ret) {
-        return ret;
-    }
-
-    ret = device_i2s_set_config(dai->i2s_dev, i2s_clk_role, i2s_pcm, &i2s_dai);
-    if (ret) {
-        return ret;
-    }
+//    struct device_codec_dai codec_dai;
+//    struct device_i2s_dai i2s_dai;
+//    uint8_t i2s_clk_role;
+//    int ret;
+//
+//    if (codec_clk_role == DEVICE_CODEC_ROLE_MASTER) {
+//        ret = device_codec_get_caps(dai->info->codec_dev, dai->dai_idx,
+//                                    codec_clk_role, codec_pcm, &codec_dai);
+//        if (ret) {
+//            return ret;
+//        }
+//
+//        /*
+//         * When codec_clk_role is DEVICE_CODEC_ROLE_MASTER,
+//         * device_codec_get_caps() sets codec_dai.mclk_freq.
+//         */
+//        i2s_dai.mclk_freq = codec_dai.mclk_freq;
+//
+//        ret = device_i2s_get_caps(dai->i2s_dev, DEVICE_I2S_ROLE_SLAVE, i2s_pcm,
+//                                  &i2s_dai);
+//        if (ret) {
+//            return ret;
+//        }
+//
+//        i2s_clk_role = DEVICE_I2S_ROLE_SLAVE;
+//    } else {
+//        ret = device_i2s_get_caps(dai->i2s_dev, DEVICE_I2S_ROLE_MASTER, i2s_pcm,
+//                                  &i2s_dai);
+//        if (ret) {
+//            return ret;
+//        }
+//
+//        /*
+//         * When i2s_clk_role is DEVICE_I2S_ROLE_MASTER,
+//         * device_i2s_get_caps() sets i2s_dai.mclk_freq.
+//         */
+//        codec_dai.mclk_freq = i2s_dai.mclk_freq;
+//
+//        ret = device_codec_get_caps(dai->info->codec_dev, dai->dai_idx,
+//                                    codec_clk_role, codec_pcm, &codec_dai);
+//        if (ret) {
+//            return ret;
+//        }
+//
+//        i2s_clk_role = DEVICE_I2S_ROLE_MASTER;
+//    }
+//
+//    ret = gb_audio_determine_protocol(&codec_dai, &i2s_dai);
+//    if (ret) {
+//        return ret;
+//    }
+//
+//    ret = gb_audio_determine_wclk_polarity(&codec_dai, &i2s_dai);
+//    if (ret) {
+//        return ret;
+//    }
+//
+//    ret = gb_audio_determine_wclk_change_edge(codec_clk_role, &codec_dai,
+//                                              &i2s_dai);
+//    if (ret) {
+//        return ret;
+//    }
+//
+//    ret = gb_audio_determine_data_edges(&codec_dai, &i2s_dai);
+//    if (ret) {
+//        return ret;
+//    }
+//
+//    ret = device_codec_set_config(dai->info->codec_dev, dai->dai_idx,
+//                                  codec_clk_role, codec_pcm, &codec_dai);
+//    if (ret) {
+//        return ret;
+//    }
+//
+//    ret = device_i2s_set_config(dai->i2s_dev, i2s_clk_role, i2s_pcm, &i2s_dai);
+//    if (ret) {
+//        return ret;
+//    }
 
     return 0;
 }
@@ -712,40 +712,40 @@ static int gb_audio_config_connection(struct gb_audio_dai_info *dai,
                                       uint32_t format, uint32_t rate,
                                       uint8_t channels, uint8_t sig_bits)
 {
-    struct device_codec_pcm codec_pcm;
-    struct device_i2s_pcm i2s_pcm;
-    unsigned int bytes, freq;
-    int ret;
-
-    codec_pcm.format = format;
-    codec_pcm.rate = rate;
-    codec_pcm.channels = channels;
-    codec_pcm.sig_bits = sig_bits;
-
-    ret = gb_audio_gb_to_i2s_format(format, &i2s_pcm.format, &bytes);
-    if (ret) {
-        return ret;
-    }
-
-    ret = gb_audio_convert_rate(rate, &i2s_pcm.rate, &freq);
-    if (ret) {
-        return ret;
-    }
-
-    i2s_pcm.channels = channels;
-
-    ret = gb_audio_set_config(dai, DEVICE_CODEC_ROLE_MASTER, &codec_pcm,
-                              &i2s_pcm);
-    if (ret) {
-        ret = gb_audio_set_config(dai, DEVICE_CODEC_ROLE_SLAVE, &codec_pcm,
-                                  &i2s_pcm);
-        if (ret) {
-            return ret;
-        }
-    }
-
-    dai->sample_size = bytes * channels;
-    dai->sample_freq = freq;
+//    struct device_codec_pcm codec_pcm;
+//    struct device_i2s_pcm i2s_pcm;
+//    unsigned int bytes, freq;
+//    int ret;
+//
+//    codec_pcm.format = format;
+//    codec_pcm.rate = rate;
+//    codec_pcm.channels = channels;
+//    codec_pcm.sig_bits = sig_bits;
+//
+//    ret = gb_audio_gb_to_i2s_format(format, &i2s_pcm.format, &bytes);
+//    if (ret) {
+//        return ret;
+//    }
+//
+//    ret = gb_audio_convert_rate(rate, &i2s_pcm.rate, &freq);
+//    if (ret) {
+//        return ret;
+//    }
+//
+//    i2s_pcm.channels = channels;
+//
+//    ret = gb_audio_set_config(dai, DEVICE_CODEC_ROLE_MASTER, &codec_pcm,
+//                              &i2s_pcm);
+//    if (ret) {
+//        ret = gb_audio_set_config(dai, DEVICE_CODEC_ROLE_SLAVE, &codec_pcm,
+//                                  &i2s_pcm);
+//        if (ret) {
+//            return ret;
+//        }
+//    }
+//
+//    dai->sample_size = bytes * channels;
+//    dai->sample_freq = freq;
 
     return 0;
 }
@@ -770,7 +770,7 @@ static uint8_t gb_audio_set_pcm_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -780,8 +780,8 @@ static uint8_t gb_audio_set_pcm_handler(struct gb_operation *operation)
         return GB_OP_PROTOCOL_BAD;
     }
 
-    format = le32_to_cpu(request->format);
-    rate = le32_to_cpu(request->rate);
+    format = sys_le32_to_cpu(request->format);
+    rate = sys_le32_to_cpu(request->rate);
     channels = request->channels;
     sig_bits = request->sig_bits;
 
@@ -818,7 +818,7 @@ static uint8_t gb_audio_set_tx_data_size_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -828,7 +828,7 @@ static uint8_t gb_audio_set_tx_data_size_handler(struct gb_operation *operation)
         return GB_OP_PROTOCOL_BAD;
     }
 
-    dai->tx_data_size = le16_to_cpu(request->size);
+    dai->tx_data_size = sys_le16_to_cpu(request->size);
 
     if (dai->tx_data_size % dai->sample_size) {
         return GB_OP_INVALID;
@@ -860,7 +860,7 @@ static uint8_t gb_audio_get_tx_delay_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -885,7 +885,7 @@ static uint8_t gb_audio_get_tx_delay_handler(struct gb_operation *operation)
     }
 
     /* TODO: Determine delay from this driver and add in */
-    response->delay = cpu_to_le32(codec_delay + i2s_delay);
+    response->delay = sys_cpu_to_le32(codec_delay + i2s_delay);
 
     return GB_OP_SUCCESS;
 }
@@ -908,6 +908,35 @@ static void gb_audio_i2s_tx(struct gb_audio_dai_info *dai, uint8_t *data)
 
     dai->tx_rb_count++;
 }
+
+enum device_i2s_event {
+	DEVICE_I2S_EVENT_NONE,
+	DEVICE_I2S_EVENT_RX_COMPLETE,
+	DEVICE_I2S_EVENT_TX_COMPLETE,
+	DEVICE_I2S_EVENT_UNDERRUN,
+	DEVICE_I2S_EVENT_OVERRUN,
+	DEVICE_I2S_EVENT_CLOCKING,
+	DEVICE_I2S_EVENT_DATA_LEN,
+	DEVICE_I2S_EVENT_UNSPECIFIED,
+};
+
+enum device_codec_event {
+	DEVICE_CODEC_EVENT_NONE,
+	DEVICE_CODEC_EVENT_UNSPECIFIED,
+	DEVICE_CODEC_EVENT_UNDERRUN,
+	DEVICE_CODEC_EVENT_OVERRUN,
+	DEVICE_CODEC_EVENT_CLOCKING,
+};
+
+enum device_codec_jack_event {
+	DEVICE_CODEC_JACK_EVENT_INSERTION,
+	DEVICE_CODEC_JACK_EVENT_REMOVAL,
+};
+
+enum device_codec_button_event {
+	DEVICE_CODEC_BUTTON_EVENT_PRESS,
+	DEVICE_CODEC_BUTTON_EVENT_RELEASE,
+};
 
 /* Callback for low-level i2s transmit operations */
 static void gb_audio_i2s_tx_cb(struct ring_buf *rb,
@@ -975,7 +1004,7 @@ static uint8_t gb_audio_activate_tx_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -1028,7 +1057,7 @@ static uint8_t gb_audio_deactivate_tx_handler(struct gb_operation *operation)
                 gb_operation_get_request_payload(operation);
     struct gb_audio_info *info;
     struct gb_audio_dai_info *dai;
-    irqstate_t flags;
+    //irqstate_t flags;
 
     if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
         gb_error("dropping short message\n");
@@ -1040,7 +1069,7 @@ static uint8_t gb_audio_deactivate_tx_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -1049,17 +1078,17 @@ static uint8_t gb_audio_deactivate_tx_handler(struct gb_operation *operation)
         return GB_OP_PROTOCOL_BAD;
     }
 
-    flags = irqsave();
+    //flags = irqsave();
 
     dai->flags |= GB_AUDIO_FLAG_TX_STOPPING;
 
     if (dai->flags & GB_AUDIO_FLAG_TX_STARTED) {
-        irqrestore(flags);
+        //irqrestore(flags);
         sem_wait(&dai->tx_stop_sem);
         device_i2s_stop_transmitter(dai->i2s_dev);
         dai->flags &= ~GB_AUDIO_FLAG_TX_STARTED;
     } else {
-        irqrestore(flags);
+        //irqrestore(flags);
     }
 
     device_i2s_shutdown_transmitter(dai->i2s_dev);
@@ -1093,7 +1122,7 @@ static uint8_t gb_audio_set_rx_data_size_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -1103,7 +1132,7 @@ static uint8_t gb_audio_set_rx_data_size_handler(struct gb_operation *operation)
         return GB_OP_PROTOCOL_BAD;
     }
 
-    dai->rx_data_size = le16_to_cpu(request->size);
+    dai->rx_data_size = sys_le16_to_cpu(request->size);
 
     if (dai->rx_data_size % dai->sample_size) {
         return GB_OP_INVALID;
@@ -1135,7 +1164,7 @@ static uint8_t gb_audio_get_rx_delay_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -1160,7 +1189,7 @@ static uint8_t gb_audio_get_rx_delay_handler(struct gb_operation *operation)
     }
 
     /* TODO: Determine delay from this driver and add in */
-    response->delay = cpu_to_le32(codec_delay + i2s_delay);
+    response->delay = sys_cpu_to_le32(codec_delay + i2s_delay);
 
     return GB_OP_SUCCESS;
 }
@@ -1294,7 +1323,7 @@ static uint8_t gb_audio_activate_rx_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -1357,7 +1386,7 @@ static uint8_t gb_audio_deactivate_rx_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    dai = gb_audio_get_dai(info, le16_to_cpu(request->data_cport));
+    dai = gb_audio_get_dai(info, sys_le16_to_cpu(request->data_cport));
     if (!dai) {
         return GB_OP_INVALID;
     }
@@ -1498,7 +1527,8 @@ static void gb_audio_alloc_info_list(void)
         return;
     }
 
-    dev = device_open(DEVICE_TYPE_AUDIO_BOARD_HW, 0);
+    //dev = device_open(DEVICE_TYPE_AUDIO_BOARD_HW, 0);
+    dev = NULL;
     if (!dev) {
         return;
     }
@@ -1529,7 +1559,8 @@ static void gb_audio_alloc_info_list(void)
             continue;
         }
 
-        info->codec_dev = device_open(DEVICE_TYPE_CODEC_HW, codec_dev_id);
+        //info->codec_dev = device_open(DEVICE_TYPE_CODEC_HW, codec_dev_id);
+        info->codec_dev = NULL;
         if (!info->codec_dev) {
             free(info);
             continue;
@@ -1571,7 +1602,8 @@ static void gb_audio_alloc_info_list(void)
                 continue;
             }
 
-            dai->i2s_dev = device_open(DEVICE_TYPE_I2S_HW, i2s_dev_id);
+            //dai->i2s_dev = device_open(DEVICE_TYPE_I2S_HW, i2s_dev_id);
+            dai->i2s_dev = NULL;
             if (!dai->i2s_dev) {
                 sem_destroy(&dai->tx_stop_sem);
                 free(dai);
@@ -1704,7 +1736,7 @@ static uint8_t gb_audio_send_data_handler(struct gb_operation *operation)
     struct gb_audio_send_data_request *request =
                 gb_operation_get_request_payload(operation);
     struct gb_audio_dai_info *dai;
-    irqstate_t flags;
+    //irqstate_t flags;
     int ret;
 
     if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
@@ -1717,20 +1749,20 @@ static uint8_t gb_audio_send_data_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    flags = irqsave();
+    //flags = irqsave();
 
     if (!(dai->flags & GB_AUDIO_FLAG_TX_ACTIVE)) {
-        irqrestore(flags);
+        //irqrestore(flags);
         return GB_OP_PROTOCOL_BAD;
     }
 
     if (dai->flags & GB_AUDIO_FLAG_TX_STOPPING) {
-        irqrestore(flags);
+        //irqrestore(flags);
         return GB_OP_SUCCESS;
     }
 
     if (!ring_buf_is_producers(dai->tx_rb)) {
-        irqrestore(flags);
+        //irqrestore(flags);
         gb_audio_report_event(dai, GB_AUDIO_STREAMING_EVENT_OVERRUN);
         return GB_OP_SUCCESS;
     }
@@ -1745,7 +1777,7 @@ static uint8_t gb_audio_send_data_handler(struct gb_operation *operation)
 
     dai->flags |= GB_AUDIO_FLAG_TX_STARTED;
 
-    irqrestore(flags);
+    //irqrestore(flags);
 
     ret = device_i2s_start_transmitter(dai->i2s_dev);
     if (ret) {

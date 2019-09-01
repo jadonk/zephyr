@@ -33,16 +33,16 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <nuttx/device.h>
-#include <nuttx/device_uart.h>
-#include <nuttx/util.h>
-#include <nuttx/config.h>
-#include <nuttx/greybus/types.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/debug.h>
-#include <nuttx/unipro/unipro.h>
+#include <device.h>
+#include <device_uart.h>
+#include <util.h>
+#include <config.h>
+#include <greybus/types.h>
+#include <greybus/greybus.h>
+#include <greybus/debug.h>
+#include <unipro/unipro.h>
 #include <apps/greybus-utils/utils.h>
-#include <arch/byteorder.h>
+#include <sys/byteorder.h>
 
 #include "uart-gb.h"
 
@@ -444,7 +444,7 @@ static void *uart_rx_thread(void *data)
                 uart_report_error(GB_UART_EVENT_PROTOCOL_ERROR, __func__);
             } else {
                 request = gb_operation_get_request_payload(operation);
-                request->size = cpu_to_le16(node->data_size);
+                request->size = sys_cpu_to_le16(node->data_size);
                 request->flags = node->data_flags;
                 memcpy(request->data, node->buffer, node->data_size);
 
@@ -656,7 +656,7 @@ static uint8_t gb_uart_send_data(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    size = le16_to_cpu(request->size);
+    size = sys_le16_to_cpu(request->size);
 
     if (request_size < sizeof(*request) + size) {
         gb_error("dropping short message\n");
@@ -703,7 +703,7 @@ static uint8_t gb_uart_set_line_coding(struct gb_operation *operation)
     bundle = gb_operation_get_bundle(operation);
     DEBUGASSERT(bundle);
 
-    baud = le32_to_cpu(request->rate);
+    baud = sys_le32_to_cpu(request->rate);
 
     switch (request->format) {
     case GB_SERIAL_1_STOP_BITS:
@@ -787,7 +787,7 @@ static uint8_t gb_uart_set_control_line_state(struct gb_operation *operation)
         return GB_OP_UNKNOWN_ERROR;
     }
 
-    control = le16_to_cpu(request->control);
+    control = sys_le16_to_cpu(request->control);
     if (control & GB_UART_CTRL_DTR) {
         modem_ctrl |= MCR_DTR;
     } else {

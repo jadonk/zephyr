@@ -28,15 +28,15 @@
  * Author: Viresh Kumar <viresh.kumar@linaro.org>
  */
 
-#include <ara_version.h>
+#include <greybus/ara_version.h>
 #include <string.h>
-#include <arch/byteorder.h>
-#include <nuttx/greybus/debug.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/unipro/unipro.h>
-#include <nuttx/device.h>
-#include <nuttx/greybus/timesync.h>
-#include <apps/greybus-utils/manifest.h>
+#include <sys/byteorder.h>
+#include <greybus/debug.h>
+#include <greybus/greybus.h>
+#include <unipro/unipro.h>
+#include <device.h>
+#include <greybus/timesync.h>
+#include <greybus-utils/manifest.h>
 
 #include "control-gb.h"
 
@@ -61,7 +61,7 @@ static uint8_t gb_control_get_manifest_size(struct gb_operation *operation)
     if (!response)
         return GB_OP_NO_MEMORY;
 
-    response->size = cpu_to_le16(get_manifest_size());
+    response->size = sys_cpu_to_le16(get_manifest_size());
 
     return GB_OP_SUCCESS;
 }
@@ -98,23 +98,23 @@ static uint8_t gb_control_connected(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    retval = gb_listen(le16_to_cpu(request->cport_id));
+    retval = gb_listen(sys_le16_to_cpu(request->cport_id));
     if (retval) {
         gb_error("Can not connect cport %d: error %d\n",
-                 le16_to_cpu(request->cport_id), retval);
+                 sys_le16_to_cpu(request->cport_id), retval);
         return GB_OP_INVALID;
     }
 
-    retval = gb_notify(le16_to_cpu(request->cport_id), GB_EVT_CONNECTED);
+    retval = gb_notify(sys_le16_to_cpu(request->cport_id), GB_EVT_CONNECTED);
     if (retval)
         goto error_notify;
 
-    unipro_enable_fct_tx_flow(le16_to_cpu(request->cport_id));
+    unipro_enable_fct_tx_flow(sys_le16_to_cpu(request->cport_id));
 
     return GB_OP_SUCCESS;
 
 error_notify:
-    gb_stop_listening(le16_to_cpu(request->cport_id));
+    gb_stop_listening(sys_le16_to_cpu(request->cport_id));
 
     return gb_errno_to_op_result(retval);
 }
@@ -130,9 +130,9 @@ static uint8_t gb_control_disconnected(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    unipro_disable_fct_tx_flow(le16_to_cpu(request->cport_id));
+    unipro_disable_fct_tx_flow(sys_le16_to_cpu(request->cport_id));
 
-    retval = gb_notify(le16_to_cpu(request->cport_id), GB_EVT_DISCONNECTED);
+    retval = gb_notify(sys_le16_to_cpu(request->cport_id), GB_EVT_DISCONNECTED);
     if (retval) {
         gb_error("Cannot notify GB driver of disconnect event.\n");
         /*
@@ -141,12 +141,12 @@ static uint8_t gb_control_disconnected(struct gb_operation *operation)
          */
     }
 
-    unipro_reset_cport(le16_to_cpu(request->cport_id), NULL, NULL);
+    unipro_reset_cport(sys_le16_to_cpu(request->cport_id), NULL, NULL);
 
-    retval = gb_stop_listening(le16_to_cpu(request->cport_id));
+    retval = gb_stop_listening(sys_le16_to_cpu(request->cport_id));
     if (retval) {
         gb_error("Can not disconnect cport %d: error %d\n",
-                 le16_to_cpu(request->cport_id), retval);
+                 sys_le16_to_cpu(request->cport_id), retval);
         return GB_OP_INVALID;
     }
 
@@ -161,8 +161,8 @@ static uint8_t gb_control_interface_version(struct gb_operation *operation)
     if (!response)
         return GB_OP_NO_MEMORY;
 
-    response->major = le16_to_cpu(GB_INTERFACE_VERSION_MAJOR);
-    response->minor = le16_to_cpu(GB_INTERFACE_VERSION_MINOR);
+    response->major = sys_le16_to_cpu(GB_INTERFACE_VERSION_MAJOR);
+    response->minor = sys_le16_to_cpu(GB_INTERFACE_VERSION_MINOR);
 
     return GB_OP_SUCCESS;
 }
@@ -191,7 +191,7 @@ static uint8_t __attribute__((unused)) gb_control_bundle_pwr_set(struct gb_opera
 {
     struct gb_control_bundle_pwr_set_request *request;
     struct gb_control_bundle_pwr_set_response *response;
-    struct device_pm_ops *pm_ops;
+    //struct device_pm_ops *pm_ops;
     struct gb_bundle *bundle;
     struct device *dev;
     int status = 0;
@@ -213,40 +213,40 @@ static uint8_t __attribute__((unused)) gb_control_bundle_pwr_set(struct gb_opera
     }
 
     dev = bundle->dev;
-    pm_ops = dev->driver->pm;
-    if (!pm_ops) {
-        gb_info("pm operations not supported by %s driver\n", dev->name);
-        response->result_code = GB_CONTROL_PWR_NOSUPP;
-        return GB_OP_SUCCESS;
-    }
+//    pm_ops = dev->driver->pm;
+//    if (!pm_ops) {
+//        gb_info("pm operations not supported by %s driver\n", dev->name);
+//        response->result_code = GB_CONTROL_PWR_NOSUPP;
+//        return GB_OP_SUCCESS;
+//    }
 
     switch (request->pwr_state) {
     case GB_CONTROL_PWR_STATE_OFF:
-        if (pm_ops->poweroff) {
-            status = pm_ops->poweroff(dev);
-        } else {
-            gb_info("poweroff not supported by %s driver\n", dev->name);
-            response->result_code = GB_CONTROL_PWR_NOSUPP;
-            goto out;
-        }
+//        if (pm_ops->poweroff) {
+//            status = pm_ops->poweroff(dev);
+//        } else {
+//            gb_info("poweroff not supported by %s driver\n", dev->name);
+//            response->result_code = GB_CONTROL_PWR_NOSUPP;
+//            goto out;
+//        }
         break;
     case GB_CONTROL_PWR_STATE_SUSPEND:
-        if (pm_ops->suspend) {
-            status = pm_ops->suspend(dev);
-        } else {
-            gb_info("suspend not supported by %s driver\n", dev->name);
-            response->result_code = GB_CONTROL_PWR_NOSUPP;
-            goto out;
-        }
+//        if (pm_ops->suspend) {
+//            status = pm_ops->suspend(dev);
+//        } else {
+//            gb_info("suspend not supported by %s driver\n", dev->name);
+//            response->result_code = GB_CONTROL_PWR_NOSUPP;
+//            goto out;
+//        }
         break;
     case GB_CONTROL_PWR_STATE_ON:
-        if (pm_ops->resume) {
-            status = pm_ops->resume(dev);
-        } else {
-            gb_info("resume not supported by %s driver\n", dev->name);
-            response->result_code = GB_CONTROL_PWR_NOSUPP;
-            goto out;
-        }
+//        if (pm_ops->resume) {
+//            status = pm_ops->resume(dev);
+//        } else {
+//            gb_info("resume not supported by %s driver\n", dev->name);
+//            response->result_code = GB_CONTROL_PWR_NOSUPP;
+//            goto out;
+//        }
         break;
     default:
         return GB_OP_PROTOCOL_BAD;
@@ -254,6 +254,7 @@ static uint8_t __attribute__((unused)) gb_control_bundle_pwr_set(struct gb_opera
 
     response->result_code = status ? GB_CONTROL_PWR_FAIL : GB_CONTROL_PWR_OK;
 
+    goto out;
 out:
     return GB_OP_SUCCESS;
 }
@@ -274,9 +275,9 @@ static uint8_t gb_control_timesync_enable(struct gb_operation *operation)
 
     request = gb_operation_get_request_payload(operation);
     count = request->count;
-    frame_time = le64_to_cpu(request->frame_time);
-    strobe_delay = le32_to_cpu(request->strobe_delay);
-    refclk = le32_to_cpu(request->refclk);
+    frame_time = sys_le64_to_cpu(request->frame_time);
+    strobe_delay = sys_le32_to_cpu(request->strobe_delay);
+    refclk = sys_le32_to_cpu(request->refclk);
 
     retval = timesync_enable(count, frame_time, strobe_delay, refclk);
     return gb_errno_to_op_result(retval);
@@ -305,7 +306,7 @@ static uint8_t gb_control_timesync_authoritative(struct gb_operation *operation)
     request = gb_operation_get_request_payload(operation);
 
     for (i = 0; i < GB_TIMESYNC_MAX_STROBES; i++)
-        frame_time[i] = le64_to_cpu(request->frame_time[i]);
+        frame_time[i] = sys_le64_to_cpu(request->frame_time[i]);
 
     retval = timesync_authoritative(frame_time);
     return gb_errno_to_op_result(retval);
@@ -324,7 +325,7 @@ static uint8_t gb_control_timesync_get_last_event(
 
     retval = timesync_get_last_event(&frame_time);
     if (!retval)
-        response->frame_time = cpu_to_le64(frame_time);
+        response->frame_time = sys_cpu_to_le64(frame_time);
     return gb_errno_to_op_result(retval);
 }
 

@@ -28,9 +28,9 @@
  * Author: Fabien Parent <fparent@baylibre.com>
  */
 
-#include <arch/byteorder.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/usb.h>
+#include <sys/byteorder.h>
+#include <greybus/greybus.h>
+#include <usb.h>
 #include "usb-gb.h"
 
 #include <stdio.h>
@@ -97,10 +97,10 @@ static uint8_t gb_usb_hub_control(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    typeReq = le16_to_cpu(request->typeReq);
-    wValue = le16_to_cpu(request->wValue);
-    wIndex = le16_to_cpu(request->wIndex);
-    wLength = le16_to_cpu(request->wLength);
+    typeReq = sys_le16_to_cpu(request->typeReq);
+    wValue = sys_le16_to_cpu(request->wValue);
+    wIndex = sys_le16_to_cpu(request->wIndex);
+    wLength = sys_le16_to_cpu(request->wLength);
 
     response =
         gb_operation_alloc_response(operation, sizeof(*response) + wLength);

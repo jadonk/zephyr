@@ -26,58 +26,68 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdarg.h>
-#include <greybus/debug.h>
-//#include <arch/irq.h>
-#include <irq.h>
+#ifndef __LOOPBACK__H__
+#define __LOOPBACK__H__
 
-#if defined(CONFIG_GB_LOG_ERROR)
-#define GB_LOG_LEVEL (GB_LOG_ERROR)
-#elif defined(CONFIG_GB_LOG_WARNING)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING)
-#elif defined(CONFIG_GB_LOG_DEBUG)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG)
-#elif defined(CONFIG_GB_LOG_DUMP)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG | \
-                      GB_LOG_DUMP)
-#else
-#define GB_LOG_LEVEL (GB_LOG_INFO)
+#include <nuttx/list.h>
+#include <nuttx/greybus/types.h>
+
+/* Greybus loopback request types */
+#define GB_LOOPBACK_TYPE_NONE                           0x00
+#define GB_LOOPBACK_TYPE_PROTOCOL_VERSION               0x01
+#define GB_LOOPBACK_TYPE_PING                           0x02
+#define GB_LOOPBACK_TYPE_TRANSFER                       0x03
+#define GB_LOOPBACK_TYPE_SINK                           0x04
+
+/* version request has no payload */
+struct gb_loopback_proto_version_response {
+	__u8	major;
+	__u8	minor;
+};
+
+struct gb_loopback_transfer_request {
+	__le32	len;
+	__le32	reserved0;
+	__le32	reserved1;
+	__u8    data[0];
+};
+
+struct gb_loopback_transfer_response {
+	__le32	len;
+	__le32	reserved0;
+	__le32	reserved1;
+	__u8    data[0];
+};
+
+struct gb_loopback_sync_transfer {
+	__le32	len;
+	__le32	chksum;
+	__u8    data[0];
+};
+
+struct gb_loopback_statistics {
+    unsigned recv;
+    unsigned recv_err;
+
+    unsigned throughput_min;
+    unsigned throughput_max;
+    unsigned throughput_avg;
+
+    unsigned latency_min;
+    unsigned latency_max;
+    unsigned latency_avg;
+
+    unsigned reqs_per_sec_min;
+    unsigned reqs_per_sec_max;
+    unsigned reqs_per_sec_avg;
+};
+
+typedef int (*gb_loopback_cport_cb)(int, void *);
+
+int gb_loopback_get_cports(gb_loopback_cport_cb cb, void *data);
+int gb_loopback_send_req(int cport, size_t size, uint8_t type);
+int gb_loopback_get_stats(int cport, struct gb_loopback_statistics *stats);
+void gb_loopback_reset(int cport);
+int gb_loopback_cport_valid(int cport);
+
 #endif
-#define GB_DUMP_LINE_LENGTH 16
-
-int gb_log_level = GB_LOG_LEVEL;
-
-void _gb_log(const char *fmt, ...)
-{
-    //irqstate_t flags;
-    va_list ap;
-
-    va_start(ap, fmt);
-    //flags = irqsave();
-    lowvsyslog(fmt, ap);
-    irqrestore(flags);
-    va_end(ap);
-}
-
-void _gb_dump(const char *func, __u8 *buf, size_t size)
-{
-    int i, count;
-    irqstate_t flags;
-
-    flags = irqsave();
-    lowsyslog("%s:\n", func);
-    count = 0;
-    for (i = 0; i < size; i++) {
-        lowsyslog( "%02x ", buf[i]);
-        /**
-         * Add line-breaks every so often to divide the dump into readable rows
-         * of bytes.
-         */
-        if (++count == GB_DUMP_LINE_LENGTH) {
-            lowsyslog("\n");
-            count = 0;
-        }
-    }
-    lowsyslog("\n");
-    irqrestore(flags);
-}

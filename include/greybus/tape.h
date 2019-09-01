@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015 Google Inc.
+ * Copyright (c) 2015 Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,60 +24,34 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Author: Fabien Parent <fparent@baylibre.com>
  */
 
-#include <stdarg.h>
-#include <greybus/debug.h>
-//#include <arch/irq.h>
-#include <irq.h>
+#ifndef __GREYBUS_TAPE_H__
+#define __GREYBUS_TAPE_H__
 
-#if defined(CONFIG_GB_LOG_ERROR)
-#define GB_LOG_LEVEL (GB_LOG_ERROR)
-#elif defined(CONFIG_GB_LOG_WARNING)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING)
-#elif defined(CONFIG_GB_LOG_DEBUG)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG)
-#elif defined(CONFIG_GB_LOG_DUMP)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG | \
-                      GB_LOG_DUMP)
-#else
-#define GB_LOG_LEVEL (GB_LOG_INFO)
-#endif
-#define GB_DUMP_LINE_LENGTH 16
+#include <sys/types.h>
 
-int gb_log_level = GB_LOG_LEVEL;
+enum {
+    GB_TAPE_RDONLY,
+    GB_TAPE_WRONLY,
+};
 
-void _gb_log(const char *fmt, ...)
-{
-    //irqstate_t flags;
-    va_list ap;
+struct gb_tape_mechanism {
+    int (*open)(const char *pathname, int mode);
+    void (*close)(int fd);
 
-    va_start(ap, fmt);
-    //flags = irqsave();
-    lowvsyslog(fmt, ap);
-    irqrestore(flags);
-    va_end(ap);
-}
+    ssize_t (*write)(int fd, const void *data, size_t size);
+    ssize_t (*read)(int fd, void *data, size_t size);
+};
 
-void _gb_dump(const char *func, __u8 *buf, size_t size)
-{
-    int i, count;
-    irqstate_t flags;
+int gb_tape_register_mechanism(struct gb_tape_mechanism *mechanism);
+int gb_tape_arm_semihosting_register(void);
 
-    flags = irqsave();
-    lowsyslog("%s:\n", func);
-    count = 0;
-    for (i = 0; i < size; i++) {
-        lowsyslog( "%02x ", buf[i]);
-        /**
-         * Add line-breaks every so often to divide the dump into readable rows
-         * of bytes.
-         */
-        if (++count == GB_DUMP_LINE_LENGTH) {
-            lowsyslog("\n");
-            count = 0;
-        }
-    }
-    lowsyslog("\n");
-    irqrestore(flags);
-}
+int gb_tape_communication(const char *pathname);
+int gb_tape_stop(void);
+int gb_tape_replay(const char *pathname);
+
+#endif /* __GREYBUS_TAPE_H__ */
+

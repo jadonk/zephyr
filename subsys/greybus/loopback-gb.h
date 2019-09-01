@@ -29,10 +29,10 @@
 #ifndef __LOOPBACK_GB_H__
 #define __LOOPBACK_GB_H__
 
-#include <nuttx/list.h>
-#include <nuttx/greybus/types.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/loopback.h> /* For greybus loopback request types. */
+#include <list.h>
+#include <greybus/types.h>
+#include <greybus/greybus.h>
+#include <greybus/loopback.h> /* For greybus loopback request types. */
 
 #ifdef CONFIG_GREYBUS_FEATURE_HAVE_TIMESTAMPS
 void gb_loopback_log_entry(unsigned int cport);

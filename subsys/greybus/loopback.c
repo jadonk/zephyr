@@ -33,14 +33,14 @@
 
 #include "loopback-gb.h"
 
-#include <nuttx/list.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/loopback.h>
-#include <nuttx/greybus/greybus_timestamp.h>
-#include <nuttx/greybus/debug.h>
-#include <nuttx/time.h>
-#include <nuttx/util.h>
-#include <arch/byteorder.h>
+#include <list.h>
+#include <greybus/greybus.h>
+#include <greybus/loopback.h>
+#include <greybus/greybus_timestamp.h>
+#include <greybus/debug.h>
+#include <time.h>
+#include <util.h>
+#include <sys/byteorder.h>
 
 #define GB_LOOPBACK_VERSION_MAJOR 0
 #define GB_LOOPBACK_VERSION_MINOR 1
@@ -279,7 +279,7 @@ static void gb_loopback_transfer_resp_cb(struct gb_operation *operation)
     response = gb_operation_get_request_payload(operation->response);
 
     if ((request->len != response->len) ||
-        (memcmp(request->data, response->data, le32_to_cpu(request->len)))) {
+        (memcmp(request->data, response->data, sys_le32_to_cpu(request->len)))) {
         loopback_error_notify(operation->cport);
     } else {
         loopback_recv_inc(operation->cport);
@@ -323,7 +323,7 @@ int gb_loopback_send_req(int cport, size_t size, uint8_t type)
     case GB_LOOPBACK_TYPE_TRANSFER:
     case GB_LOOPBACK_TYPE_SINK:
         request = gb_operation_get_request_payload(operation);
-        request->len = cpu_to_le32(size);
+        request->len = sys_cpu_to_le32(size);
         if (type == GB_LOOPBACK_TYPE_TRANSFER) {
             for (i = 0; i < size; i++) {
                 request->data[i] = rand() & 0xFF;
@@ -383,7 +383,7 @@ static uint8_t gb_loopback_transfer_req_cb(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    request_length = le32_to_cpu(request->len);
+    request_length = sys_le32_to_cpu(request->len);
 
     response = gb_operation_alloc_response(operation,
                                            sizeof(*response) + request_length);

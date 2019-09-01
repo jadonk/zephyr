@@ -22,5 +22,3 @@ zephyr_library_sources_ifdef(CONFIG_GB_SPI            spi.c)
 zephyr_library_sources_ifdef(CONFIG_GB_UART           uart.c)
 zephyr_library_sources_ifdef(CONFIG_GB_USB            usb.c)
 zephyr_library_sources_ifdef(CONFIG_GB_VIBRATOR       vibrator.c)
-
-zephyr_library_link_libraries(GB)

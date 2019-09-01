@@ -29,7 +29,7 @@
 #ifndef _GREYBUS_UART_H_
 #define _GREYBUS_UART_H_
 
-#include <nuttx/greybus/types.h>
+#include <greybus/types.h>
 
 /* UART protocol IDs */
 #define GB_UART_PROTOCOL_INVALID                0x00

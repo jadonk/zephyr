@@ -31,12 +31,12 @@
 #include <string.h>
 #include <errno.h>
 
-#include <nuttx/device.h>
-#include <nuttx/device_lights.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/debug.h>
+#include <device.h>
+#include <device_lights.h>
+#include <greybus/greybus.h>
+#include <greybus/debug.h>
 #include <apps/greybus-utils/utils.h>
-#include <arch/byteorder.h>
+#include <sys/byteorder.h>
 
 #include "lights-gb.h"
 
@@ -229,10 +229,10 @@ static uint8_t gb_lights_get_channel_config(struct gb_operation *operation)
     }
 
     response->max_brightness = cfg.max_brightness;
-    response->flags = cpu_to_le32(cfg.flags);
-    response->color = cpu_to_le32(cfg.color);
+    response->flags = sys_cpu_to_le32(cfg.flags);
+    response->color = sys_cpu_to_le32(cfg.color);
     memcpy(response->color_name, cfg.color_name, sizeof(cfg.color_name));
-    response->mode = cpu_to_le32(cfg.mode);
+    response->mode = sys_cpu_to_le32(cfg.mode);
     memcpy(response->mode_name, cfg.mode_name, sizeof(cfg.mode_name));
 
     return GB_OP_SUCCESS;
@@ -281,12 +281,12 @@ static uint8_t gb_lights_get_channel_flash_config(
         return gb_errno_to_op_result(ret);
     }
 
-    response->intensity_min_uA = cpu_to_le32(fcfg.intensity_min_uA);
-    response->intensity_max_uA = cpu_to_le32(fcfg.intensity_max_uA);
-    response->intensity_step_uA = cpu_to_le32(fcfg.intensity_step_uA);
-    response->timeout_min_us = cpu_to_le32(fcfg.timeout_min_us);
-    response->timeout_max_us = cpu_to_le32(fcfg.timeout_max_us);
-    response->timeout_step_us = cpu_to_le32(fcfg.timeout_step_us);
+    response->intensity_min_uA = sys_cpu_to_le32(fcfg.intensity_min_uA);
+    response->intensity_max_uA = sys_cpu_to_le32(fcfg.intensity_max_uA);
+    response->intensity_step_uA = sys_cpu_to_le32(fcfg.intensity_step_uA);
+    response->timeout_min_us = sys_cpu_to_le32(fcfg.timeout_min_us);
+    response->timeout_max_us = sys_cpu_to_le32(fcfg.timeout_max_us);
+    response->timeout_step_us = sys_cpu_to_le32(fcfg.timeout_step_us);
 
     return GB_OP_SUCCESS;
 }
@@ -357,8 +357,8 @@ static uint8_t gb_lights_set_blink(struct gb_operation *operation)
     /* set blink to channel */
     ret = device_lights_set_blink(bundle->dev, request->light_id,
                                   request->channel_id,
-                                  le16_to_cpu(request->time_on_ms),
-                                  le16_to_cpu(request->time_off_ms));
+                                  sys_le16_to_cpu(request->time_on_ms),
+                                  sys_le16_to_cpu(request->time_off_ms));
     if (ret) {
         return gb_errno_to_op_result(ret);
     }
@@ -394,7 +394,7 @@ static uint8_t gb_lights_set_color(struct gb_operation *operation)
     /* set color to channel */
     ret = device_lights_set_color(bundle->dev, request->light_id,
                                   request->channel_id,
-                                  le32_to_cpu(request->color));
+                                  sys_le32_to_cpu(request->color));
     if (ret) {
         return gb_errno_to_op_result(ret);
     }
@@ -468,7 +468,7 @@ static uint8_t gb_lights_set_flash_intensity(struct gb_operation *operation)
     /* set flash intensity to channel */
     ret = device_lights_set_flash_intensity(bundle->dev, request->light_id,
                                             request->channel_id,
-                                            le32_to_cpu(request->intensity_uA));
+                                            sys_le32_to_cpu(request->intensity_uA));
     if (ret) {
         return gb_errno_to_op_result(ret);
     }
@@ -540,7 +540,7 @@ static uint8_t gb_lights_set_flash_timeout(struct gb_operation *operation)
     /* set flash timeout to channel */
     ret = device_lights_set_flash_timeout(bundle->dev, request->light_id,
                                           request->channel_id,
-                                          le32_to_cpu(request->timeout_us));
+                                          sys_le32_to_cpu(request->timeout_us));
     if (ret) {
         return gb_errno_to_op_result(ret);
     }
@@ -586,7 +586,7 @@ static uint8_t gb_lights_get_flash_fault(struct gb_operation *operation)
         return gb_errno_to_op_result(ret);
     }
 
-    response->fault = cpu_to_le32(response->fault);
+    response->fault = sys_cpu_to_le32(response->fault);
 
     return GB_OP_SUCCESS;
 }

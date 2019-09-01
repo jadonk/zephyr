@@ -27,14 +27,14 @@
  */
 
 #include <errno.h>
-#include <debug.h>
+//#include <debug.h>
 #include <stdlib.h>
 
-#include <arch/byteorder.h>
-#include <nuttx/device.h>
-#include <nuttx/device_i2c.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/debug.h>
+#include <sys/byteorder.h>
+#include <device.h>
+//#include <device_i2c.h>
+#include <greybus/greybus.h>
+#include <greybus/debug.h>
 
 #include "i2c-gb.h"
 
@@ -59,7 +59,7 @@ static uint8_t gb_i2c_protocol_functionality(struct gb_operation *operation)
     if (!response)
         return GB_OP_NO_MEMORY;
 
-    response->functionality = cpu_to_le32(GB_I2C_FUNC_I2C |
+    response->functionality = sys_cpu_to_le32(GB_I2C_FUNC_I2C |
                                           GB_I2C_FUNC_SMBUS_READ_BYTE |
                                           GB_I2C_FUNC_SMBUS_WRITE_BYTE |
                                           GB_I2C_FUNC_SMBUS_READ_BYTE_DATA |
@@ -97,7 +97,7 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
     }
 
     request = gb_operation_get_request_payload(operation);
-    op_count = le16_to_cpu(request->op_count);
+    op_count = sys_le16_to_cpu(request->op_count);
     write_data = (uint8_t *)&request->desc[op_count];
 
     if (req_size < sizeof(*request) + op_count * sizeof(request->desc[0])) {
@@ -107,10 +107,10 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
 
     for (i = 0; i < op_count; i++) {
         desc = &request->desc[i];
-        read_op = (le16_to_cpu(desc->flags) & GB_I2C_M_RD) ? true : false;
+        read_op = (sys_le16_to_cpu(desc->flags) & GB_I2C_M_RD) ? true : false;
 
         if (read_op)
-            size += le16_to_cpu(desc->size);
+            size += sys_le16_to_cpu(desc->size);
     }
 
     response = gb_operation_alloc_response(operation, size);
@@ -125,19 +125,19 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
 
     for (i = 0; i < op_count; i++) {
         desc = &request->desc[i];
-        read_op = (le16_to_cpu(desc->flags) & GB_I2C_M_RD) ? true : false;
+        read_op = (sys_le16_to_cpu(desc->flags) & GB_I2C_M_RD) ? true : false;
 
         requests[i].flags = 0;
-        requests[i].addr = le16_to_cpu(desc->addr);
-        requests[i].length = le16_to_cpu(desc->size);
+        requests[i].addr = sys_le16_to_cpu(desc->addr);
+        requests[i].length = sys_le16_to_cpu(desc->size);
 
         if (read_op) {
             requests[i].flags |= GB_I2C_M_RD;
             requests[i].buffer = &response->data[read_count];
-            read_count += le16_to_cpu(desc->size);
+            read_count += sys_le16_to_cpu(desc->size);
         } else {
             requests[i].buffer = write_data;
-            write_data += le16_to_cpu(desc->size);
+            write_data += sys_le16_to_cpu(desc->size);
         }
     }
 

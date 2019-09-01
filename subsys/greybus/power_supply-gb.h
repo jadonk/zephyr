@@ -29,7 +29,7 @@
 #ifndef __POWER_SUPPLY_GB_H__
 #define __POWER_SUPPLY_GB_H__
 
-#include <nuttx/greybus/types.h>
+#include <greybus/types.h>
 
 /* Greybus power supply operation types */
 #define GB_POWER_SUPPLY_TYPE_INVALID              GB_INVALID_TYPE

@@ -27,17 +27,17 @@
  */
 
 #include <errno.h>
-#include <debug.h>
+//#include <debug.h>
 #include <stdlib.h>
 #include <string.h>
-#include <queue.h>
+//#include <queue.h>
 
-#include <nuttx/device.h>
-#include <nuttx/device_hid.h>
-#include <nuttx/greybus/greybus.h>
-#include <apps/greybus-utils/utils.h>
+#include <device.h>
+//#include <device_hid.h>
+#include <greybus/greybus.h>
+//#include <apps/greybus-utils/utils.h>
 
-#include <arch/byteorder.h>
+#include <sys/byteorder.h>
 
 #include "hid-gb.h"
 
@@ -196,10 +196,10 @@ static uint8_t gb_hid_get_descriptor(struct gb_operation *operation)
     }
 
     response->length = hid_desc.length;
-    response->report_desc_length = cpu_to_le16(hid_desc.report_desc_length);
-    response->hid_version = cpu_to_le16(hid_desc.hid_version);
-    response->product_id = cpu_to_le16(hid_desc.product_id);
-    response->vendor_id = cpu_to_le16(hid_desc.vendor_id);
+    response->report_desc_length = sys_cpu_to_le16(hid_desc.report_desc_length);
+    response->hid_version = sys_cpu_to_le16(hid_desc.hid_version);
+    response->product_id = sys_cpu_to_le16(hid_desc.product_id);
+    response->vendor_id = sys_cpu_to_le16(hid_desc.vendor_id);
     response->country_code = hid_desc.country_code;
 
     hid_info->report_desc_len = hid_desc.report_desc_length;

@@ -29,7 +29,7 @@
 #ifndef __GPIO_GB_H__
 #define __GPIO_GB_H__
 
-#include <nuttx/greybus/types.h>
+#include <greybus/types.h>
 
 #define	GB_GPIO_TYPE_PROTOCOL_VERSION	0x01
 #define	GB_GPIO_TYPE_LINE_COUNT         0x02

@@ -30,7 +30,7 @@
 #ifndef __VIBRATOR_GB_H__
 #define __VIBRATOR_GB_H__
 
-#include <nuttx/greybus/types.h>
+#include <greybus/types.h>
 
 /* Greybus vibrator request types */
 #define GB_VIBRATOR_TYPE_INVALID             GB_INVALID_TYPE

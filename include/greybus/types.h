@@ -24,60 +24,20 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Author: Fabien Parent <fparent@baylibre.com>
  */
 
-#include <stdarg.h>
-#include <greybus/debug.h>
-//#include <arch/irq.h>
-#include <irq.h>
+#ifndef __GREYBUS_TYPES_H__
+#define __GREYBUS_TYPES_H__
 
-#if defined(CONFIG_GB_LOG_ERROR)
-#define GB_LOG_LEVEL (GB_LOG_ERROR)
-#elif defined(CONFIG_GB_LOG_WARNING)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING)
-#elif defined(CONFIG_GB_LOG_DEBUG)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG)
-#elif defined(CONFIG_GB_LOG_DUMP)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG | \
-                      GB_LOG_DUMP)
-#else
-#define GB_LOG_LEVEL (GB_LOG_INFO)
-#endif
-#define GB_DUMP_LINE_LENGTH 16
+typedef uint8_t u8;
+typedef uint8_t __u8;
+typedef uint16_t __le16;
+typedef uint32_t __le32;
+typedef uint64_t __le64;
 
-int gb_log_level = GB_LOG_LEVEL;
+#define __packed    __attribute__((packed))
 
-void _gb_log(const char *fmt, ...)
-{
-    //irqstate_t flags;
-    va_list ap;
+#endif /* __GREYBUS_TYPES_H__ */
 
-    va_start(ap, fmt);
-    //flags = irqsave();
-    lowvsyslog(fmt, ap);
-    irqrestore(flags);
-    va_end(ap);
-}
-
-void _gb_dump(const char *func, __u8 *buf, size_t size)
-{
-    int i, count;
-    irqstate_t flags;
-
-    flags = irqsave();
-    lowsyslog("%s:\n", func);
-    count = 0;
-    for (i = 0; i < size; i++) {
-        lowsyslog( "%02x ", buf[i]);
-        /**
-         * Add line-breaks every so often to divide the dump into readable rows
-         * of bytes.
-         */
-        if (++count == GB_DUMP_LINE_LENGTH) {
-            lowsyslog("\n");
-            count = 0;
-        }
-    }
-    lowsyslog("\n");
-    irqrestore(flags);
-}

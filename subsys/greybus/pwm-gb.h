@@ -29,7 +29,7 @@
 #ifndef _GREYBUS_PWM_H_
 #define _GREYBUS_PWM_H_
 
-#include <nuttx/greybus/types.h>
+#include <greybus/types.h>
 
 #define GB_PWM_PROTOCOL_VERSION         0x01
 #define GB_PWM_PROTOCOL_COUNT           0x02

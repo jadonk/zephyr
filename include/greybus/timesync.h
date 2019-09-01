@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2015 Google Inc.
+ * Copyright (c) 2016 Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,58 +26,32 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdarg.h>
-#include <greybus/debug.h>
-//#include <arch/irq.h>
-#include <irq.h>
+#ifndef  _TIMESYNC_H_
+#define  _TIMESYNC_H_
 
-#if defined(CONFIG_GB_LOG_ERROR)
-#define GB_LOG_LEVEL (GB_LOG_ERROR)
-#elif defined(CONFIG_GB_LOG_WARNING)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING)
-#elif defined(CONFIG_GB_LOG_DEBUG)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG)
-#elif defined(CONFIG_GB_LOG_DUMP)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG | \
-                      GB_LOG_DUMP)
-#else
-#define GB_LOG_LEVEL (GB_LOG_INFO)
-#endif
-#define GB_DUMP_LINE_LENGTH 16
+#include <greybus/greybus.h>
 
-int gb_log_level = GB_LOG_LEVEL;
+/* TimeSync finite state machine */
+enum timesync_state {
+        TIMESYNC_STATE_INVALID       = 0,
+        TIMESYNC_STATE_INACTIVE      = 1,
+        TIMESYNC_STATE_SYNCING       = 2,
+        TIMESYNC_STATE_ACTIVE        = 3,
+        TIMESYNC_STATE_DEBUG_ACTIVE  = 4,
+};
 
-void _gb_log(const char *fmt, ...)
-{
-    //irqstate_t flags;
-    va_list ap;
+int timesync_enable(uint8_t strobe_count, uint64_t frame_time,
+                    uint32_t strobe_delay, uint32_t refclk);
+int timesync_disable(void);
+int timesync_authoritative(uint64_t *frame_time);
+int timesync_get_last_event(uint64_t *frame_time);
 
-    va_start(ap, fmt);
-    //flags = irqsave();
-    lowvsyslog(fmt, ap);
-    irqrestore(flags);
-    va_end(ap);
-}
+int timesync_strobe_handler(void);
+int timesync_init(void);
+void timesync_exit(void);
 
-void _gb_dump(const char *func, __u8 *buf, size_t size)
-{
-    int i, count;
-    irqstate_t flags;
+/* This returns the frame-time */
+uint64_t timesync_get_frame_time(void);
+int timesync_get_state(void);
 
-    flags = irqsave();
-    lowsyslog("%s:\n", func);
-    count = 0;
-    for (i = 0; i < size; i++) {
-        lowsyslog( "%02x ", buf[i]);
-        /**
-         * Add line-breaks every so often to divide the dump into readable rows
-         * of bytes.
-         */
-        if (++count == GB_DUMP_LINE_LENGTH) {
-            lowsyslog("\n");
-            count = 0;
-        }
-    }
-    lowsyslog("\n");
-    irqrestore(flags);
-}
+#endif	/* _TIMESYNC_H_ */

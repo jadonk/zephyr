@@ -31,11 +31,11 @@
 #include <string.h>
 #include <errno.h>
 
-#include <nuttx/device.h>
-#include <nuttx/device_pwm.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/debug.h>
-#include <arch/byteorder.h>
+#include <device.h>
+#include <device_pwm.h>
+#include <greybus/greybus.h>
+#include <greybus/debug.h>
+#include <sys/byteorder.h>
 #include <apps/greybus-utils/utils.h>
 
 #include "pwm-gb.h"
@@ -274,8 +274,8 @@ static uint8_t gb_pwm_protocol_config(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    duty = le32_to_cpu(request->duty);
-    period = le32_to_cpu(request->period);
+    duty = sys_le32_to_cpu(request->duty);
+    period = sys_le32_to_cpu(request->period);
     ret = device_pwm_config(bundle->dev, request->which, duty, period);
     if (ret) {
         gb_info("%s(): %x error in ops\n", __func__, ret);

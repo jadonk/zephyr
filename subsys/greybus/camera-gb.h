@@ -29,7 +29,7 @@
 #ifndef _GREYBUS_CAMERA_GB_H_
 #define _GREYBUS_CAMERA_GB_H_
 
-#include <nuttx/greybus/types.h>
+#include <greybus/types.h>
 
 /* Greybus Camera request types */
 #define GB_CAMERA_TYPE_INVALID                  GB_INVALID_TYPE

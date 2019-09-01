@@ -29,8 +29,8 @@
 #ifndef __CONTROL_GB_H__
 #define __CONTROL_GB_H__
 
-#include <nuttx/greybus/types.h>
-#include <nuttx/greybus/greybus.h>
+#include <greybus/types.h>
+#include <greybus/greybus.h>
 
 /* Version of the Greybus control protocol we support */
 #define GB_CONTROL_VERSION_MAJOR                0x00

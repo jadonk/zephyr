@@ -31,13 +31,13 @@
 #include <errno.h>
 #include <debug.h>
 
-#include <nuttx/config.h>
-#include <nuttx/device.h>
-#include <nuttx/device_sdio.h>
-#include <nuttx/greybus/greybus.h>
+#include <config.h>
+#include <device.h>
+#include <device_sdio.h>
+#include <greybus/greybus.h>
 #include <apps/greybus-utils/utils.h>
 
-#include <arch/byteorder.h>
+#include <sys/byteorder.h>
 
 #include "sdio-gb.h"
 
@@ -180,12 +180,12 @@ static uint8_t gb_sdio_protocol_get_capabilities(struct gb_operation *operation)
         }
     }
 
-    response->caps = cpu_to_le32(cap.caps);
-    response->ocr = cpu_to_le32(cap.ocr);
-    response->f_min = cpu_to_le32(cap.f_min);
-    response->f_max = cpu_to_le32(cap.f_max);
-    response->max_blk_count = cpu_to_le16(cap.max_blk_count);
-    response->max_blk_size = cpu_to_le16(cap.max_blk_size);
+    response->caps = sys_cpu_to_le32(cap.caps);
+    response->ocr = sys_cpu_to_le32(cap.ocr);
+    response->f_min = sys_cpu_to_le32(cap.f_min);
+    response->f_max = sys_cpu_to_le32(cap.f_max);
+    response->max_blk_count = sys_cpu_to_le16(cap.max_blk_count);
+    response->max_blk_size = sys_cpu_to_le16(cap.max_blk_size);
 
     return GB_OP_SUCCESS;
 }
@@ -215,8 +215,8 @@ static uint8_t gb_sdio_protocol_set_ios(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    ios.clock = le32_to_cpu(request->clock);
-    ios.vdd = le32_to_cpu(request->vdd);
+    ios.clock = sys_le32_to_cpu(request->clock);
+    ios.vdd = sys_le32_to_cpu(request->vdd);
     ios.bus_mode = request->bus_mode;
     ios.power_mode = request->power_mode;
     ios.bus_width = request->bus_width;
@@ -261,9 +261,9 @@ static uint8_t gb_sdio_protocol_command(struct gb_operation *operation)
     cmd.cmd = request->cmd;
     cmd.cmd_flags = request->cmd_flags;
     cmd.cmd_type = request->cmd_type;
-    cmd.cmd_arg = le32_to_cpu(request->cmd_arg);
-    cmd.data_blocks = le16_to_cpu(request->data_blocks);
-    cmd.data_blksz = le16_to_cpu(request->data_blksz);
+    cmd.cmd_arg = sys_le32_to_cpu(request->cmd_arg);
+    cmd.data_blocks = sys_le16_to_cpu(request->data_blocks);
+    cmd.data_blksz = sys_le16_to_cpu(request->data_blksz);
     cmd.resp = resp;
     ret = device_sdio_send_cmd(bundle->dev, &cmd);
     if (ret && ret != -ETIMEDOUT) {
@@ -301,7 +301,7 @@ static uint8_t gb_sdio_protocol_command(struct gb_operation *operation)
      * must conver it to those bit position.
      */
     for (i = 0; i < 4; i++) {
-        response->resp[i] = cpu_to_le32(resp[i]);
+        response->resp[i] = sys_cpu_to_le32(resp[i]);
     }
 
     return GB_OP_SUCCESS;
@@ -334,8 +334,8 @@ static uint8_t gb_sdio_protocol_transfer(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    transfer.blocks = le16_to_cpu(request->data_blocks);
-    transfer.blksz = le16_to_cpu(request->data_blksz);
+    transfer.blocks = sys_le16_to_cpu(request->data_blocks);
+    transfer.blksz = sys_le16_to_cpu(request->data_blksz);
     transfer.dma = NULL; /* NO DMA so far */
     transfer.callback = NULL; /* NO non-blocking transfer */
 
@@ -352,8 +352,8 @@ static uint8_t gb_sdio_protocol_transfer(struct gb_operation *operation)
         if (!response) {
             return GB_OP_NO_MEMORY;
         }
-        response->data_blocks = cpu_to_le16(transfer.blocks);
-        response->data_blksz = cpu_to_le16(transfer.blksz);
+        response->data_blocks = sys_cpu_to_le16(transfer.blocks);
+        response->data_blksz = sys_cpu_to_le16(transfer.blksz);
     } else if (request->data_flags & GB_SDIO_DATA_READ) {
         response = gb_operation_alloc_response(operation, sizeof(*response) +
                                                           transfer.blocks *
@@ -366,8 +366,8 @@ static uint8_t gb_sdio_protocol_transfer(struct gb_operation *operation)
         if (ret) {
             return gb_errno_to_op_result(ret);
         }
-        response->data_blocks = cpu_to_le16(transfer.blocks);
-        response->data_blksz = cpu_to_le16(transfer.blksz);
+        response->data_blocks = sys_cpu_to_le16(transfer.blocks);
+        response->data_blksz = sys_cpu_to_le16(transfer.blksz);
     } else {
         return GB_OP_INVALID;
     }

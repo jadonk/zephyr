@@ -17,91 +17,91 @@ module-str = gb
 
 config GB_AUDIO
 	bool "Greybus Audio"
-	default y
+	default n
 	help
 	  Select this for Greybus Audio support.
 
 config GB_CAMERA
 	bool "Greybus Camera"
-	default y
+	default n
 	help
 	  Select this for Greybus Camera support.
 
 config GB_GPIO
 	bool "Greybus GPIO"
-	default y
+	default n
 	help
 	  Select this for Greybus GPIO support.
 
 config GB_DEBUG
 	bool "Debug Greybus"
-	default y
+	default n
 	help
 	  Select this to debug Greybus.
 
 config GB_HID
 	bool "Greybus HID"
-	default y
+	default n
 	help
 	  Select this for Greybus HID support.
 
 config GB_I2C
 	bool "Greybus I2C support"
-	default y
+	default n
 	help
 	  Select this for Greybus I2C support.
 
 config GB_LIGHTS
 	bool "Greybus Lights"
-	default y
+	default n
 	help
 	  Select this for Greybus Light support.
 
 config GB_LOOPBACK
 	bool "Greybus Loopback"
-	default y
+	default n
 	help
 	  Select this for Greybus Loopback support.
 
 config GB_POWER_SUPPLY
 	bool "Greybus Power Supply"
-	default y
+	default n
 	help
 	  Select this for Greybus Power Supply support.
 
 config GB_PWM
 	bool "Greybus PWM"
-	default y
+	default n
 	help
 	  Select this for Greybus Pulse Width Modulation support.
 
 config GB_SDIO
 	bool "Greybus SDIO"
-	default y
+	default n
 	help
 	  Select this for Greybus Secure Digital IO support.
 
 config GB_SPI
 	bool "Greybus SPI"
-	default y
+	default n
 	help
 	  Select this for Greybus Serial Peripheral Interface support.
 
 config GB_UART
 	bool "Greybus UART"
-	default y
+	default n
 	help
 	  Select this for Greybus Universal Asynchronous Receiver Transmitter support.
 
 config GB_USB
 	bool "Greybus USB"
-	default y
+	default n
 	help
 	  Select this for Greybus Universal Serial Bus support.
 
 config GB_VIBRATOR
 	bool "Greybus Vibrator"
-	default y
+	default n
 	help
 	  Select this for Greybus Vibrator support.
 

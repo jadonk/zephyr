@@ -28,19 +28,20 @@
  * Author: Fabien Parent <fparent@baylibre.com>
  */
 
-#include <nuttx/config.h>
-#include <nuttx/list.h>
-#include <nuttx/unipro/unipro.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/tape.h>
-#include <nuttx/greybus/debug.h>
-#include <nuttx/wdog.h>
-#include <loopback-gb.h>
+//#include <config.h>
+#include <list.h>
+#include <unipro/unipro.h>
+#include <greybus/greybus.h>
+#include <greybus/tape.h>
+#include <greybus/debug.h>
+//#include <wdog.h>
+//#include <loopback-gb.h>
 
-#include <apps/greybus-utils/manifest.h>
+#include <greybus-utils/manifest.h>
 
-#include <arch/atomic.h>
-#include <arch/byteorder.h>
+#include <sys/atomic.h>
+#include <sys/byteorder.h>
+#include <posix/pthread.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -53,8 +54,15 @@
 #define ONE_SEC_IN_MSEC         1000
 #define ONE_MSEC_IN_NSEC        1000000
 
+#ifndef CLOCKS_PER_SEC
+#define CLOCKS_PER_SEC 100
+#endif
+
 #define TIMEOUT_WD_DELAY    (TIMEOUT_IN_MS * CLOCKS_PER_SEC) / ONE_SEC_IN_MSEC
 
+struct wdog_s {
+	int woof;
+};
 struct gb_cport_driver {
     struct gb_driver *driver;
     struct list_head tx_fifo;
@@ -77,7 +85,7 @@ static struct gb_cport_driver *g_cport;
 static struct gb_bundle **g_bundle;
 static struct gb_transport_backend *transport_backend;
 static struct gb_tape_mechanism *gb_tape;
-static int gb_tape_fd = -EBADFD;
+static int gb_tape_fd = -EBADF;
 static struct gb_operation_hdr timedout_hdr = {
     .size = sizeof(timedout_hdr),
     .result = GB_OP_TIMEOUT,
@@ -253,9 +261,9 @@ static bool gb_operation_has_timedout(struct gb_operation *operation)
  */
 static void gb_watchdog_update(unsigned int cport)
 {
-    irqstate_t flags;
+    //irqstate_t flags;
 
-    flags = irqsave();
+    //flags = irqsave();
 
     if (list_is_empty(&g_cport[cport].tx_fifo)) {
         wd_cancel(&g_cport[cport].timeout_wd);
@@ -264,12 +272,12 @@ static void gb_watchdog_update(unsigned int cport)
                  gb_operation_timeout, 1, cport);
     }
 
-    irqrestore(flags);
+    //irqrestore(flags);
 }
 
 static void gb_clean_timedout_operation(unsigned int cport)
 {
-    irqstate_t flags;
+    //irqstate_t flags;
     struct list_head *iter, *iter_next;
     struct gb_operation *op;
 
@@ -280,9 +288,9 @@ static void gb_clean_timedout_operation(unsigned int cport)
             continue;
         }
 
-        flags = irqsave();
+        //flags = irqsave();
         list_del(iter);
-        irqrestore(flags);
+        //irqrestore(flags);
 
         if (op->callback) {
             op->callback(op);
@@ -296,7 +304,7 @@ static void gb_clean_timedout_operation(unsigned int cport)
 static void gb_process_response(struct gb_operation_hdr *hdr,
                                 struct gb_operation *operation)
 {
-    irqstate_t flags;
+    //irqstate_t flags;
     struct list_head *iter, *iter_next;
     struct gb_operation *op;
     struct gb_operation_hdr *op_hdr;
@@ -308,10 +316,10 @@ static void gb_process_response(struct gb_operation_hdr *hdr,
         if (hdr->id != op_hdr->id)
             continue;
 
-        flags = irqsave();
+        //flags = irqsave();
         list_del(iter);
         gb_watchdog_update(operation->cport);
-        irqrestore(flags);
+        //irqrestore(flags);
 
         /* attach this response with the original request */
         gb_operation_ref(operation);
@@ -324,13 +332,13 @@ static void gb_process_response(struct gb_operation_hdr *hdr,
     }
 
     gb_error("CPort %u: cannot find matching request for response %hu. Dropping message.\n",
-             operation->cport, le16_to_cpu(hdr->id));
+             operation->cport, sys_le16_to_cpu(hdr->id));
 }
 
 static void *gb_pending_message_worker(void *data)
 {
     const int cportid = (int) data;
-    irqstate_t flags;
+    //irqstate_t flags;
     struct gb_operation *operation;
     struct list_head *head;
     struct gb_operation_hdr *hdr;
@@ -346,10 +354,10 @@ static void *gb_pending_message_worker(void *data)
             break;
         }
 
-        flags = irqsave();
+        //flags = irqsave();
         head = g_cport[cportid].rx_fifo.next;
         list_del(g_cport[cportid].rx_fifo.next);
-        irqrestore(flags);
+        //irqrestore(flags);
 
         operation = list_entry(head, struct gb_operation, list);
         hdr = operation->request_buffer;
@@ -402,7 +410,7 @@ static struct gb_operation *gb_rx_create_operation(unsigned cport, void *data,
 
 int greybus_rx_handler(unsigned int cport, void *data, size_t size)
 {
-    irqstate_t flags;
+    //irqstate_t flags;
     struct gb_operation *op;
     struct gb_operation_hdr *hdr = data;
     struct gb_operation_handler *op_handler;
@@ -424,7 +432,7 @@ int greybus_rx_handler(unsigned int cport, void *data, size_t size)
         return -EINVAL; /* Dropping garbage request */
     }
 
-    hdr_size = le16_to_cpu(hdr->size);
+    hdr_size = sys_le16_to_cpu(hdr->size);
 
     if (hdr_size > size || sizeof(*hdr) > hdr_size) {
         gb_error("Dropping garbage request\n");
@@ -456,10 +464,10 @@ int greybus_rx_handler(unsigned int cport, void *data, size_t size)
 
     op_mark_recv_time(op);
 
-    flags = irqsave();
+    //flags = irqsave();
     list_add(&g_cport[cport].rx_fifo, &op->list);
     sem_post(&g_cport[cport].rx_fifo_lock);
-    irqrestore(flags);
+    //irqrestore(flags);
 
     return 0;
 }
@@ -646,19 +654,19 @@ int gb_stop_listening(unsigned int cport)
 
 static void gb_operation_timeout(int argc, uint32_t cport, ...)
 {
-    irqstate_t flags;
+    //irqstate_t flags;
 
-    flags = irqsave();
+    //flags = irqsave();
 
     /* timedout operation could potentially already been queued */
     if (!list_is_empty(&g_cport[cport].timedout_operation.list)) {
-        irqrestore(flags);
+        //irqrestore(flags);
         return;
     }
 
     list_add(&g_cport[cport].rx_fifo, &g_cport[cport].timedout_operation.list);
     sem_post(&g_cport[cport].rx_fifo_lock);
-    irqrestore(flags);
+    //irqrestore(flags);
 }
 
 static int gb_operation_send_request_nowait_cb(int status, const void *buf,
@@ -684,7 +692,7 @@ int gb_operation_send_request_nowait(struct gb_operation *operation,
 {
     struct gb_operation_hdr *hdr = operation->request_buffer;
     int retval = 0;
-    irqstate_t flags;
+    //irqstate_t flags;
 
     DEBUGASSERT(operation);
     DEBUGASSERT(transport_backend);
@@ -705,14 +713,14 @@ int gb_operation_send_request_nowait(struct gb_operation *operation,
 
     gb_operation_ref(operation);
 
-    flags = irqsave();
+    //flags = irqsave();
     retval = transport_backend->send_async(operation->cport,
                                            operation->request_buffer,
-                                           le16_to_cpu(hdr->size),
+                                           sys_le16_to_cpu(hdr->size),
                                            gb_operation_send_request_nowait_cb,
                                            operation);
     op_mark_send_time(operation);
-    irqrestore(flags);
+    //irqrestore(flags);
 
     return retval;
 }
@@ -723,7 +731,7 @@ int gb_operation_send_request(struct gb_operation *operation,
 {
     struct gb_operation_hdr *hdr = operation->request_buffer;
     int retval = 0;
-    irqstate_t flags;
+    //irqstate_t flags;
 
     DEBUGASSERT(operation);
     DEBUGASSERT(transport_backend);
@@ -734,12 +742,12 @@ int gb_operation_send_request(struct gb_operation *operation,
 
     hdr->id = 0;
 
-    flags = irqsave();
+    //flags = irqsave();
 
     if (need_response) {
-        hdr->id = cpu_to_le16(atomic_inc(&request_id));
+        hdr->id = sys_cpu_to_le16(atomic_inc(&request_id));
         if (hdr->id == 0) /* ID 0 is for request with no response */
-            hdr->id = cpu_to_le16(atomic_inc(&request_id));
+            hdr->id = sys_cpu_to_le16(atomic_inc(&request_id));
         clock_gettime(CLOCK_MONOTONIC, &operation->time);
         operation->callback = callback;
         gb_operation_ref(operation);
@@ -753,7 +761,7 @@ int gb_operation_send_request(struct gb_operation *operation,
     gb_dump(operation->request_buffer, hdr->size);
     retval = transport_backend->send(operation->cport,
                                      operation->request_buffer,
-                                     le16_to_cpu(hdr->size));
+                                     sys_le16_to_cpu(hdr->size));
     op_mark_send_time(operation);
     if (need_response && retval) {
         list_del(&operation->list);
@@ -761,7 +769,7 @@ int gb_operation_send_request(struct gb_operation *operation,
         gb_operation_unref(operation);
     }
 
-    irqrestore(flags);
+    //irqrestore(flags);
 
     return retval;
 }
@@ -792,13 +800,13 @@ int gb_operation_send_request_sync(struct gb_operation *operation)
 static int gb_operation_send_oom_response(struct gb_operation *operation)
 {
     int retval;
-    irqstate_t flags;
+    //irqstate_t flags;
     struct gb_operation_hdr *req_hdr = operation->request_buffer;
 
     if (g_cport[operation->cport].exit_worker)
         return -ENETDOWN;
 
-    flags = irqsave();
+    //flags = irqsave();
 
     oom_hdr.id = req_hdr->id;
     oom_hdr.type = GB_TYPE_RESPONSE_FLAG | req_hdr->type;
@@ -806,7 +814,7 @@ static int gb_operation_send_oom_response(struct gb_operation *operation)
     retval = transport_backend->send(operation->cport, &oom_hdr,
                                      sizeof(oom_hdr));
 
-    irqrestore(flags);
+    //irqrestore(flags);
 
     return retval;
 }
@@ -842,7 +850,7 @@ int gb_operation_send_response(struct gb_operation *operation, uint8_t result)
     gb_loopback_log_exit(operation->cport, operation, resp_hdr->size);
     retval = transport_backend->send(operation->cport,
                                      operation->response_buffer,
-                                     le16_to_cpu(resp_hdr->size));
+                                     sys_le16_to_cpu(resp_hdr->size));
     if (retval) {
         gb_error("Greybus backend failed to send: error %d\n", retval);
         if (has_allocated_response) {
@@ -876,7 +884,7 @@ void *gb_operation_alloc_response(struct gb_operation *operation, size_t size)
     req_hdr = operation->request_buffer;
     resp_hdr = operation->response_buffer;
 
-    resp_hdr->size = cpu_to_le16(size + sizeof(*resp_hdr));
+    resp_hdr->size = sys_cpu_to_le16(size + sizeof(*resp_hdr));
     resp_hdr->id = req_hdr->id;
     resp_hdr->type = GB_TYPE_RESPONSE_FLAG | req_hdr->type;
     return gb_operation_get_response_payload(operation);
@@ -959,7 +967,7 @@ struct gb_operation *gb_operation_create(unsigned int cport, uint8_t type,
 
     memset(operation->request_buffer, 0, req_size + sizeof(*hdr));
     hdr = operation->request_buffer;
-    hdr->size = cpu_to_le16(req_size + sizeof(*hdr));
+    hdr->size = sys_cpu_to_le16(req_size + sizeof(*hdr));
     hdr->type = type;
 
     return operation;
@@ -977,11 +985,11 @@ size_t gb_operation_get_request_payload_size(struct gb_operation *operation)
     }
 
     hdr = operation->request_buffer;
-    if (le16_to_cpu(hdr->size) < sizeof(*hdr)) {
+    if (sys_le16_to_cpu(hdr->size) < sizeof(*hdr)) {
         return 0;
     }
 
-    return le16_to_cpu(hdr->size) - sizeof(*hdr);
+    return sys_le16_to_cpu(hdr->size) - sizeof(*hdr);
 }
 
 uint8_t gb_operation_get_request_result(struct gb_operation *operation)
@@ -1106,7 +1114,7 @@ int gb_tape_stop(void)
         return -EINVAL;
 
     gb_tape->close(gb_tape_fd);
-    gb_tape_fd = -EBADFD;
+    gb_tape_fd = -EBADF;
 
     return 0;
 }

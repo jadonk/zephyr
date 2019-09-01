@@ -26,58 +26,30 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdarg.h>
-#include <greybus/debug.h>
-//#include <arch/irq.h>
-#include <irq.h>
+#ifndef _GREYBUS_UTILS_MANIFEST_H_
+#define _GREYBUS_UTILS_MANIFEST_H_
 
-#if defined(CONFIG_GB_LOG_ERROR)
-#define GB_LOG_LEVEL (GB_LOG_ERROR)
-#elif defined(CONFIG_GB_LOG_WARNING)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING)
-#elif defined(CONFIG_GB_LOG_DEBUG)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG)
-#elif defined(CONFIG_GB_LOG_DUMP)
-#define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG | \
-                      GB_LOG_DUMP)
-#else
-#define GB_LOG_LEVEL (GB_LOG_INFO)
+//#include <list.h>
+
+struct gb_cport {
+    //struct list_head list;
+    int id;
+    int bundle;
+    int protocol;
+};
+
+typedef void (*manifest_handler)(unsigned char *manifest_file,
+                                 int device_id, int manifest_number);
+void foreach_manifest(manifest_handler handler);
+void enable_cports(void);
+void *get_manifest_blob(void);
+void parse_manifest_blob(void *manifest);
+void enable_manifest(char *name, void *manifest, int device_id);
+void disable_manifest(char *name, void *priv, int device_id);
+void release_manifest_blob(void *manifest);
+struct list_head *get_manifest_cports(void);
+int get_manifest_size(void);
+size_t manifest_get_max_bundle_id(void);
+
 #endif
-#define GB_DUMP_LINE_LENGTH 16
 
-int gb_log_level = GB_LOG_LEVEL;
-
-void _gb_log(const char *fmt, ...)
-{
-    //irqstate_t flags;
-    va_list ap;
-
-    va_start(ap, fmt);
-    //flags = irqsave();
-    lowvsyslog(fmt, ap);
-    irqrestore(flags);
-    va_end(ap);
-}
-
-void _gb_dump(const char *func, __u8 *buf, size_t size)
-{
-    int i, count;
-    irqstate_t flags;
-
-    flags = irqsave();
-    lowsyslog("%s:\n", func);
-    count = 0;
-    for (i = 0; i < size; i++) {
-        lowsyslog( "%02x ", buf[i]);
-        /**
-         * Add line-breaks every so often to divide the dump into readable rows
-         * of bytes.
-         */
-        if (++count == GB_DUMP_LINE_LENGTH) {
-            lowsyslog("\n");
-            count = 0;
-        }
-    }
-    lowsyslog("\n");
-    irqrestore(flags);
-}

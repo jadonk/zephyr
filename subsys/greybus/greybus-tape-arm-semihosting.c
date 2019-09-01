@@ -30,7 +30,7 @@
 
 #include <errno.h>
 #include <arch/arm/semihosting.h>
-#include <nuttx/greybus/tape.h>
+#include <greybus/tape.h>
 
 static ssize_t gb_tape_write(int fd, const void *data, size_t size)
 {

@@ -29,10 +29,10 @@
  */
 
 #include <errno.h>
-#include <nuttx/bufram.h>
-#include <nuttx/unipro/unipro.h>
-#include <nuttx/greybus/debug.h>
-#include <nuttx/greybus/greybus.h>
+#include <bufram.h>
+#include <unipro/unipro.h>
+#include <greybus/debug.h>
+#include <greybus/greybus.h>
 
 static int gb_unipro_rx_handler(unsigned int cport, void *data, size_t size)
 {

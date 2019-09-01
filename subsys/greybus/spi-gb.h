@@ -29,7 +29,7 @@
 #ifndef _GREYBUS_SPI_H_
 #define _GREYBUS_SPI_H_
 
-#include <nuttx/greybus/types.h>
+#include <greybus/types.h>
 
 /* SPI Protocol Operation Types */
 #define GB_SPI_PROTOCOL_VERSION     0x01    /* Protocol Version */

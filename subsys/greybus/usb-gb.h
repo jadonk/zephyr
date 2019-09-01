@@ -29,7 +29,7 @@
 #ifndef __USB_GB_H__
 #define __USB_GB_H__
 
-#include <nuttx/greybus/types.h>
+#include <greybus/types.h>
 
 /* Version of the Greybus USB protocol we support */
 #define GB_USB_VERSION_MAJOR		0x00

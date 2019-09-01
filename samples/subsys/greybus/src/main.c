@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Open-RnD Sp. z o.o.
+ * Copyright (c) Friedt Professional Engineering Services, Inc, 2019
  *
  * SPDX-License-Identifier: Apache-2.0
  */

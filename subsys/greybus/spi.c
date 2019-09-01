@@ -31,13 +31,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <nuttx/device.h>
-#include <nuttx/device_spi.h>
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/debug.h>
+#include <device.h>
+#include <device_spi.h>
+#include <greybus/greybus.h>
+#include <greybus/debug.h>
 #include <apps/greybus-utils/utils.h>
 
-#include <arch/byteorder.h>
+#include <sys/byteorder.h>
 
 #include "spi-gb.h"
 
@@ -92,12 +92,12 @@ static uint8_t gb_spi_protocol_master_config(struct gb_operation *operation)
         return GB_OP_NO_MEMORY;
     }
 
-    response->bpw_mask = cpu_to_le32(master_config.bpw_mask);
-    response->min_speed_hz = cpu_to_le32(master_config.min_speed_hz);
-    response->max_speed_hz = cpu_to_le32(master_config.max_speed_hz);
-    response->mode = cpu_to_le16(master_config.mode);
-    response->flags = cpu_to_le16(master_config.flags);
-    response->num_chipselect = cpu_to_le16(master_config.dev_num);
+    response->bpw_mask = sys_cpu_to_le32(master_config.bpw_mask);
+    response->min_speed_hz = sys_cpu_to_le32(master_config.min_speed_hz);
+    response->max_speed_hz = sys_cpu_to_le32(master_config.max_speed_hz);
+    response->mode = sys_cpu_to_le16(master_config.mode);
+    response->flags = sys_cpu_to_le16(master_config.flags);
+    response->num_chipselect = sys_cpu_to_le16(master_config.dev_num);
 
     return GB_OP_SUCCESS;
 }
@@ -144,9 +144,9 @@ static uint8_t gb_spi_protocol_device_config(struct gb_operation *operation)
     }
 
     response->device_type = device_cfg.device_type;
-    response->mode = cpu_to_le16(device_cfg.mode);
+    response->mode = sys_cpu_to_le16(device_cfg.mode);
     response->bpw = device_cfg.bpw;
-    response->max_speed_hz = cpu_to_le32(device_cfg.max_speed_hz);
+    response->max_speed_hz = sys_cpu_to_le32(device_cfg.max_speed_hz);
     memcpy(response->name, &device_cfg.name, sizeof(device_cfg.name));
 
     return GB_OP_SUCCESS;
@@ -184,7 +184,7 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
     }
 
     request = gb_operation_get_request_payload(operation);
-    op_count = le16_to_cpu(request->count);
+    op_count = sys_le16_to_cpu(request->count);
 
     expected_size = sizeof(*request) +
                     op_count * sizeof(request->transfers[0]);
@@ -198,7 +198,7 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
     for (i = 0; i < op_count; i++) {
         desc = &request->transfers[i];
         if (desc->rdwr & GB_SPI_XFER_READ) {
-            size += le32_to_cpu(desc->len);
+            size += sys_le32_to_cpu(desc->len);
         }
     }
 
@@ -217,7 +217,7 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
     /* parse all transfer request from AP host side */
     for (i = 0; i < op_count; i++) {
         desc = &request->transfers[i];
-        freq = le32_to_cpu(desc->speed_hz);
+        freq = sys_le32_to_cpu(desc->speed_hz);
 
         /* assert chip-select pin */
         if (!selected) {
@@ -238,7 +238,7 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
             transfer.rxbuffer = NULL;
         }
 
-        transfer.nwords = le32_to_cpu(desc->len);
+        transfer.nwords = sys_le32_to_cpu(desc->len);
 
         /* set SPI configuration */
         config.max_speed_hz = freq;
@@ -252,17 +252,17 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
             goto spi_err;
         }
         /* move to next gb_spi_transfer data buffer */
-        write_data += le32_to_cpu(desc->len);
+        write_data += sys_le32_to_cpu(desc->len);
 
         /* If rdwr without GB_SPI_XFER_READ flag, not need to resize
          * read buffer
          */
         if (desc->rdwr & GB_SPI_XFER_READ) {
-            read_buf += le32_to_cpu(desc->len);
+            read_buf += sys_le32_to_cpu(desc->len);
         }
 
-        if (le16_to_cpu(desc->delay_usecs) > 0) {
-            usleep(le16_to_cpu(desc->delay_usecs));
+        if (sys_le16_to_cpu(desc->delay_usecs) > 0) {
+            usleep(sys_le16_to_cpu(desc->delay_usecs));
         }
 
         /* if cs_change enable, change the chip-select pin signal */

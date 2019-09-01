@@ -28,12 +28,12 @@
  * Author: Fabien Parent <fparent@baylibre.com>
  */
 
-#include <nuttx/greybus/greybus.h>
-#include <nuttx/greybus/debug.h>
+#include <greybus/greybus.h>
+#include <greybus/debug.h>
 #include "gpio-gb.h"
 
-#include <arch/byteorder.h>
-#include <nuttx/gpio.h>
+#include <sys/byteorder.h>
+#include <gpio.h>
 
 #define GB_GPIO_VERSION_MAJOR 0
 #define GB_GPIO_VERSION_MINOR 1
@@ -212,7 +212,7 @@ static uint8_t gb_gpio_set_debounce(struct gb_operation *operation)
     if (request->which >= gpio_line_count())
         return GB_OP_INVALID;
 
-    ret = gpio_set_debounce(request->which, le16_to_cpu(request->usec));
+    ret = gpio_set_debounce(request->which, sys_le16_to_cpu(request->usec));
     if (ret)
         return GB_OP_UNKNOWN_ERROR;
 
@@ -294,19 +294,19 @@ static uint8_t gb_gpio_irq_type(struct gb_operation *operation)
 
     switch(request->type) {
     case GB_GPIO_IRQ_TYPE_EDGE_RISING:
-        trigger = IRQ_TYPE_EDGE_RISING;
+        //trigger = IRQ_TYPE_EDGE_RISING;
         break;
     case GB_GPIO_IRQ_TYPE_EDGE_FALLING:
-        trigger = IRQ_TYPE_EDGE_FALLING;
+        //trigger = IRQ_TYPE_EDGE_FALLING;
         break;
     case GB_GPIO_IRQ_TYPE_EDGE_BOTH:
-        trigger = IRQ_TYPE_EDGE_BOTH;
+        //trigger = IRQ_TYPE_EDGE_BOTH;
         break;
     case GB_GPIO_IRQ_TYPE_LEVEL_HIGH:
-        trigger = IRQ_TYPE_LEVEL_HIGH;
+        //trigger = IRQ_TYPE_LEVEL_HIGH;
         break;
     case GB_GPIO_IRQ_TYPE_LEVEL_LOW:
-        trigger = IRQ_TYPE_LEVEL_LOW;
+        //trigger = IRQ_TYPE_LEVEL_LOW;
         break;
     default:
         return GB_OP_INVALID;

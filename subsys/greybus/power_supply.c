@@ -31,12 +31,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <arch/byteorder.h>
-#include <nuttx/greybus/greybus.h>
+#include <sys/byteorder.h>
+#include <greybus/greybus.h>
 #include <apps/greybus-utils/utils.h>
 
 #include "power_supply-gb.h"
-#include <nuttx/device_power_supply.h>
+#include <device_power_supply.h>
 
 /* Version of the Greybus power supply protocol we support */
 #define GB_POWER_SUPPLY_VERSION_MAJOR 0x00
@@ -181,7 +181,7 @@ static uint8_t gb_power_supply_get_description(struct gb_operation *operation)
     memcpy(response->manufacturer, description.manufacturer, DESC_LEN);
     memcpy(response->model, description.model, DESC_LEN);
     memcpy(response->serial_number, description.serial_number, DESC_LEN);
-    response->type = cpu_to_le16(description.type);
+    response->type = sys_cpu_to_le16(description.type);
     response->properties_count = description.properties_count;
 
     return GB_OP_SUCCESS;
@@ -293,7 +293,7 @@ static uint8_t gb_power_supply_get_property(struct gb_operation *operation)
         return GB_OP_NO_MEMORY;
     }
 
-    response->prop_val = cpu_to_le32(prop_val);
+    response->prop_val = sys_cpu_to_le32(prop_val);
 
     return GB_OP_SUCCESS;
 }
@@ -327,7 +327,7 @@ static uint8_t gb_power_supply_set_property(struct gb_operation *operation)
     }
 
     property = request->property;
-    prop_val = le32_to_cpu(request->prop_val);
+    prop_val = sys_le32_to_cpu(request->prop_val);
     ret = device_power_supply_set_property(bundle->dev, request->psy_id,
                                            property, prop_val);
     if (ret) {

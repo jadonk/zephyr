@@ -264,7 +264,9 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 		       "ms (per build configuration) *****\n");
 		k_busy_wait(CONFIG_BOOT_DELAY * USEC_PER_MSEC);
 	}
+#if 0
 	PRINT_BOOT_BANNER();
+#endif
 
 	/* Final init level before app starts */
 	z_sys_device_do_config_level(_SYS_INIT_LEVEL_APPLICATION);

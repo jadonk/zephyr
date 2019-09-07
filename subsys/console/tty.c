@@ -113,7 +113,7 @@ ssize_t tty_write(struct tty_serial *tty, const void *buf, size_t size)
 		return out_size;
 	}
 
-	while (size--) {
+	for(; size; size--) {
 		res = tty_putchar(tty, *p++);
 		if (res < 0) {
 			/* If we didn't transmit anything, return the error. */

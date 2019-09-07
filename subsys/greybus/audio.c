@@ -1057,7 +1057,7 @@ static uint8_t gb_audio_deactivate_tx_handler(struct gb_operation *operation)
                 gb_operation_get_request_payload(operation);
     struct gb_audio_info *info;
     struct gb_audio_dai_info *dai;
-    //irqstate_t flags;
+    int flags;
 
     if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
         gb_error("dropping short message\n");
@@ -1078,17 +1078,17 @@ static uint8_t gb_audio_deactivate_tx_handler(struct gb_operation *operation)
         return GB_OP_PROTOCOL_BAD;
     }
 
-    //flags = irqsave();
+    flags = irq_lock();
 
     dai->flags |= GB_AUDIO_FLAG_TX_STOPPING;
 
     if (dai->flags & GB_AUDIO_FLAG_TX_STARTED) {
-        //irqrestore(flags);
+        irq_unlock(flags);
         sem_wait(&dai->tx_stop_sem);
         device_i2s_stop_transmitter(dai->i2s_dev);
         dai->flags &= ~GB_AUDIO_FLAG_TX_STARTED;
     } else {
-        //irqrestore(flags);
+        irq_unlock(flags);
     }
 
     device_i2s_shutdown_transmitter(dai->i2s_dev);
@@ -1736,7 +1736,7 @@ static uint8_t gb_audio_send_data_handler(struct gb_operation *operation)
     struct gb_audio_send_data_request *request =
                 gb_operation_get_request_payload(operation);
     struct gb_audio_dai_info *dai;
-    //irqstate_t flags;
+    int flags;
     int ret;
 
     if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
@@ -1749,20 +1749,20 @@ static uint8_t gb_audio_send_data_handler(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    //flags = irqsave();
+    flags = irq_lock();
 
     if (!(dai->flags & GB_AUDIO_FLAG_TX_ACTIVE)) {
-        //irqrestore(flags);
+        irq_unlock(flags);
         return GB_OP_PROTOCOL_BAD;
     }
 
     if (dai->flags & GB_AUDIO_FLAG_TX_STOPPING) {
-        //irqrestore(flags);
+        irq_unlock(flags);
         return GB_OP_SUCCESS;
     }
 
     if (!ring_buf_is_producers(dai->tx_rb)) {
-        //irqrestore(flags);
+        irq_unlock(flags);
         gb_audio_report_event(dai, GB_AUDIO_STREAMING_EVENT_OVERRUN);
         return GB_OP_SUCCESS;
     }
@@ -1777,7 +1777,7 @@ static uint8_t gb_audio_send_data_handler(struct gb_operation *operation)
 
     dai->flags |= GB_AUDIO_FLAG_TX_STARTED;
 
-    //irqrestore(flags);
+    irq_unlock(flags);
 
     ret = device_i2s_start_transmitter(dai->i2s_dev);
     if (ret) {

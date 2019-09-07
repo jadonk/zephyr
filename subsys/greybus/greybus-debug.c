@@ -49,13 +49,13 @@ int gb_log_level = GB_LOG_LEVEL;
 
 void _gb_log(const char *fmt, ...)
 {
-    //irqstate_t flags;
+    int flags;
     va_list ap;
 
     va_start(ap, fmt);
-    //flags = irqsave();
+    flags = irq_lock();
     lowvsyslog(fmt, ap);
-    irqrestore(flags);
+    irq_unlock(flags);
     va_end(ap);
 }
 
@@ -64,7 +64,7 @@ void _gb_dump(const char *func, __u8 *buf, size_t size)
     int i, count;
     irqstate_t flags;
 
-    flags = irqsave();
+    flags = irq_lock();
     lowsyslog("%s:\n", func);
     count = 0;
     for (i = 0; i < size; i++) {
@@ -79,5 +79,5 @@ void _gb_dump(const char *func, __u8 *buf, size_t size)
         }
     }
     lowsyslog("\n");
-    irqrestore(flags);
+    irq_unlock(flags);
 }

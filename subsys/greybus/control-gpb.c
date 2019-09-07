@@ -153,6 +153,59 @@ static uint8_t gb_control_disconnected(struct gb_operation *operation)
     return GB_OP_SUCCESS;
 }
 
+static uint8_t gb_control_disconnecting(struct gb_operation *operation)
+{
+	return GB_OP_SUCCESS;
+}
+
+static uint8_t gb_control_bundle_activate(struct gb_operation *operation)
+{
+	struct gb_control_bundle_pm_response *response;
+    response = gb_operation_alloc_response(operation, sizeof(*response));
+    if (!response)
+        return GB_OP_NO_MEMORY;
+
+    response->status = GB_CONTROL_BUNDLE_PM_OK;
+
+	return GB_OP_SUCCESS;
+}
+
+static uint8_t gb_control_bundle_suspend(struct gb_operation *operation)
+{
+	struct gb_control_bundle_pm_response *response;
+    response = gb_operation_alloc_response(operation, sizeof(*response));
+    if (!response)
+        return GB_OP_NO_MEMORY;
+
+    response->status = GB_CONTROL_BUNDLE_PM_OK;
+
+	return GB_OP_SUCCESS;
+}
+
+static uint8_t gb_control_bundle_resume(struct gb_operation *operation)
+{
+	struct gb_control_bundle_pm_response *response;
+    response = gb_operation_alloc_response(operation, sizeof(*response));
+    if (!response)
+        return GB_OP_NO_MEMORY;
+
+    response->status = GB_CONTROL_BUNDLE_PM_OK;
+
+	return GB_OP_SUCCESS;
+}
+
+static uint8_t gb_control_intf_suspend_prepare(struct gb_operation *operation)
+{
+	struct gb_control_bundle_pm_response *response;
+    response = gb_operation_alloc_response(operation, sizeof(*response));
+    if (!response)
+        return GB_OP_NO_MEMORY;
+
+    response->status = GB_CONTROL_BUNDLE_PM_OK;
+
+	return GB_OP_SUCCESS;
+}
+
 static uint8_t gb_control_interface_version(struct gb_operation *operation)
 {
     struct gb_control_interface_version_response *response;
@@ -336,6 +389,11 @@ static struct gb_operation_handler gb_control_handlers[] = {
     GB_HANDLER(GB_CONTROL_TYPE_CONNECTED, gb_control_connected),
     GB_HANDLER(GB_CONTROL_TYPE_DISCONNECTED, gb_control_disconnected),
     GB_HANDLER(GB_CONTROL_TYPE_INTERFACE_VERSION, gb_control_interface_version),
+	GB_HANDLER(GB_CONTROL_TYPE_DISCONNECTING, gb_control_disconnecting),
+	GB_HANDLER(GB_CONTROL_TYPE_BUNDLE_ACTIVATE, gb_control_bundle_activate),
+	GB_HANDLER(GB_CONTROL_TYPE_BUNDLE_SUSPEND, gb_control_bundle_suspend),
+	GB_HANDLER(GB_CONTROL_TYPE_BUNDLE_RESUME, gb_control_bundle_resume),
+	GB_HANDLER(GB_CONTROL_TYPE_INTF_SUSPEND_PREPARE, gb_control_intf_suspend_prepare),
     /* XXX SW-4136: see control-gb.h */
     /*GB_HANDLER(GB_CONTROL_TYPE_INTF_POWER_STATE_SET, gb_control_intf_pwr_set),
     GB_HANDLER(GB_CONTROL_TYPE_BUNDLE_POWER_STATE_SET, gb_control_bundle_pwr_set),*/

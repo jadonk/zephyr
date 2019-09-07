@@ -447,9 +447,9 @@ void gb_loopback_register(int cport, int bundle)
         loopback->cport = cport;
         pthread_mutex_init(&loopback->lock, NULL);
         loopback->ts.tag = true;
-        flags = irqsave();
+        flags = irq_lock();
         list_add(&gb_loopback_list, &loopback->list);
-        irqrestore(flags);
+        irq_unlock(flags);
     }
     gb_timestamp_init();
     gb_register_driver(cport, bundle, &loopback_driver);

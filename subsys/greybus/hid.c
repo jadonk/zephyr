@@ -108,11 +108,11 @@ struct gb_hid_info {
  */
 static void node_requeue(sq_queue_t *queue, struct op_node *node)
 {
-    irqstate_t flags = irqsave();
+    irqstate_t flags = irq_lock();
 
     sq_addlast(&node->entry, queue);
 
-    irqrestore(flags);
+    irq_unlock(flags);
 }
 
 /**
@@ -124,15 +124,15 @@ static void node_requeue(sq_queue_t *queue, struct op_node *node)
 static struct op_node *node_dequeue(sq_queue_t *queue)
 {
     struct op_node *node = NULL;
-    irqstate_t flags = irqsave();
+    irqstate_t flags = irq_lock();
 
     if (sq_empty(queue)) {
-        irqrestore(flags);
+        irq_unlock(flags);
         return NULL;
     }
 
     node = (struct op_node *)sq_remfirst(queue);
-    irqrestore(flags);
+    irq_unlock(flags);
 
     return node;
 }

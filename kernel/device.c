@@ -76,7 +76,7 @@ struct device *z_impl_device_get_binding(const char *name)
 	 */
 	for (info = __device_init_start; info != __device_init_end; info++) {
 		if ((info->driver_api != NULL) &&
-		    (info->config->name == name)) {
+		    (0 == strcmp(info->config->name, name))) {
 			return info;
 		}
 	}

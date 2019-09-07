@@ -120,11 +120,11 @@ struct gb_uart_info {
  */
 static void put_node_back(sq_queue_t *queue, struct buf_node *node)
 {
-    irqstate_t flags = irqsave();
+    irqstate_t flags = irq_lock();
 
     sq_addlast(&node->entry, queue);
 
-    irqrestore(flags);
+    irq_unlock(flags);
 }
 
 /**
@@ -136,15 +136,15 @@ static void put_node_back(sq_queue_t *queue, struct buf_node *node)
 static struct buf_node *get_node_from(sq_queue_t *queue)
 {
     struct buf_node *node = NULL;
-    irqstate_t flags = irqsave();
+    irqstate_t flags = irq_lock();
 
     if (sq_empty(queue)) {
-        irqrestore(flags);
+        irq_unlock(flags);
         return NULL;
     }
 
     node = (struct buf_node *)sq_remfirst(queue);
-    irqrestore(flags);
+    irq_unlock(flags);
 
     return node;
 }

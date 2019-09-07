@@ -29,10 +29,10 @@
 #ifndef _GREYBUS_UTILS_MANIFEST_H_
 #define _GREYBUS_UTILS_MANIFEST_H_
 
-//#include <list.h>
+#include <list.h>
 
 struct gb_cport {
-    //struct list_head list;
+    struct list_head list;
     int id;
     int bundle;
     int protocol;
@@ -43,6 +43,8 @@ typedef void (*manifest_handler)(unsigned char *manifest_file,
 void foreach_manifest(manifest_handler handler);
 void enable_cports(void);
 void *get_manifest_blob(void);
+void set_manifest_blob(void *blob);
+bool manifest_parse(void *data, size_t size);
 void parse_manifest_blob(void *manifest);
 void enable_manifest(char *name, void *manifest, int device_id);
 void disable_manifest(char *name, void *priv, int device_id);

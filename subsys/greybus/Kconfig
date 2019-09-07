@@ -4,105 +4,111 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-menuconfig GB
+menuconfig GREYBUS
 	bool "Greybus"
 	help
 	  This option enables Greybus support.
 
-if GB
+if GREYBUS
 
-module = GB
+module = GREYBUS
 module-str = gb
 #source "subsys/logging/Kconfig.template.log_config"
 
-config GB_AUDIO
+config GREYBUS_AUDIO
 	bool "Greybus Audio"
 	default n
 	help
 	  Select this for Greybus Audio support.
 
-config GB_CAMERA
+config GREYBUS_CAMERA
 	bool "Greybus Camera"
 	default n
 	help
 	  Select this for Greybus Camera support.
 
-config GB_GPIO
-	bool "Greybus GPIO"
+config GREYBUS_CONTROL
+	bool "Greybus Control"
 	default n
 	help
-	  Select this for Greybus GPIO support.
+	  Select this for a Greybus Control cport.
 
-config GB_DEBUG
+config GREYBUS_DEBUG
 	bool "Debug Greybus"
 	default n
 	help
 	  Select this to debug Greybus.
 
-config GB_HID
+config GREYBUS_GPIO
+	bool "Greybus GPIO"
+	default n
+	help
+	  Select this for Greybus GPIO support.
+
+config GREYBUS_HID
 	bool "Greybus HID"
 	default n
 	help
 	  Select this for Greybus HID support.
 
-config GB_I2C
+config GREYBUS_I2C
 	bool "Greybus I2C support"
 	default n
 	help
 	  Select this for Greybus I2C support.
 
-config GB_LIGHTS
+config GREYBUS_LIGHTS
 	bool "Greybus Lights"
 	default n
 	help
 	  Select this for Greybus Light support.
 
-config GB_LOOPBACK
+config GREYBUS_LOOPBACK
 	bool "Greybus Loopback"
 	default n
 	help
 	  Select this for Greybus Loopback support.
 
-config GB_POWER_SUPPLY
+config GREYBUS_POWER_SUPPLY
 	bool "Greybus Power Supply"
 	default n
 	help
 	  Select this for Greybus Power Supply support.
 
-config GB_PWM
+config GREYBUS_PWM
 	bool "Greybus PWM"
 	default n
 	help
 	  Select this for Greybus Pulse Width Modulation support.
 
-config GB_SDIO
+config GREYBUS_SDIO
 	bool "Greybus SDIO"
 	default n
 	help
 	  Select this for Greybus Secure Digital IO support.
 
-config GB_SPI
+config GREYBUS_SPI
 	bool "Greybus SPI"
 	default n
 	help
 	  Select this for Greybus Serial Peripheral Interface support.
 
-config GB_UART
+config GREYBUS_UART
 	bool "Greybus UART"
 	default n
 	help
 	  Select this for Greybus Universal Asynchronous Receiver Transmitter support.
 
-config GB_USB
+config GREYBUS_USB
 	bool "Greybus USB"
 	default n
 	help
 	  Select this for Greybus Universal Serial Bus support.
 
-config GB_VIBRATOR
+config GREYBUS_VIBRATOR
 	bool "Greybus Vibrator"
 	default n
 	help
 	  Select this for Greybus Vibrator support.
 
-endif # GB
+endif # GREYBUS

@@ -35,10 +35,73 @@
 #include <sys/byteorder.h>
 #include <gpio.h>
 
+#include <greybus-utils/platform.h>
+
 #define GB_GPIO_VERSION_MAJOR 0
 #define GB_GPIO_VERSION_MINOR 1
 
 static int g_gpio_cport;
+
+static uint8_t gb_gpio_default_line_count(void) {
+	return 0;
+}
+static int gb_gpio_default_activate(uint8_t which) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_deactivate(uint8_t which) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_get_direction(uint8_t which) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_direction_in(uint8_t which) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_direction_out(uint8_t which, uint8_t val) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_get_value(uint8_t which) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_set_value(uint8_t which, uint8_t val) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_set_debounce(uint8_t which, uint16_t usec) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_irq_mask(uint8_t which) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_irq_unmask(uint8_t which) {
+	return -ENOSYS;
+}
+static int gb_gpio_default_irq_type(uint8_t which, uint8_t type) {
+	return -ENOSYS;
+}
+
+static const struct gb_gpio_platform_driver gb_gpio_platform_driver_default = {
+	.line_count = gb_gpio_default_line_count,
+	.activate = gb_gpio_default_activate,
+	.deactivate = gb_gpio_default_deactivate,
+	.get_direction = gb_gpio_default_get_direction,
+	.direction_in = gb_gpio_default_direction_in,
+	.direction_out = gb_gpio_default_direction_out,
+	.get_value = gb_gpio_default_get_value,
+	.set_value = gb_gpio_default_set_value,
+	.set_debounce = gb_gpio_default_set_debounce,
+	.irq_mask = gb_gpio_default_irq_mask,
+	.irq_unmask = gb_gpio_default_irq_unmask,
+	.irq_type = gb_gpio_default_irq_type,
+};
+
+static struct gb_gpio_platform_driver *plat = (struct gb_gpio_platform_driver *)&gb_gpio_platform_driver_default;
+
+void gb_gpio_register_platform_driver(struct gb_gpio_platform_driver *drv) {
+	if (NULL == drv) {
+		return;
+	}
+	plat = drv;
+}
 
 static uint8_t gb_gpio_protocol_version(struct gb_operation *operation)
 {
@@ -62,7 +125,7 @@ static uint8_t gb_gpio_line_count(struct gb_operation *operation)
     if (!response)
         return GB_OP_NO_MEMORY;
 
-    count = gpio_line_count();
+    count = plat->line_count();
     if (!count)
         return GB_OP_UNKNOWN_ERROR;
 
@@ -81,10 +144,10 @@ static uint8_t gb_gpio_activate(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
-    return gb_errno_to_op_result(gpio_activate(request->which));
+    return gb_errno_to_op_result(plat->activate(request->which));
 }
 
 static uint8_t gb_gpio_deactivate(struct gb_operation *operation)
@@ -97,10 +160,10 @@ static uint8_t gb_gpio_deactivate(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
-    return gb_errno_to_op_result(gpio_deactivate(request->which));
+    return gb_errno_to_op_result(plat->deactivate(request->which));
 }
 
 static uint8_t gb_gpio_get_direction(struct gb_operation *operation)
@@ -114,14 +177,14 @@ static uint8_t gb_gpio_get_direction(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
     response = gb_operation_alloc_response(operation, sizeof(*response));
     if (!response)
         return GB_OP_NO_MEMORY;
 
-    response->direction = gpio_get_direction(request->which);
+    response->direction = plat->get_direction(request->which);
     return GB_OP_SUCCESS;
 }
 
@@ -135,10 +198,10 @@ static uint8_t gb_gpio_direction_in(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
-    gpio_direction_in(request->which);
+    plat->direction_in(request->which);
     return GB_OP_SUCCESS;
 }
 
@@ -152,10 +215,10 @@ static uint8_t gb_gpio_direction_out(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
-    gpio_direction_out(request->which, request->value);
+    plat->direction_out(request->which, request->value);
     return GB_OP_SUCCESS;
 }
 
@@ -170,14 +233,14 @@ static uint8_t gb_gpio_get_value(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
     response = gb_operation_alloc_response(operation, sizeof(*response));
     if (!response)
         return GB_OP_NO_MEMORY;
 
-    response->value = gpio_get_value(request->which);
+    response->value = plat->get_value(request->which);
     return GB_OP_SUCCESS;
 }
 
@@ -191,10 +254,10 @@ static uint8_t gb_gpio_set_value(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
-    gpio_set_value(request->which, request->value);
+    plat->set_value(request->which, request->value);
     return GB_OP_SUCCESS;
 }
 
@@ -209,10 +272,10 @@ static uint8_t gb_gpio_set_debounce(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
-    ret = gpio_set_debounce(request->which, sys_le16_to_cpu(request->usec));
+    ret = plat->set_debounce(request->which, sys_le16_to_cpu(request->usec));
     if (ret)
         return GB_OP_UNKNOWN_ERROR;
 
@@ -229,10 +292,10 @@ static uint8_t gb_gpio_irq_mask(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
-    gpio_irq_mask(request->which);
+    plat->irq_mask(request->which);
     return GB_OP_SUCCESS;
 }
 
@@ -246,10 +309,10 @@ static uint8_t gb_gpio_irq_unmask(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
-    gpio_irq_unmask(request->which);
+    plat->irq_unmask(request->which);
     return GB_OP_SUCCESS;
 }
 
@@ -267,7 +330,7 @@ int gb_gpio_irq_event(int irq, void *context, void *priv)
     request->which = irq;
 
     /* Host is responsible for unmasking. */
-    gpio_irq_mask(irq);
+    plat->irq_mask(irq);
 
     /* Send unidirectional operation. */
     gb_operation_send_request_nowait(operation, NULL, false);
@@ -289,37 +352,28 @@ static uint8_t gb_gpio_irq_type(struct gb_operation *operation)
         return GB_OP_INVALID;
     }
 
-    if (request->which >= gpio_line_count())
+    if (request->which >= plat->line_count())
         return GB_OP_INVALID;
 
     switch(request->type) {
     case GB_GPIO_IRQ_TYPE_EDGE_RISING:
-        //trigger = IRQ_TYPE_EDGE_RISING;
-        break;
     case GB_GPIO_IRQ_TYPE_EDGE_FALLING:
-        //trigger = IRQ_TYPE_EDGE_FALLING;
-        break;
     case GB_GPIO_IRQ_TYPE_EDGE_BOTH:
-        //trigger = IRQ_TYPE_EDGE_BOTH;
-        break;
     case GB_GPIO_IRQ_TYPE_LEVEL_HIGH:
-        //trigger = IRQ_TYPE_LEVEL_HIGH;
-        break;
     case GB_GPIO_IRQ_TYPE_LEVEL_LOW:
-        //trigger = IRQ_TYPE_LEVEL_LOW;
-        break;
+    	trigger = request->type;
+    	break;
     default:
         return GB_OP_INVALID;
     }
-    ret = gpio_irq_settriggering(request->which, trigger);
+    ret = plat->irq_type(request->which, trigger);
     if (ret)
         return GB_OP_INVALID;
-    ret = gpio_irq_attach(request->which, gb_gpio_irq_event, NULL);
-    if (ret)
-        return GB_OP_UNKNOWN_ERROR;
+//    ret = gpio_irq_attach(request->which, gb_gpio_irq_event, NULL);
+//    if (ret)
+//        return GB_OP_UNKNOWN_ERROR;
     return GB_OP_SUCCESS;
 }
-
 
 static struct gb_operation_handler gb_gpio_handlers[] = {
     GB_HANDLER(GB_GPIO_TYPE_PROTOCOL_VERSION, gb_gpio_protocol_version),

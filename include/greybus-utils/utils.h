@@ -29,19 +29,19 @@
 #ifndef _GREYNUS_UTILS_UTILS_H_
 #define _GREYNUS_UTILS_UTILS_H_
 
-#include <nuttx/greybus/debug.h>
-#include <nuttx/greybus/types.h>
-#include <nuttx/greybus/greybus.h>
+#include <greybus/debug.h>
+#include <greybus/types.h>
+#include <greybus/greybus.h>
 
-#include <apps/greybus-utils/svc.h>
-#include <apps/greybus-utils/manifest.h>
+#include <greybus-utils/svc.h>
+#include <greybus-utils/manifest.h>
 
-#include <arch/byteorder.h>
+#include <sys/byteorder.h>
 
 static inline size_t gb_packet_size(const char *rbuf)
 {
    const struct gb_operation_hdr *hdr = (const struct gb_operation_hdr *)rbuf;
-   return le16_to_cpu(hdr->size);
+   return sys_le16_to_cpu(hdr->size);
 }
 
 struct cport_msg {

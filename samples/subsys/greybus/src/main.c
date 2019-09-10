@@ -18,6 +18,10 @@
 #include <sys/byteorder.h>
 #include <zephyr.h>
 
+#ifdef CONFIG_GREYBUS_STATIC_MANIFEST
+#include <greybus/static-manifest.h>
+#endif
+
 enum {
 	GB_TYPE_MANIFEST_SET = 0x42,
 	GB_TYPE_ANY = (uint8_t)-1,
@@ -206,6 +210,21 @@ void main(void)
 	r = -EIO;
 
 start_over:
+#ifdef CONFIG_GREYBUS_STATIC_MANIFEST
+
+	// blink an led twice to indicate that the manifest was received
+	blink(red_led_dev, red_led_pin, 2, 100000);
+
+	manifest = get_manifest_blob();
+	manifest_size = (size_t)manifest_mnfb_len;
+	r = manifest_parse(manifest, manifest_size);
+	if (true != r) {
+		gb_error("failed to parse manifest\n");
+		resp.result = gb_errno_to_op_result(-EINVAL);
+		sendMessage(&resp);
+		goto start_over;
+	}
+#else
 	// blink an led once to indicate that the manifest is expected
 	blink(red_led_dev, red_led_pin, 1, 100000);
 
@@ -238,6 +257,7 @@ start_over:
 	}
 
 	set_manifest_blob(manifest);
+#endif
 
 	r = gb_init((struct gb_transport_backend *)&gb_xport);
 	if (0 != r) {
@@ -249,8 +269,10 @@ start_over:
 
 	enable_cports();
 
+#ifndef CONFIG_GREYBUS_STATIC_MANIFEST
 	resp.result = GB_OP_SUCCESS;
 	sendMessage(&resp);
+#endif
 
 	// Turn on the red LED to indicate the device is 'online'
 	gpio_pin_write(red_led_dev, red_led_pin, 1);

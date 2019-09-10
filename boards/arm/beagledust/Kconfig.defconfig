@@ -1,0 +1,20 @@
+# Kconfig - BeagleBoard.org BeagleDust
+#
+# Copyright (c) 2018 Brett Witherspoon
+# Copyright (c) 2019 Jason Kridner
+#
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_BEAGLEDUST
+
+config BOARD
+	default "beagledust"
+
+if SPI
+
+config SPI_0
+	default y
+
+endif # SPI
+
+endif # BOARD_BEAGLEDUST

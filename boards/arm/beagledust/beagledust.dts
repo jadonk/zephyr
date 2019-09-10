@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019 Brett Witherspoon
+ * Copyright (c) 2019 Jason Kridner
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,11 +12,13 @@
 #define BTN_GPIO_FLAGS (GPIO_INT_ACTIVE_LOW | GPIO_PUD_PULL_UP)
 
 / {
-	model = "BeagleBoard BeagleDust";
-	compatible = "ti,launchxl-cc1352r1";
+	model = "BeagleBoard.org BeagleDust";
+	compatible = "beagleboard.org,beagledust";
 
 	aliases {
 		sw0 = &btn0;
+		led0 = &led_click1;
+		led1 = &led_click2;
 	};
 
 	chosen {
@@ -27,23 +30,23 @@
 
 	leds {
 		compatible = "gpio-leds";
-		2GHz_led: led_0 {
+		led_2GHz: led_0 {
 			gpios = <&gpio0 25 0>;
 			label = "2.4GHz LED";
 		};
-		900MHz_led: led_1 {
+		led_900MHz: led_1 {
 			gpios = <&gpio0 26 0>;
 			label = "900MHz LED";
 		};
-		click1_led: led_2 {
+		led_click1: led_2 {
 			gpios = <&gpio0 27 0>;
 			label = "Click1 LED";
 		};
-		click2_led: led_2 {
+		led_click2: led_3 {
 			gpios = <&gpio0 28 0>;
 			label = "Click2 LED";
 		};
-		5V_EN_led: led_2 {
+		led_5V_EN: led_4 {
 			gpios = <&gpio0 29 0>;
 			label = "5V EN LED";
 		};

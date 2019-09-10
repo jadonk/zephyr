@@ -1,0 +1,10 @@
+# Kconfig - BeagleBoard.org BeagleDust
+#
+# Copyright (c) 2018 Brett Witherspoon
+# Copyright (c) 2019 Jason Kridner
+#
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_BEAGLEDUST
+	bool "BeagleBoard.org BeagleDust"
+	depends on SOC_CC1352R

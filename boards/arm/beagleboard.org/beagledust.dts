@@ -11,14 +11,11 @@
 #define BTN_GPIO_FLAGS (GPIO_INT_ACTIVE_LOW | GPIO_PUD_PULL_UP)
 
 / {
-	model = "TI CC1352R1 LaunchXL";
+	model = "BeagleBoard BeagleDust";
 	compatible = "ti,launchxl-cc1352r1";
 
 	aliases {
-		led0 = &led0;
-		led1 = &led1;
 		sw0 = &btn0;
-		sw1 = &btn1;
 	};
 
 	chosen {
@@ -30,25 +27,33 @@
 
 	leds {
 		compatible = "gpio-leds";
-		led0: led_0 {
-			gpios = <&gpio0 7 0>;
-			label = "Green LED";
+		2GHz_led: led_0 {
+			gpios = <&gpio0 25 0>;
+			label = "2.4GHz LED";
 		};
-		led1: led_1 {
-			gpios = <&gpio0 6 0>;
-			label = "Red LED";
+		900MHz_led: led_1 {
+			gpios = <&gpio0 26 0>;
+			label = "900MHz LED";
+		};
+		click1_led: led_2 {
+			gpios = <&gpio0 27 0>;
+			label = "Click1 LED";
+		};
+		click2_led: led_2 {
+			gpios = <&gpio0 28 0>;
+			label = "Click2 LED";
+		};
+		5V_EN_led: led_2 {
+			gpios = <&gpio0 29 0>;
+			label = "5V EN LED";
 		};
 	};
 
 	keys {
 		compatible = "gpio-keys";
 		btn0: btn_0 {
-			gpios = <&gpio0 15 BTN_GPIO_FLAGS>;
-			label = "Push button 1";
-		};
-		btn1: btn_1 {
-			gpios = <&gpio0 14 BTN_GPIO_FLAGS>;
-			label = "Push button 2";
+			gpios = <&gpio0 30 BTN_GPIO_FLAGS>;
+			label = "User button";
 		};
 	};
 };
@@ -61,11 +66,22 @@
 	status = "okay";
 };
 
+// TODO: verify RX/TX perspective
+// TODO: may need to move for bootloader
+// On the prototypes, this is shared with the USB header
 &uart0 {
 	status = "okay";
 	current-speed = <115200>;
 	tx-pin = <13>;
 	rx-pin = <12>;
+};
+
+// TODO: verify RX/TX perspective
+&uart1 {
+	status = "okay";
+	current-speed = <115200>;
+	tx-pin = <22>;
+	rx-pin = <21>;
 };
 
 &i2c0 {
@@ -74,11 +90,16 @@
 	sda-pin = <5>;
 };
 
+// TODO: Figure out how to add a second CS
 &spi0 {
 	status = "okay";
 	sck-pin = <10>;
 	mosi-pin = <9>;
 	miso-pin = <8>;
-	cs-pin = <11>;
-	cs-gpios = <&gpio0 11 0>;
+	cs-pin = <15>;
+	cs-gpios = <&gpio0 15 0>;
 };
+
+// TODO: Add PWMs (timers?)
+// TODO: Add analog pins
+// TODO: Add GPIOs for reset and interrupt

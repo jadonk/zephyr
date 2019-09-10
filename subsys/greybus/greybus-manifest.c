@@ -39,6 +39,10 @@
 #include <greybus-utils/utils.h>
 //#include <nuttx/util.h>
 
+#ifdef CONFIG_GREYBUS_STATIC_MANIFEST
+#include <greybus/static-manifest.h>
+#endif
+
 #undef ALIGN
 #undef PAD
 #define PAD(x,pot) (((x) & (pot-1)) ? (((x) & ~(pot-1)) + pot) : (x))
@@ -72,7 +76,11 @@ static struct greybus g_greybus = {
     .cports = LIST_INIT(g_greybus.cports),
 };
 
+#ifdef CONFIG_GREYBUS_STATIC_MANIFEST
+static unsigned char *bridge_manifest = manifest_mnfb;
+#else
 static unsigned char *bridge_manifest;
+#endif
 
 static void *alloc_cport(void)
 {

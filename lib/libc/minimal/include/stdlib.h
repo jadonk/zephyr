@@ -20,10 +20,10 @@ int atoi(const char *s);
 
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
 
-void *z_malloc_debug(size_t size);
-void z_free_debug(void *ptr);
-void *z_calloc_debug(size_t nmemb, size_t size);
-void *z_realloc_debug(void *ptr, size_t size);
+void *z_malloc_debug(const char *file, const char *func, const int line, size_t size);
+void z_free_debug(const char *file, const char *func, const int line, void *ptr);
+void *z_calloc_debug(const char *file, const char *func, const int line, size_t nmemb, size_t size);
+void *z_realloc_debug(const char *file, const char *func, const int line, void *ptr, size_t size);
 
 #define malloc(size) z_malloc_debug(__FILE__, __func__, __LINE__, size)
 #define free(ptr) z_free_debug(__FILE__, __func__, __LINE__, ptr)

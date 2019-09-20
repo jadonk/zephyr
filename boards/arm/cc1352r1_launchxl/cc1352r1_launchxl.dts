@@ -68,6 +68,13 @@
 	rx-pin = <12>;
 };
 
+&uart1 {
+	status = "okay";
+	current-speed = <115200>;
+	tx-pin = <3>;
+	rx-pin = <20>;
+};
+
 &i2c0 {
 	status = "okay";
 	scl-pin = <4>;

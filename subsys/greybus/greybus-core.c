@@ -35,6 +35,7 @@
 #include <greybus/tape.h>
 #include <greybus/debug.h>
 //#include <wdog.h>
+#include "greybus-stubs.h"
 //#include <loopback-gb.h>
 
 #include <greybus-utils/manifest.h>
@@ -42,6 +43,7 @@
 #include <sys/atomic.h>
 #include <sys/byteorder.h>
 #include <posix/pthread.h>
+#include <posix/semaphore.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -613,7 +615,7 @@ int _gb_register_driver(unsigned int cport, int bundle_id,
     return 0;
 
 pthread_create_error:
-pthread_attr_setstacksize_error:
+//pthread_attr_setstacksize_error:
     if (thread_attr_ptr != NULL)
         pthread_attr_destroy(&thread_attr);
 pthread_attr_init_error:
@@ -1138,7 +1140,7 @@ int gb_tape_replay(const char *pathname)
     if (!pathname || !gb_tape)
         return -EINVAL;
 
-    lowsyslog("greybus: replaying '%s'...\n", pathname);
+    printk("greybus: replaying '%s'...\n", pathname);
 
     fd = gb_tape->open(pathname, GB_TAPE_RDONLY);
     if (fd < 0)

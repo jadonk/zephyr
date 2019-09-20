@@ -49,7 +49,7 @@
 #define GB_LOG_DEBUG    BIT(3)
 #define GB_LOG_DUMP     BIT(4)
 
-#ifdef CONFIG_GB_DEBUG
+#ifdef CONFIG_GREYBUS_DEBUG
 #define gb_log(lvl, fmt, ...)                                       \
     do {                                                            \
         if (gb_log_level & lvl)                                     \
@@ -71,10 +71,10 @@ static inline __attribute__ ((format(printf, 2, 3)))
 	void gb_log(int level, const char *fmt, ...) { }
 #endif
 
-#if defined(CONFIG_GB_LOG_FUNC)
+#if defined(CONFIG_GREYBUS_LOG_FUNC)
 #define gb_log_format(lvl, fmt)                                     \
     "[" #lvl "] %s(): " fmt, __func__
-#elif defined(CONFIG_GB_LOG_FILE)
+#elif defined(CONFIG_GREYBUS_LOG_FILE)
 #define gb_log_format(lvl, fmt)                                     \
     "[" #lvl "] %s:%d: " fmt, __FILE__, __LINE__
 #else

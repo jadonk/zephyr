@@ -5,6 +5,7 @@
  */
 
 #include <console/console.h>
+#include <console/tty.h>
 #include <device.h>
 #include <drivers/gpio.h>
 #include <errno.h>
@@ -13,8 +14,6 @@
 #include <greybus-utils/manifest.h>
 #include <greybus-utils/platform.h>
 #include <posix/unistd.h>
-//#include <syscalls/uart.h>
-#include <sys/printk.h>
 #include <sys/byteorder.h>
 #include <zephyr.h>
 
@@ -27,6 +26,10 @@ enum {
 	GB_TYPE_ANY = (uint8_t)-1,
 };
 
+static struct tty_serial app_serial;
+static u8_t app_serial_rxbuf[CONFIG_CONSOLE_GETCHAR_BUFSIZE];
+static u8_t app_serial_txbuf[CONFIG_CONSOLE_PUTCHAR_BUFSIZE];
+
 static int getMessage( struct gb_operation_hdr **msg, const u8_t expected_msg_type) {
 
 	int r;
@@ -38,20 +41,23 @@ static int getMessage( struct gb_operation_hdr **msg, const u8_t expected_msg_ty
 	size_t recvd;
 
 	if (NULL == msg) {
+		gb_error("One or more arguments were NULL or invalid\n");
 		r = -EINVAL;
 		goto out;
 	}
 
 	tmp = realloc(*msg, sizeof(**msg));
 	if (NULL == tmp) {
+		gb_error("Failed to allocate memory\n");
 		r = -ENOMEM;
 		goto out;
 	}
 	*msg = tmp;
 
 	for( remaining = sizeof(**msg), offset = 0; remaining; remaining -= recvd, offset += recvd) {
-		r = console_read(NULL, *msg, sizeof(**msg));
+		r = tty_read(&app_serial, *msg, sizeof(**msg));
 		if (r <= 0) {
+			gb_error("tty_read failed\n");
 			goto freemsg;
 		}
 		recvd = r;
@@ -63,14 +69,16 @@ static int getMessage( struct gb_operation_hdr **msg, const u8_t expected_msg_ty
 	if (payload_size > 0) {
 		tmp = realloc(*msg, msg_size);
 		if (NULL == tmp) {
+			gb_error("Failed to allocate memory\n");
 			r = -ENOMEM;
 			goto freemsg;
 		}
 		*msg = tmp;
 
 		for( remaining = payload_size, offset = sizeof(**msg); remaining; remaining -= recvd, offset += recvd) {
-			r = console_read(NULL, &((uint8_t *)*msg)[offset], remaining);
+			r = tty_read(&app_serial, &((uint8_t *)*msg)[offset], remaining);
 			if (r <= 0) {
+				gb_error("tty_read failed\n");
 				goto freemsg;
 			}
 			recvd = r;
@@ -78,6 +86,7 @@ static int getMessage( struct gb_operation_hdr **msg, const u8_t expected_msg_ty
 	}
 
 	if (!(GB_TYPE_ANY == expected_msg_type || expected_msg_type == (*msg)->type)) {
+		gb_error("Expected message type %d but received messsage type %d\n", expected_msg_type, (*msg)->type);
 		r = -EPROTO;
 		goto freemsg;
 	}
@@ -101,13 +110,15 @@ static int sendMessage(struct gb_operation_hdr *msg) {
 	size_t written;
 
 	if (NULL == msg) {
+		gb_error("One or more arguments were NULL or invalid\n");
 		r = -EINVAL;
 		goto out;
 	}
 
 	for(remaining = sys_le16_to_cpu(msg->size), offset = 0; remaining; remaining -= written, offset += written) {
-		r = console_write(NULL, &((uint8_t *)msg)[offset], remaining);
+		r = tty_write(&app_serial, &((uint8_t *)msg)[offset], remaining);
 		if (r < 0) {
+			gb_error("tty_write failed\n");
 			goto out;
 		}
 		written = r;
@@ -138,19 +149,29 @@ static int gb_xport_send(unsigned int cport, const void *buf, size_t len) {
 	msg = (struct gb_operation_hdr *)buf;
 	msg->pad[0] = cport & 0xff;
 	msg->pad[1] = (cport >> 8) & 0xff;
-	r = console_write(NULL, buf, len);
+	r = tty_write(&app_serial, buf, len);
 	if (r < 0) {
+		gb_error("tty_write failed\n");
 		return r;
 	}
 	if (r != len) {
+		gb_error("expected a write of %d bytes but wrote %d bytes\n", len, r);
 		return -EIO;
 	}
 	return 0;
 }
 static void *gb_xport_alloc_buf(size_t size) {
-	return calloc(1,size);
+	void *r;
+	r = calloc(1,size);
+	if (NULL == r) {
+		gb_error("Failed to allocate buffer of size %u\n", (unsigned)size);
+	} else {
+		printk("Allocated buffer of size %u at %p\n", (unsigned)size, r);
+	}
+	return r;
 }
 static void gb_xport_free_buf(void *ptr) {
+	printk("Freeing buffer at %p\n", ptr);
 	free(ptr);
 }
 
@@ -188,7 +209,6 @@ void main(void)
 	void *manifest;
 	size_t manifest_size;
 	struct gb_operation_hdr *msg = NULL;
-	u16_t msg_size;
 	struct gb_operation_hdr resp;
 
 	struct device *red_led_dev;
@@ -203,9 +223,20 @@ void main(void)
 	assert(NULL != green_led_dev);
 	gpio_pin_configure(green_led_dev, green_led_pin, GPIO_DIR_IN);
 
-	register_gb_platform_drivers();
+	const char *app_serial_name = "UART_0";
+	struct device *uart_dev;
 
+	// The console uart is controlled by CONFIG_UART_CONSOLE_ON_DEV_NAME="UART_1"
 	console_init();
+
+	uart_dev = device_get_binding(app_serial_name);
+	tty_init(&app_serial, uart_dev);
+	tty_set_tx_buf(&app_serial, app_serial_txbuf, sizeof(app_serial_txbuf));
+	tty_set_rx_buf(&app_serial, app_serial_rxbuf, sizeof(app_serial_rxbuf));
+
+	printk("Registering platform drivers..\n");
+
+	register_gb_platform_drivers();
 
 	r = -EIO;
 
@@ -224,7 +255,11 @@ start_over:
 		sendMessage(&resp);
 		goto start_over;
 	}
+
 #else
+
+	printk("Awaiting manifest..\n");
+
 	// blink an led once to indicate that the manifest is expected
 	blink(red_led_dev, red_led_pin, 1, 100000);
 
@@ -237,7 +272,7 @@ start_over:
 	resp.type |= GB_TYPE_RESPONSE_FLAG;
 	resp.size = sys_cpu_to_le16(sizeof(resp));
 
-	msg_size = sys_le16_to_cpu(msg->size);
+	u16_t msg_size = sys_le16_to_cpu(msg->size);
 	manifest_size = msg_size - sizeof(*msg);
 
 	memmove(msg, (uint8_t *)msg + sizeof(*msg), manifest_size);
@@ -248,6 +283,10 @@ start_over:
 	// blink an led twice to indicate that the manifest was received
 	blink(red_led_dev, red_led_pin, 2, 100000);
 
+	printk("Received manifest\n");
+
+	printk("Parsing manifest\n");
+
 	r = manifest_parse(manifest, manifest_size);
 	if (true != r) {
 		gb_error("failed to parse manifest\n");
@@ -256,8 +295,12 @@ start_over:
 		goto start_over;
 	}
 
+	printk("Parsed manifest\n");
+
 	set_manifest_blob(manifest);
 #endif
+
+	printk("Calling gb_init()\n");
 
 	r = gb_init((struct gb_transport_backend *)&gb_xport);
 	if (0 != r) {
@@ -267,9 +310,11 @@ start_over:
 		goto start_over;
 	}
 
+	printk("Calling enable_cports()\n");
 	enable_cports();
 
 #ifndef CONFIG_GREYBUS_STATIC_MANIFEST
+	printk("Sending back success message()\n");
 	resp.result = GB_OP_SUCCESS;
 	sendMessage(&resp);
 #endif
@@ -277,8 +322,13 @@ start_over:
 	// Turn on the red LED to indicate the device is 'online'
 	gpio_pin_write(red_led_dev, red_led_pin, 1);
 
+	printk("Greybus is active.\n");
+
 	msg = NULL;
 	for( size_t i = 0;; i++) {
+
+		printk("Awaiting message..\n");
+
 		// get messages and pass them to greybus
 		r = getMessage(&msg, GB_TYPE_ANY);
 		if (0 != r) {
@@ -286,11 +336,15 @@ start_over:
 			continue;
 		}
 
+		printk("Received message\n");
+
 		unsigned int cport = ((uint16_t)msg->pad[1] << 8) | msg->pad[0];
 		//blink(red_led_dev, red_led_pin, 1, 10000);
 
 		r = greybus_rx_handler(cport, msg, sys_le16_to_cpu(msg->size));
-		if (0 != r) {
+		if ( 0 == r ) {
+			printk("Handled message!\n");
+		} else {
 			gb_error("failed to handle message %u: size: %u, id: %u, type: %u\n", i, sys_le16_to_cpu(msg->size), sys_le16_to_cpu(msg->id), msg->type);
 		}
 	}

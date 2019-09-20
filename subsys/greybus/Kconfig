@@ -52,6 +52,18 @@ config GREYBUS_DEBUG
 	help
 	  Select this to debug Greybus.
 
+config GREYBUS_LOG_FUNC
+	bool "Greybus Debug with Function Name"
+	default n
+	help
+	  Select this option to show the function name in Greybus debug messages.
+
+config GREYBUS_LOG_FILE
+	bool "Greybus Debug with File Name"
+	default y
+	help
+	  Select this option to show the filename and line number in Greybus debug messages.
+
 config GREYBUS_GPIO
 	bool "Greybus GPIO"
 	default n

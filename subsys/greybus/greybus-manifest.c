@@ -49,6 +49,9 @@
 // "align" (really pad) to a 4-byte boundary
 #define ALIGN(x) PAD(x,4)
 
+// not yet a part of zephyr minimal libc??
+extern char *strtok(char *str, const char *delim);
+
 extern void gb_control_register(int cport, int bundle);
 extern void gb_gpio_register(int cport, int bundle);
 extern void gb_i2c_register(int cport, int bundle);
@@ -77,7 +80,7 @@ static struct greybus g_greybus = {
 };
 
 #ifdef CONFIG_GREYBUS_STATIC_MANIFEST
-static unsigned char *bridge_manifest = manifest_mnfb;
+static unsigned char *bridge_manifest = (unsigned char *)manifest_mnfb;
 #else
 static unsigned char *bridge_manifest;
 #endif

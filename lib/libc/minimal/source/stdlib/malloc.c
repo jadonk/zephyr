@@ -53,9 +53,27 @@ void *malloc(size_t size)
 		errno = ENOMEM;
 	}
 
+#ifdef CONFIG_MINIMAL_LIBC_MALLOC_STATS
+	struct sys_mem_pool_block *blk;
+	/* Stored right before the pointer passed to the user */
+	blk = (struct sys_mem_pool_block *)((char *)ptr - struct_blk_size);
+
+	/* Determine size of previously allocated block by its level.
+	 * Most likely a bit larger than the original allocation
+	 */
+	block_size = blk->pool->base.max_sz;
+	for (int i = 1; i <= blk->level; i++) {
+		block_size = WB_DN(block_size / 4);
+	}
+
+	malloc_mallinfo.uordblks += block_size;
+	malloc_mallinfo.fordblks -= block_size;
+#endif
+
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
-	printk("%p\n", ret);
+	printk("%p free: %08x used: %08x\n", ret, malloc_mallinfo.fordblks, malloc_mallinfo.uordblks);
 #endif /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
+
 	return ret;
 }
 
@@ -84,12 +102,14 @@ void *malloc(size_t size)
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
 void z_free_debug(const char *file, const char *func, const int line, void *ptr)
 {
-	printk("free: %s:%s():%d %p\n", file, func, line, ptr);
+	printk("free: %s:%s():%d %p ", file, func, line, ptr);
 #else /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
 void free(void *ptr)
 {
 #endif /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
 
+#ifdef CONFIG_MINIMAL_LIBC_MALLOC_STATS
+	struct sys_mem_pool_block *blk;
 	/* Stored right before the pointer passed to the user */
 	blk = (struct sys_mem_pool_block *)((char *)ptr - struct_blk_size);
 
@@ -100,6 +120,16 @@ void free(void *ptr)
 	for (int i = 1; i <= blk->level; i++) {
 		block_size = WB_DN(block_size / 4);
 	}
+
+	/* The sys_mem_pool API provides no way to validate if a pointer is valid
+	 * so we just assume that it is */
+	malloc_mallinfo.uordblks -= block_size;
+	malloc_mallinfo.fordblks += block_size;
+#endif
+
+#ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
+	printk("free: %08x used: %08x\n", malloc_mallinfo.fordblks, malloc_mallinfo.uordblks);
+#endif /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
 
 	sys_mem_pool_free(ptr);
 }

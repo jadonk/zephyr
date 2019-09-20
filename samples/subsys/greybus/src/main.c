@@ -8,6 +8,7 @@
 #include <console/tty.h>
 #include <device.h>
 #include <drivers/gpio.h>
+#include <drivers/uart.h>
 #include <errno.h>
 #include <greybus/debug.h>
 #include <greybus/greybus.h>
@@ -64,6 +65,12 @@ static int getMessage( struct gb_operation_hdr **msg, const u8_t expected_msg_ty
 	}
 
 	msg_size = sys_le16_to_cpu((*msg)->size);
+
+	if ( msg_size < sizeof(**msg) ) {
+		gb_error("invalid message with size %u\n", msg_size);
+		goto freemsg;
+	}
+
 	payload_size = msg_size - sizeof(**msg);
 
 	if (payload_size > 0) {
@@ -166,6 +173,9 @@ static void *gb_xport_alloc_buf(size_t size) {
 	if (NULL == r) {
 		gb_error("Failed to allocate buffer of size %u\n", (unsigned)size);
 	} else {
+		if ( 0 == size ) {
+			printk("");
+		}
 		gb_info("Allocated buffer of size %u at %p\n", (unsigned)size, r);
 	}
 	return r;
@@ -231,6 +241,14 @@ void main(void)
 
 	uart_dev = device_get_binding(app_serial_name);
 	tty_init(&app_serial, uart_dev);
+
+	/* Checks device driver supports for interrupt driven data transfers. */
+	if (CONFIG_CONSOLE_GETCHAR_BUFSIZE + CONFIG_CONSOLE_PUTCHAR_BUFSIZE) {
+		const struct uart_driver_api *api =
+			(const struct uart_driver_api *)uart_dev->driver_api;
+		assert(api->irq_callback_set);
+	}
+
 	tty_set_tx_buf(&app_serial, app_serial_txbuf, sizeof(app_serial_txbuf));
 	tty_set_rx_buf(&app_serial, app_serial_rxbuf, sizeof(app_serial_rxbuf));
 
@@ -256,7 +274,7 @@ start_over:
 		goto start_over;
 	}
 
-#else
+#else /* CONFIG_GREYBUS_STATIC_MANIFEST */
 
 	gb_info("Awaiting manifest..\n");
 
@@ -298,7 +316,7 @@ start_over:
 	gb_info("Parsed manifest\n");
 
 	set_manifest_blob(manifest);
-#endif
+#endif /* CONFIG_GREYBUS_STATIC_MANIFEST */
 
 	gb_info("Calling gb_init()\n");
 

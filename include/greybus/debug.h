@@ -82,6 +82,7 @@ static inline __attribute__ ((format(printf, 2, 3)))
     "[" #lvl "]: " fmt
 #endif
 
+#if 0
 #define gb_info(fmt, ...)                                           \
     gb_log(GB_LOG_INFO, gb_log_format(I, fmt), ##__VA_ARGS__);
 #define gb_error(fmt, ...)                                          \
@@ -90,5 +91,15 @@ static inline __attribute__ ((format(printf, 2, 3)))
     gb_log(GB_LOG_WARNING, gb_log_format(W, fmt), ##__VA_ARGS__);
 #define gb_debug(fmt, ...)                                          \
     gb_log(GB_LOG_DEBUG, gb_log_format(D, fmt), ##__VA_ARGS__);
+#else
+#define gb_info(fmt, args...)                                           \
+    printk("[I] %s:%d: " fmt, __FILE__, __LINE__, ##args);
+#define gb_error(fmt, args...)                                          \
+	printk("[E] %s:%d: " fmt, __FILE__, __LINE__, ##args);
+#define gb_warning(fmt, args...)                                        \
+	printk("[W] %s:%d: " fmt, __FILE__, __LINE__, ##args);
+#define gb_debug(fmt, args...)                                          \
+	printk("[D] %s:%d: " fmt, __FILE__, __LINE__, ##args);
+#endif
 #endif
 

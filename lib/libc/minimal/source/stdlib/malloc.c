@@ -16,6 +16,7 @@
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_STATS
 #include <malloc.h>
 static struct mallinfo malloc_mallinfo = {
+	.arena    = CONFIG_MINIMAL_LIBC_MALLOC_ARENA_SIZE,
 	.fordblks = CONFIG_MINIMAL_LIBC_MALLOC_ARENA_SIZE,
 };
 #endif /* CONFIG_MINIMAL_LIBC_MALLOC_STATS */
@@ -38,7 +39,7 @@ SYS_MEM_POOL_DEFINE(z_malloc_mem_pool, NULL, 16,
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
 void *z_malloc_debug(const char *file, const char *func, const int line, size_t size)
 {
-	printk("malloc: %s:%s():%d: ", file, func, line);
+	printk("malloc: %s:%s():%d: size: %u ", file, func, line, (unsigned)size);
 #else /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
 void *malloc(size_t size)
 {
@@ -73,7 +74,7 @@ void *malloc(size_t size)
 #endif
 
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
-	printk("%p free: %08x used: %08x\n", ret, malloc_mallinfo.fordblks, malloc_mallinfo.uordblks);
+	printk("ret: %p arena: %08x free: %08x used: %08x\n", ret, malloc_mallinfo.arena, malloc_mallinfo.fordblks, malloc_mallinfo.uordblks);
 #endif /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
 
 	return ret;
@@ -132,7 +133,7 @@ void free(void *ptr)
 #endif
 
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
-	printk("free: %08x used: %08x\n", malloc_mallinfo.fordblks, malloc_mallinfo.uordblks);
+	printk("total: %08x free: %08x used: %08x\n", malloc_mallinfo.arena, malloc_mallinfo.fordblks, malloc_mallinfo.uordblks);
 #endif /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
 
 	sys_mem_pool_free(ptr);
@@ -141,7 +142,7 @@ void free(void *ptr)
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
 void *z_calloc_debug(const char *file, const char *func, const int line, size_t nmemb, size_t size)
 {
-	printk("calloc: %s:%s():%d %u %u\n", file, func, line, (unsigned)nmemb, (unsigned)size);
+	printk("calloc: %s:%s():%d nmemb: %u size: %u\n", file, func, line, (unsigned)nmemb, (unsigned)size);
 #else /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
 void *calloc(size_t nmemb, size_t size)
 {
@@ -165,7 +166,7 @@ void *calloc(size_t nmemb, size_t size)
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
 void *z_realloc_debug(const char *file, const char *func, const int line, void *ptr, size_t requested_size)
 {
-	printk("realloc: %s:%s():%d %p %u\n", file, func, line, ptr, (unsigned)requested_size);
+	printk("realloc: %s:%s():%d ptr: %p requested_size: %u\n", file, func, line, ptr, (unsigned)requested_size);
 #else /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
 void *realloc(void *ptr, size_t requested_size)
 {

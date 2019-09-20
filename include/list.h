@@ -81,7 +81,7 @@ static inline void list_add(struct list_head *head, struct list_head *iter) {
 	for(iter = (head)->next; iter != head; iter = (iter)->next)
 
 #define list_foreach_safe(head, iter, iter_next) \
-	list_foreach(head, iter)
+	for(iter = (head)->next, iter_next = iter->next; iter != head; iter = iter_next, iter_next = iter->next)
 
 #define list_entry(iter, container, member) CONTAINER_OF(iter, container, member)
 

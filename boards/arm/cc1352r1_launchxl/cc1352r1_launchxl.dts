@@ -24,8 +24,8 @@
 	chosen {
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
-		zephyr,console = &uart0;
-		zephyr,shell-uart = &uart0;
+		zephyr,console = &uart1;
+		/* zephyr,shell-uart = &uart0; */
 	};
 
 	leds {
@@ -68,6 +68,13 @@
 	rx-pin = <12>;
 };
 
+&uart1 {
+	status = "okay";
+	current-speed = <115200>;
+	tx-pin = <3>;
+	rx-pin = <20>;
+};
+
 &i2c0 {
 	status = "okay";
 	scl-pin = <4>;
@@ -81,4 +88,8 @@
 	miso-pin = <8>;
 	cs-pin = <11>;
 	cs-gpios = <&gpio0 11 0>;
+};
+
+&rtc {
+	status = "okay";
 };

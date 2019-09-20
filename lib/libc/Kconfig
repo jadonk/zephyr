@@ -19,6 +19,7 @@ if "$(ZEPHYR_TOOLCHAIN_VARIANT)" = "gnuarmemb"
 config NEWLIB_LIBC_NANO
 	bool "Build with newlib-nano c library"
 	depends on NEWLIB_LIBC
+	default y
 	help
 	  Build with newlib-nano library, for small embedded apps.
 	  The newlib-nano library for ARM embedded processors is a part of the
@@ -73,6 +74,27 @@ config MINIMAL_LIBC_MALLOC_ARENA_SIZE
 	  Indicate the size of the memory arena used for minimal libc's
 	  malloc() implementation. This size value must be compatible with
 	  a sys_mem_pool definition with nmax of 1 and minsz of 16.
+
+config MINIMAL_LIBC_MALLOC_DEBUG
+	bool "Print verbose information about calls to malloc, free, etc"
+	depends on !NEWLIB_LIBC
+	select MINIMAL_LIBC_MALLOC_STATS
+	default false
+	help
+	  This function replaces malloc, free, calloc, and realloc with
+	  macros and defines "z_<func>_debug" versions of each such that
+	  the functionality is the same, but the caller file, function,
+	  line, and function arguments are printed to the console.
+
+config MINIMAL_LIBC_MALLOC_STATS
+	bool "Provide an implementation of mallinfo()"
+	depends on !NEWLIB_LIBC
+	default false
+	help
+	  This function replaces allows programs to query statistics about
+	  the heap, such as total bytes free and total bytes used.
+	  
+	  For more information, see 'man 3 mallinfo'.
 
 config MINIMAL_LIBC_LL_PRINTF
 	bool "Build with minimal libc long long printf" if !64BIT

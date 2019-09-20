@@ -96,31 +96,65 @@ def run():
                  "[<Register, addr: 0x30000000200000001, size: 0x1>]")
 
     #
-    # Test !include in bindings
+    # Test 'include:' and the legacy 'inherits: !include ...'
     #
 
     verify_streq(edt.get_dev("/binding-include").description,
                  "Parent binding")
 
     verify_streq(edt.get_dev("/binding-include").props,
-                 "{'compatible': <Property, name: compatible, value: ['binding-include-test']>, 'foo': <Property, name: foo, value: 0>, 'bar': <Property, name: bar, value: 1>, 'baz': <Property, name: baz, value: 2>}")
+                 "{'foo': <Property, name: foo, type: int, value: 0>, 'bar': <Property, name: bar, type: int, value: 1>, 'baz': <Property, name: baz, type: int, value: 2>, 'qaz': <Property, name: qaz, type: int, value: 3>}")
 
     #
-    # Test 'sub-node:' in binding
+    # Test 'child/parent-bus:'
     #
 
-    verify_streq(edt.get_dev("/parent-with-sub-node/node").description,
-                 "Sub-node test")
+    verify_streq(edt.get_dev("/buses/foo-bus/node").binding_path,
+                 "test-bindings/device-on-foo-bus.yaml")
 
-    verify_streq(edt.get_dev("/parent-with-sub-node/node").props,
-                 "{'foo': <Property, name: foo, value: 1>, 'bar': <Property, name: bar, value: 2>}")
+    verify_streq(edt.get_dev("/buses/bar-bus/node").binding_path,
+                 "test-bindings/device-on-bar-bus.yaml")
+
+    #
+    # Test 'child-binding:'
+    #
+
+    child1 = edt.get_dev("/child-binding/child-1")
+    child2 = edt.get_dev("/child-binding/child-2")
+    grandchild = edt.get_dev("/child-binding/child-1/grandchild")
+
+    verify_streq(child1.binding_path, "test-bindings/child-binding.yaml")
+    verify_streq(child1.description, "child node")
+    verify_streq(child1.props, "{'child-prop': <Property, name: child-prop, type: int, value: 1>}")
+
+    verify_streq(child2.binding_path, "test-bindings/child-binding.yaml")
+    verify_streq(child2.description, "child node")
+    verify_streq(child2.props, "{'child-prop': <Property, name: child-prop, type: int, value: 3>}")
+
+    verify_streq(grandchild.binding_path, "test-bindings/child-binding.yaml")
+    verify_streq(grandchild.description, "grandchild node")
+    verify_streq(grandchild.props, "{'grandchild-prop': <Property, name: grandchild-prop, type: int, value: 2>}")
+
+    #
+    # Test deprecated 'sub-node:' key (replaced with 'child-binding:')
+    #
+
+    verify_streq(edt.get_dev("/deprecated/sub-node").props,
+                 "{'child-prop': <Property, name: child-prop, type: int, value: 3>}")
 
     #
     # Test Device.property (derived from DT and 'properties:' in the binding)
     #
 
     verify_streq(edt.get_dev("/props").props,
-                 r"{'compatible': <Property, name: compatible, value: ['props']>, 'nonexistent-boolean': <Property, name: nonexistent-boolean, value: False>, 'existent-boolean': <Property, name: existent-boolean, value: True>, 'int': <Property, name: int, value: 1>, 'array': <Property, name: array, value: [1, 2, 3]>, 'uint8-array': <Property, name: uint8-array, value: b'\x124'>, 'string': <Property, name: string, value: 'foo'>, 'string-array': <Property, name: string-array, value: ['foo', 'bar', 'baz']>, 'phandle-ref': <Property, name: phandle-ref, value: <Device /props/node in 'test.dts', no binding>>}")
+                 r"{'nonexistent-boolean': <Property, name: nonexistent-boolean, type: boolean, value: False>, 'existent-boolean': <Property, name: existent-boolean, type: boolean, value: True>, 'int': <Property, name: int, type: int, value: 1>, 'array': <Property, name: array, type: array, value: [1, 2, 3]>, 'uint8-array': <Property, name: uint8-array, type: uint8-array, value: b'\x124'>, 'string': <Property, name: string, type: string, value: 'foo'>, 'string-array': <Property, name: string-array, type: string-array, value: ['foo', 'bar', 'baz']>, 'phandle-ref': <Property, name: phandle-ref, type: phandle, value: <Device /props/node in 'test.dts', no binding>>, 'phandle-refs': <Property, name: phandle-refs, type: phandles, value: [<Device /props/node in 'test.dts', no binding>, <Device /props/node2 in 'test.dts', no binding>]>}")
+
+    #
+    # Test property default values given in bindings
+    #
+
+    verify_streq(edt.get_dev("/defaults").props,
+                 r"{'int': <Property, name: int, type: int, value: 123>, 'array': <Property, name: array, type: array, value: [1, 2, 3]>, 'uint8-array': <Property, name: uint8-array, type: uint8-array, value: b'\x89\xab\xcd'>, 'string': <Property, name: string, type: string, value: 'hello'>, 'string-array': <Property, name: string-array, type: string-array, value: ['hello', 'there']>, 'default-not-used': <Property, name: default-not-used, type: int, value: 234>}")
 
     #
     # Test having multiple directories with bindings, with a different .dts file

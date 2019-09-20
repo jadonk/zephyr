@@ -61,9 +61,10 @@ def main():
 
             write_regs(dev)
             write_irqs(dev)
-            write_gpios(dev)
-            write_pwms(dev)
-            write_iochannels(dev)
+            for gpios in dev.gpios.values():
+                write_phandle_val_list(dev, gpios, "GPIO")
+            write_phandle_val_list(dev, dev.pwms, "PWM")
+            write_phandle_val_list(dev, dev.iochannels, "IO_CHANNEL")
             write_clocks(dev)
             write_spi_dev(dev)
             write_props(dev)
@@ -81,18 +82,6 @@ def main():
     write_addr_size(edt, "zephyr,sram", "SRAM")
     write_addr_size(edt, "zephyr,ccm", "CCM")
     write_addr_size(edt, "zephyr,dtcm", "DTCM")
-
-    # NOTE: These defines aren't used by the code and just used by
-    # the kconfig build system, we can remove them in the future
-    # if we provide a function in kconfigfunctions.py to get
-    # the same info
-    write_required_label("UART_CONSOLE_ON_DEV_NAME", edt.chosen_dev("zephyr,console"))
-    write_required_label("UART_SHELL_ON_DEV_NAME",   edt.chosen_dev("zephyr,shell-uart"))
-    write_required_label("BT_UART_ON_DEV_NAME",      edt.chosen_dev("zephyr,bt-uart"))
-    write_required_label("UART_PIPE_ON_DEV_NAME",    edt.chosen_dev("zephyr,uart-pipe"))
-    write_required_label("BT_MONITOR_ON_DEV_NAME",   edt.chosen_dev("zephyr,bt-mon-uart"))
-    write_required_label("UART_MCUMGR_ON_DEV_NAME",  edt.chosen_dev("zephyr,uart-mcumgr"))
-    write_required_label("BT_C2H_UART_ON_DEV_NAME",  edt.chosen_dev("zephyr,bt-c2h-uart"))
 
     write_flash(edt.chosen_dev("zephyr,flash"))
     write_code_partition(edt.chosen_dev("zephyr,code-partition"))
@@ -155,12 +144,14 @@ def write_props(dev):
             continue
 
         # Skip phandles
-        if isinstance(prop.val, edtlib.Device):
+        if prop.type in {"phandle", "phandles"}:
             continue
 
         # Skip properties that we handle elsewhere
-        if prop.name in {"reg", "interrupts", "compatible", "interrupt-controller",
-                "gpio-controller"}:
+        if prop.name in {
+            "reg", "compatible", "status", "interrupts",
+            "interrupt-controller", "gpio-controller"
+        }:
             continue
 
         if prop.description is not None:
@@ -168,17 +159,19 @@ def write_props(dev):
 
         ident = str2ident(prop.name)
 
-        if isinstance(prop.val, bool):
+        if prop.type == "boolean":
             out_dev(dev, ident, 1 if prop.val else 0)
-        elif isinstance(prop.val, str):
+        elif prop.type == "string":
             out_dev_s(dev, ident, prop.val)
-        elif isinstance(prop.val, int):
+        elif prop.type == "int":
             out_dev(dev, ident, prop.val)
-        elif isinstance(prop.val, list):
-            for i, elm in enumerate(prop.val):
-                out_fn = out_dev_s if isinstance(elm, str) else out_dev
-                out_fn(dev, "{}_{}".format(ident, i), elm)
-        elif isinstance(prop.val, bytes):
+        elif prop.type == "array":
+            for i, val in enumerate(prop.val):
+                out_dev(dev, "{}_{}".format(ident, i), val)
+        elif prop.type == "string-array":
+            for i, val in enumerate(prop.val):
+                out_dev_s(dev, "{}_{}".format(ident, i), val)
+        elif prop.type == "uint8-array":
             out_dev(dev, ident,
                     "{ " + ", ".join("0x{:02x}".format(b) for b in prop.val) + " }")
 
@@ -413,22 +406,6 @@ def write_flash_partition_prefix(prefix, partition_dev, index):
         out_s("{}_DEV".format(prefix), controller.label)
 
 
-def write_required_label(ident, dev):
-    # Helper function. Writes '#define <ident> "<label>"', where <label>
-    # is the value of the 'label' property from 'dev'. Does nothing if
-    # 'dev' is None.
-    #
-    # Errors out if 'dev' exists but has no label.
-
-    if not dev:
-        return
-
-    if dev.label is None:
-        err("missing 'label' property on {!r}".format(dev))
-
-    out_s(ident, dev.label)
-
-
 def write_irqs(dev):
     # Writes IRQ num and data for the interrupts in dev's 'interrupt' property
 
@@ -441,45 +418,31 @@ def write_irqs(dev):
             alias += "_" + str2ident(cell_name)
         return alias
 
+    def encode_zephyr_multi_level_irq(irq, irq_num):
+        # See doc/reference/kernel/other/interrupts.rst for details
+        # on how this encoding works
+
+        irq_ctrl = irq.controller
+        # Look for interrupt controller parent until we have none
+        while irq_ctrl.interrupts:
+            irq_num = (irq_num + 1) << 8
+            if "irq" not in irq_ctrl.interrupts[0].specifier:
+                err("Expected binding for {!r} to have 'irq' "
+                    "in '#cells'".format(irq_ctrl))
+            irq_num |= irq_ctrl.interrupts[0].specifier["irq"]
+            irq_ctrl = irq_ctrl.interrupts[0].controller
+        return irq_num
+
     for irq_i, irq in enumerate(dev.interrupts):
-        # We ignore the controller for now
         for cell_name, cell_value in irq.specifier.items():
             ident = "IRQ_{}".format(irq_i)
-            if cell_name != "irq":
+            if cell_name == "irq":
+                cell_value = encode_zephyr_multi_level_irq(irq, cell_value)
+            else:
                 ident += "_" + str2ident(cell_name)
 
             out_dev(dev, ident, cell_value,
                     name_alias=irq_name_alias(irq, cell_name))
-
-
-def write_gpios(dev):
-    # Writes GPIO controller data for the gpios in dev's 'gpios' property
-
-    for gpios in dev.gpios.values():
-        for gpio_i, gpio in enumerate(gpios):
-            write_gpio(dev, gpio, gpio_i if len(gpios) > 1 else None)
-
-
-def write_gpio(dev, gpio, index=None):
-    # Writes GPIO controller & data for the GPIO object 'gpio'. If 'index' is
-    # not None, it is added as a suffix to identifiers.
-
-    ctrl_ident = "GPIOS_CONTROLLER"
-    if gpio.name:
-        ctrl_ident = str2ident(gpio.name) + "_" + ctrl_ident
-    if index is not None:
-        ctrl_ident += "_{}".format(index)
-
-    out_dev_s(dev, ctrl_ident, gpio.controller.label)
-
-    for cell, val in gpio.specifier.items():
-        cell_ident = "GPIOS_" + str2ident(cell)
-        if gpio.name:
-            cell_ident = str2ident(gpio.name) + "_" + cell_ident
-        if index is not None:
-            cell_ident += "_{}".format(index)
-
-        out_dev(dev, cell_ident, val)
 
 
 def write_spi_dev(dev):
@@ -487,59 +450,87 @@ def write_spi_dev(dev):
 
     cs_gpio = edtlib.spi_dev_cs_gpio(dev)
     if cs_gpio is not None:
-        write_gpio(dev, cs_gpio)
+        write_phandle_val_list_entry(dev, cs_gpio, None, "GPIO")
 
 
-def write_pwms(dev):
-    # Writes PWM controller and specifier info for the PWMs in dev's 'pwms'
-    # property
+def write_phandle_val_list(dev, entries, ident):
+    # Writes output for a phandle/value list, e.g.
+    #
+    #    pwms = <&pwm-ctrl-1 10 20
+    #            &pwm-ctrl-2 30 40>;
+    #
+    # dev:
+    #   Device used to generate device prefixes (see 'ident' below)
+    #
+    # entries:
+    #   List of entries (two for 'pwms' above). This might be a list of
+    #   edtlib.PWM instances, for example.  If only one entry is given it
+    #   does not have a suffix '_0', and the '_COUNT' and group initializer
+    #   are not emitted.
+    #
+    # ident:
+    #   Base identifier. For example, "PWM" generates output like this:
+    #
+    #     #define <device prefix>_PWMS_CONTROLLER_0 "PWM_0"  (name taken from 'label = ...')
+    #     #define <device prefix>_PWMS_CHANNEL_0 123         (name taken from #cells in binding)
+    #     #define <device prefix>_PWMS_0 {"PWM_0", 123}
+    #     #define <device prefix>_PWMS_CONTROLLER_1 "PWM_1"
+    #     #define <device prefix>_PWMS_CHANNEL_1 456
+    #     #define <device prefix>_PWMS_1 {"PWM_1", 456}
+    #     #define <device prefix>_PWMS_COUNT 2
+    #     #define <device prefix>_PWMS {<device prefix>_PWMS_0, <device prefix>_PWMS_1}
+    #     ...
+    #
+    #   Note: Do not add an "S" to 'ident'. It's added automatically, which
+    #   forces consistency.
 
-    for pwm_i, pwm in enumerate(dev.pwms):
-        write_pwm(dev, pwm, pwm_i if len(dev.pwms) > 1 else None)
+    initializer_vals = []
+    for i, entry in enumerate(entries):
+        initializer_vals.append(write_phandle_val_list_entry(
+            dev, entry, i if len(entries) > 1 else None, ident))
+    if len(entries) > 1:
+        out_dev(dev, ident + "S_COUNT", len(initializer_vals))
+        out_dev(dev, ident + "S", "{" + ", ".join(initializer_vals) + "}")
 
 
-def write_pwm(dev, pwm, index=None):
-    # Writes PWM controller & data for the PWM object 'pwm'. If 'index' is
-    # not None, it is added as a suffix to identifiers.
+def write_phandle_val_list_entry(dev, entry, i, ident):
+    # write_phandle_val_list() helper. We could get rid of it if it wasn't for
+    # write_spi_dev(). Adds 'i' as an index to identifiers unless it's None.
+    #
+    # Returns the identifier for the macro that provides the
+    # initializer for the entire entry.
 
-    if pwm.controller.label is not None:
-        ctrl_ident = "PWMS_CONTROLLER"
-        if index is not None:
-            ctrl_ident += "_{}".format(index)
-        out_dev_s(dev, ctrl_ident, pwm.controller.label)
+    initializer_vals = []
+    if entry.controller.label is not None:
+        ctrl_ident = ident + "S_CONTROLLER"  # e.g. PWMS_CONTROLLER
+        if entry.name:
+            ctrl_ident = str2ident(entry.name) + "_" + ctrl_ident
+        # Ugly backwards compatibility hack. Only add the index if there's
+        # more than one entry.
+        if i is not None:
+            ctrl_ident += "_{}".format(i)
+        initializer_vals.append(quote_str(entry.controller.label))
+        out_dev_s(dev, ctrl_ident, entry.controller.label)
 
-    for cell, val in pwm.specifier.items():
-        cell_ident = "PWMS_" + str2ident(cell)
-        if index is not None:
-            cell_ident += "_{}".format(index)
-
+    for cell, val in entry.specifier.items():
+        cell_ident = ident + "S_" + str2ident(cell)  # e.g. PWMS_CHANNEL
+        if entry.name:
+            # From e.g. 'pwm-names = ...'
+            cell_ident = str2ident(entry.name) + "_" + cell_ident
+        # Backwards compatibility (see above)
+        if i is not None:
+            cell_ident += "_{}".format(i)
         out_dev(dev, cell_ident, val)
 
+    initializer_vals += entry.specifier.values()
 
-def write_iochannels(dev):
-    # Writes IO channel controller and specifier info for the IO
-    # channels in dev's 'io-channels' property
-
-    for io_ch_i, io_ch in enumerate(dev.iochannels):
-        write_iochannel(dev, io_ch, io_ch_i if len(dev.iochannels) > 1 else None)
-
-
-def write_iochannel(dev, iochannel, index=None):
-    # Writes IO channel controller & data for the IO channel object 'iochannel'
-    # If 'index' is not None, it is added as a suffix to identifiers.
-
-    if iochannel.controller.label is not None:
-        ctrl_ident = "IO_CHANNELS_CONTROLLER"
-        if index is not None:
-            ctrl_ident += "_{}".format(index)
-        out_dev_s(dev, ctrl_ident, iochannel.controller.label)
-
-    for cell, val in iochannel.specifier.items():
-        cell_ident = "IO_CHANNELS_" + str2ident(cell)
-        if index is not None:
-            cell_ident += "_{}".format(index)
-
-        out_dev(dev, cell_ident, val)
+    initializer_ident = ident + "S"
+    if entry.name:
+        initializer_ident += "_" + str2ident(entry.name)
+    if i is not None:
+        initializer_ident += "_{}".format(i)
+    return out_dev(dev, initializer_ident,
+                   "{" + ", ".join(map(str, initializer_vals)) + "}")
 
 
 def write_clocks(dev):
@@ -591,6 +582,9 @@ def out_dev(dev, ident, val, name_alias=None):
     #   <device alias>_<name alias> (for each device alias)
     #
     # 'name_alias' is used for reg-names and the like.
+    #
+    # Returns the identifier used for the macro that provides the value
+    # for 'ident' within 'dev', e.g. DT_MFG_MODEL_CTL_GPIOS_PIN.
 
     dev_prefix = dev_ident(dev)
 
@@ -599,22 +593,24 @@ def out_dev(dev, ident, val, name_alias=None):
         aliases.append(dev_prefix + "_" + name_alias)
         aliases += [alias + "_" + name_alias for alias in dev_aliases(dev)]
 
-    out(dev_prefix + "_" + ident, val, aliases)
+    return out(dev_prefix + "_" + ident, val, aliases)
 
 
 def out_dev_s(dev, ident, s):
-    # Like out_dev(), but puts quotes around 's' and escapes any double quotes
-    # and backslashes within it
+    # Like out_dev(), but emits 's' as a string literal
+    #
+    # Returns the generated macro name for 'ident'.
 
-    # \ must be escaped before " to avoid double escaping
-    out_dev(dev, ident, '"{}"'.format(escape(s)))
+    return out_dev(dev, ident, quote_str(s))
 
 
 def out_s(ident, val):
-    # Like out(), but puts quotes around 's' and escapes any double quotes and
-    # backslashes within it
+    # Like out(), but puts quotes around 'val' and escapes any double
+    # quotes and backslashes within it
+    #
+    # Returns the generated macro name for 'ident'.
 
-    out(ident, '"{}"'.format(escape(val)))
+    return out(ident, quote_str(val))
 
 
 def out(ident, val, aliases=()):
@@ -624,17 +620,30 @@ def out(ident, val, aliases=()):
     # Also writes any aliases listed in 'aliases' (an iterable). For the
     # header, these look like '#define <alias> <ident>'. For the configuration
     # file, the value is just repeated as '<alias>=<val>' for each alias.
+    #
+    # Returns the generated macro name for 'ident'.
 
     print("#define DT_{:40} {}".format(ident, val), file=header_file)
-    print("DT_{}={}".format(ident, val), file=conf_file)
+    primary_ident = "DT_{}".format(ident)
+
+    # Exclude things that aren't single token values from .conf.  At
+    # the moment the only such items are unquoted string
+    # representations of initializer lists, which begin with a curly
+    # brace.
+    output_to_conf = not (isinstance(val, str) and val.startswith("{"))
+    if output_to_conf:
+        print("{}={}".format(primary_ident, val), file=conf_file)
 
     for alias in aliases:
         if alias != ident:
             print("#define DT_{:40} DT_{}".format(alias, ident),
                   file=header_file)
-            # For the configuration file, the value is just repeated for all
-            # the aliases
-            print("DT_{}={}".format(alias, val), file=conf_file)
+            if output_to_conf:
+                # For the configuration file, the value is just repeated for all
+                # the aliases
+                print("DT_{}={}".format(alias, val), file=conf_file)
+
+    return primary_ident
 
 
 def out_comment(s, blank_before=True):
@@ -656,6 +665,13 @@ def escape(s):
 
     # \ must be escaped before " to avoid double escaping
     return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def quote_str(s):
+    # Puts quotes around 's' and escapes any double quotes and
+    # backslashes within it
+
+    return '"{}"'.format(escape(s))
 
 
 def err(s):

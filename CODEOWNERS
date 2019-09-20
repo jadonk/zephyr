@@ -82,6 +82,7 @@
 /boards/arm/sam4s_xplained/               @fallrisk
 /boards/arm/v2m_beetle/                   @fvincenzo
 /boards/arm/olimexino_stm32/              @ydamigos
+/boards/arm/sensortile_box/               @avisconti
 /boards/arm/stm32*_disco/                 @erwango
 /boards/arm/stm32f3_disco/                @ydamigos
 /boards/arm/stm32*_eval/                  @erwango
@@ -107,7 +108,6 @@
 /doc/reference/bluetooth/                 @joerchan @jhedberg @Vudentz
 /drivers/*/*cc13xx_cc26xx*                @bwitherspoon
 /drivers/*/*mcux*                         @MaureenHelm
-/drivers/*/*qmsi*                         @nashif
 /drivers/*/*stm32*                        @erwango
 /drivers/*/*native_posix*                 @aescolar
 /drivers/adc/                             @anangl
@@ -121,6 +121,7 @@
 /drivers/display/display_framebuf.c       @gnuless
 /drivers/dma/*sam0*                       @Sizurka
 /drivers/espi/                            @albertofloyd @franciscomunoz @scottwcpg
+/drivers/ps2/                             @albertofloyd @franciscomunoz @scottwcpg
 /drivers/ethernet/                        @jukkar @tbursztyka @pfalcon
 /drivers/flash/                           @nashif
 /drivers/flash/*native_posix*             @vanwinkeljan @aescolar
@@ -137,9 +138,9 @@
 /drivers/led/                             @Mani-Sadhasivam
 /drivers/led_strip/                       @mbolivar
 /drivers/modem/                           @mike-scott
-/drivers/pci/                             @gnuless
 /drivers/pcie/                            @gnuless
 /drivers/pinmux/stm32/                    @rsalveti @idlethread
+/drivers/pinmux/*hsdk*                    @iriszzw
 /drivers/sensor/                          @MaureenHelm
 /drivers/sensor/ams_iAQcore/              @alexanderwachter
 /drivers/sensor/ens210/                   @alexanderwachter
@@ -166,6 +167,7 @@
 /drivers/timer/riscv_machine_timer.c      @nategraff-sifive @kgugala @pgielda
 /drivers/timer/litex_timer.c              @mateusz-holenko @kgugala @pgielda
 /drivers/timer/xlnx_psttc_timer.c         @wjliang
+/drivers/timer/cc13x2_cc26x2_rtc_timer.c  @vanti
 /drivers/usb/                             @jfischer-phytec-iot @finikorg
 /drivers/usb/device/usb_dc_stm32.c        @ydamigos @loicpoulain
 /drivers/i2c/i2c_ll_stm32*                @ldts @ydamigos
@@ -180,6 +182,7 @@
 /dts/arm/st/                              @erwango
 /dts/arm/ti/cc13?2*                       @bwitherspoon
 /dts/arm/ti/cc26?2*                       @bwitherspoon
+/dts/arm/ti/cc3235*                       @vanti
 /dts/arm/nordic/                          @ioannisg @carlescufi
 /dts/arm/nxp/                             @MaureenHelm
 /dts/arm/microchip/                       @franciscomunoz @albertofloyd @scottwcpg

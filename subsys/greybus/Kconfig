@@ -15,6 +15,19 @@ module = GREYBUS
 module-str = gb
 #source "subsys/logging/Kconfig.template.log_config"
 
+config GREYBUS_STATIC_MANIFEST
+	bool "Static Greybus Manifest"
+	default n
+	help
+	  Statically linke a Greybus manifest. This
+	  manifest must be pre-compiled with the 'manifesto' tool
+	  and also pre-converted to a C-array using the 'xxd' tool
+	  or something similar.
+	  
+	  The resulting static-manifest.h must include a
+	  static const unsigned char manifest_mnfb[]; as well as
+	  static const unsigned manifest_mnfb_len;
+
 config GREYBUS_AUDIO
 	bool "Greybus Audio"
 	default n
@@ -38,6 +51,18 @@ config GREYBUS_DEBUG
 	default n
 	help
 	  Select this to debug Greybus.
+
+config GREYBUS_LOG_FUNC
+	bool "Greybus Debug with Function Name"
+	default n
+	help
+	  Select this option to show the function name in Greybus debug messages.
+
+config GREYBUS_LOG_FILE
+	bool "Greybus Debug with File Name"
+	default y
+	help
+	  Select this option to show the filename and line number in Greybus debug messages.
 
 config GREYBUS_GPIO
 	bool "Greybus GPIO"

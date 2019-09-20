@@ -1,0 +1,41 @@
+# Kconfig.intel64 - Intel64-specific X86 subarchitecture options
+#
+# Copyright (c) 2019 Intel Corp.
+# SPDX-License-Identifier: Apache-2.0
+
+if X86_LONGMODE
+
+config MAIN_STACK_SIZE
+	default 8192
+
+config IDLE_STACK_SIZE
+	default 4096
+
+config ISR_STACK_SIZE
+	default 4096
+
+config TEST_EXTRA_STACKSIZE
+	default 4096
+
+config SYSTEM_WORKQUEUE_STACK_SIZE
+	default 8192
+
+config OFFLOAD_WORKQUEUE_STACK_SIZE
+	default 8192
+
+config EXCEPTION_STACK_SIZE
+	int "Size of the exception stack(s)"
+	default 1024
+	help
+	  The exception stack(s) (one per CPU) are used both for exception
+	  processing and early kernel/CPU initialization. They need only
+	  support limited call-tree depth and must fit into the low core,
+	  so they are typically smaller than the ISR stacks.
+
+config ISR_DEPTH
+	int "Maximum IRQ nesting depth"
+	default 4
+	help
+	  The more nesting allowed, the more room is required for IRQ stacks.
+
+endif # X86_LONGMODE

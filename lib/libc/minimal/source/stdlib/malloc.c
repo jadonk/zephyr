@@ -58,7 +58,7 @@ void *malloc(size_t size)
 	size_t struct_blk_size = WB_UP(sizeof(struct sys_mem_pool_block));
 	size_t block_size;
 	/* Stored right before the pointer passed to the user */
-	blk = (struct sys_mem_pool_block *)((char *)ptr - struct_blk_size);
+	blk = (struct sys_mem_pool_block *)((char *)ret - struct_blk_size);
 
 	/* Determine size of previously allocated block by its level.
 	 * Most likely a bit larger than the original allocation

@@ -233,11 +233,13 @@ elseif(QEMU_NET_STACK)
   endif()
 endif(QEMU_PIPE_STACK)
 
-if(CONFIG_X86_IAMCU)
+if(CONFIG_X86_LONGMODE)
+  # QEMU doesn't like 64-bit ELF files. Since we don't use any >4GB
+  # addresses, converting it to 32-bit is safe enough for emulation.
   list(APPEND PRE_QEMU_COMMANDS
     COMMAND
-    ${PYTHON_EXECUTABLE}
-    ${ZEPHYR_BASE}/scripts/qemu-machine-hack.py
+    ${CMAKE_OBJCOPY}
+    -O elf32-i386
     $<TARGET_FILE:${logical_target_for_zephyr_elf}>
     )
 endif()

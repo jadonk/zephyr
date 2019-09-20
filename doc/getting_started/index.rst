@@ -44,6 +44,8 @@ package is already installed locally but a more recent version is available. It
 is good practice to use this flag if the latest version of a package is
 required.
 
+.. _install-required-tools:
+
 Install the required tools
 ===========================
 
@@ -95,6 +97,16 @@ Clone all of Zephyr's repositories in a new :file:`zephyrproject` directory:
 
 You can replace :file:`zephyrproject` with another directory name. West creates
 the directory if it doesn't exist. See :ref:`west-multi-repo` for more details.
+
+.. important::
+
+   You need to run ``west update`` any time :file:`zephyr/west.yml` changes.
+   This command keeps :ref:`modules` in the :file:`zephyrproject` folder in sync
+   with the code in the zephyr repository, so they work correctly together.
+
+   Some examples when ``west update`` is needed are: whenever you
+   pull the :file:`zephyr` repository, switch branches in it, or perform a ``git
+   bisect`` inside of it.
 
 .. warning::
 

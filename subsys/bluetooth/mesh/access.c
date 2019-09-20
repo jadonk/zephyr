@@ -30,20 +30,6 @@
 static const struct bt_mesh_comp *dev_comp;
 static u16_t dev_primary_addr;
 
-static const struct {
-	const u16_t id;
-	int (*const init)(struct bt_mesh_model *model, bool primary);
-} model_init[] = {
-	{ BT_MESH_MODEL_ID_CFG_SRV, bt_mesh_cfg_srv_init },
-	{ BT_MESH_MODEL_ID_HEALTH_SRV, bt_mesh_health_srv_init },
-#if defined(CONFIG_BT_MESH_CFG_CLI)
-	{ BT_MESH_MODEL_ID_CFG_CLI, bt_mesh_cfg_cli_init },
-#endif
-#if defined(CONFIG_BT_MESH_HEALTH_CLI)
-	{ BT_MESH_MODEL_ID_HEALTH_CLI, bt_mesh_health_cli_init },
-#endif
-};
-
 void bt_mesh_model_foreach(void (*func)(struct bt_mesh_model *mod,
 					struct bt_mesh_elem *elem,
 					bool vnd, bool primary,
@@ -302,14 +288,8 @@ static void mod_init(struct bt_mesh_model *mod, struct bt_mesh_elem *elem,
 		mod->mod_idx = mod - elem->models;
 	}
 
-	if (vnd) {
-		return;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(model_init); i++) {
-		if (model_init[i].id == mod->id) {
-			model_init[i].init(mod, primary);
-		}
+	if (mod->cb && mod->cb->init) {
+		mod->cb->init(mod);
 	}
 }
 
@@ -402,17 +382,21 @@ static struct bt_mesh_model *bt_mesh_elem_find_group(struct bt_mesh_elem *elem,
 
 struct bt_mesh_elem *bt_mesh_elem_find(u16_t addr)
 {
-	int i;
+	u16_t index;
 
-	for (i = 0; i < dev_comp->elem_count; i++) {
-		struct bt_mesh_elem *elem = &dev_comp->elem[i];
+	if (BT_MESH_ADDR_IS_UNICAST(addr)) {
+		index = (addr - dev_comp->elem[0].addr);
+		if (index < dev_comp->elem_count) {
+			return &dev_comp->elem[index];
+		} else {
+			return NULL;
+		}
+	}
 
-		if (BT_MESH_ADDR_IS_GROUP(addr) ||
-		    BT_MESH_ADDR_IS_VIRTUAL(addr)) {
-			if (bt_mesh_elem_find_group(elem, addr)) {
-				return elem;
-			}
-		} else if (elem->addr == addr) {
+	for (index = 0; index < dev_comp->elem_count; index++) {
+		struct bt_mesh_elem *elem = &dev_comp->elem[index];
+
+		if (bt_mesh_elem_find_group(elem, addr)) {
 			return elem;
 		}
 	}
@@ -513,8 +497,7 @@ bool bt_mesh_fixed_group_match(u16_t addr)
 	case BT_MESH_ADDR_ALL_NODES:
 		return true;
 	case BT_MESH_ADDR_PROXIES:
-		/* TODO: Proxy not yet supported */
-		return false;
+		return (bt_mesh_gatt_proxy_get() == BT_MESH_GATT_PROXY_ENABLED);
 	case BT_MESH_ADDR_FRIENDS:
 		return (bt_mesh_friend_get() == BT_MESH_FRIEND_ENABLED);
 	case BT_MESH_ADDR_RELAYS:
@@ -730,7 +713,7 @@ int bt_mesh_model_publish(struct bt_mesh_model *model)
 	return 0;
 }
 
-struct bt_mesh_model *bt_mesh_model_find_vnd(struct bt_mesh_elem *elem,
+struct bt_mesh_model *bt_mesh_model_find_vnd(const struct bt_mesh_elem *elem,
 					     u16_t company, u16_t id)
 {
 	u8_t i;
@@ -745,7 +728,7 @@ struct bt_mesh_model *bt_mesh_model_find_vnd(struct bt_mesh_elem *elem,
 	return NULL;
 }
 
-struct bt_mesh_model *bt_mesh_model_find(struct bt_mesh_elem *elem,
+struct bt_mesh_model *bt_mesh_model_find(const struct bt_mesh_elem *elem,
 					 u16_t id)
 {
 	u8_t i;

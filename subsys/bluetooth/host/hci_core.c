@@ -728,7 +728,10 @@ int bt_le_auto_conn(const struct bt_le_conn_param *conn_param)
 		 * NRPA used for active scan could be used for connection.
 		 */
 		if (addr->type == BT_ADDR_LE_RANDOM) {
-			set_random_address(&addr->a);
+			err = set_random_address(&addr->a);
+			if (err) {
+				return err;
+			}
 		}
 
 		own_addr_type = addr->type;
@@ -785,7 +788,10 @@ static int hci_le_create_conn(const struct bt_conn *conn)
 		const bt_addr_le_t *own_addr = &bt_dev.id_addr[conn->id];
 
 		if (own_addr->type == BT_ADDR_LE_RANDOM) {
-			set_random_address(&own_addr->a);
+			err = set_random_address(&own_addr->a);
+			if (err) {
+				return err;
+			}
 		}
 
 		own_addr_type = own_addr->type;
@@ -983,7 +989,7 @@ static void slave_update_conn_param(struct bt_conn *conn)
 	 * The Peripheral device should not perform a Connection Parameter
 	 * Update procedure within 5 s after establishing a connection.
 	 */
-	k_delayed_work_submit(&conn->le.update_work, CONN_UPDATE_TIMEOUT);
+	k_delayed_work_submit(&conn->update_work, CONN_UPDATE_TIMEOUT);
 }
 
 #if defined(CONFIG_BT_SMP)
@@ -1118,7 +1124,7 @@ static void enh_conn_complete(struct bt_hci_evt_le_enh_conn_complete *evt)
 
 		/* for slave we may need to add new connection */
 		if (!conn) {
-			conn = bt_conn_add_le(&id_addr);
+			conn = bt_conn_add_le(bt_dev.adv_id, &id_addr);
 		}
 	}
 
@@ -1127,7 +1133,7 @@ static void enh_conn_complete(struct bt_hci_evt_le_enh_conn_complete *evt)
 	    evt->role == BT_HCI_ROLE_MASTER) {
 		/* for whitelist initiator me may need to add new connection. */
 		if (!conn) {
-			conn = bt_conn_add_le(&id_addr);
+			conn = bt_conn_add_le(BT_ID_DEFAULT, &id_addr);
 		}
 	}
 
@@ -1151,7 +1157,6 @@ static void enh_conn_complete(struct bt_hci_evt_le_enh_conn_complete *evt)
 	 */
 	if (IS_ENABLED(CONFIG_BT_PERIPHERAL) &&
 	    conn->role == BT_HCI_ROLE_SLAVE) {
-		conn->id = bt_dev.adv_id;
 		bt_addr_le_copy(&conn->le.init_addr, &peer_addr);
 
 		if (IS_ENABLED(CONFIG_BT_PRIVACY)) {
@@ -3496,7 +3501,10 @@ static int start_le_scan(u8_t scan_type, u16_t interval, u16_t window)
 
 			set_param.addr_type = BT_ADDR_LE_RANDOM;
 		} else if (set_param.addr_type == BT_ADDR_LE_RANDOM) {
-			set_random_address(&bt_dev.id_addr[0].a);
+			err = set_random_address(&bt_dev.id_addr[0].a);
+			if (err) {
+				return err;
+			}
 		}
 	}
 
@@ -5666,15 +5674,6 @@ int bt_le_adv_start_internal(const struct bt_le_adv_param *param,
 		return -EALREADY;
 	}
 
-	if (!dir_adv) {
-		err = le_adv_update(ad, ad_len, sd, sd_len,
-				    param->options & BT_LE_ADV_OPT_CONNECTABLE,
-				    param->options & BT_LE_ADV_OPT_USE_NAME);
-		if (err) {
-			return err;
-		}
-	}
-
 	(void)memset(&set_param, 0, sizeof(set_param));
 
 	set_param.min_interval = sys_cpu_to_le16(param->interval_min);
@@ -5726,7 +5725,10 @@ int bt_le_adv_start_internal(const struct bt_le_adv_param *param,
 			 * could be used for advertising.
 			 */
 			if (id_addr->type == BT_ADDR_LE_RANDOM) {
-				set_random_address(&id_addr->a);
+				err = set_random_address(&id_addr->a);
+				if (err) {
+					return err;
+				}
 			}
 
 			set_param.own_addr_type = id_addr->type;
@@ -5787,6 +5789,15 @@ int bt_le_adv_start_internal(const struct bt_le_adv_param *param,
 	err = bt_hci_cmd_send_sync(BT_HCI_OP_LE_SET_ADV_PARAM, buf, NULL);
 	if (err) {
 		return err;
+	}
+
+	if (!dir_adv) {
+		err = le_adv_update(ad, ad_len, sd, sd_len,
+				    param->options & BT_LE_ADV_OPT_CONNECTABLE,
+				    param->options & BT_LE_ADV_OPT_USE_NAME);
+		if (err) {
+			return err;
+		}
 	}
 
 	err = set_advertise_enable(true);

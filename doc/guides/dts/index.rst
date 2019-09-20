@@ -416,6 +416,12 @@ This node would get mapped to a binding with this in it:
 
 .. code-block:: yaml
 
+   compatible: "foo-company,bar-device"
+
+You might also run across this legacy syntax, which works the same way:
+
+.. code-block:: yaml
+
    ...
 
    properties:
@@ -438,11 +444,76 @@ into account when mapping nodes to bindings. See the description of ``parent``
 and ``child`` in the template below.
 
 Below is a template that shows the format of binding files, stored in
-:zephyr_file:`dts/bindings/binding-template.yaml`.
+:zephyr_file:`dts/binding-template.yaml`.
 
-.. literalinclude:: ../../../dts/bindings/binding-template.yaml
+.. literalinclude:: ../../../dts/binding-template.yaml
    :language: yaml
 
+.. _legacy_binding_syntax:
+
+Legacy binding syntax
+=====================
+
+Various parts of the binding syntax were simplified and generalized for the
+Zephyr 2.1 release.
+
+The binding below shows various legacy syntax.
+
+.. code-block:: yaml
+
+   title: ...
+   description: ...
+
+   inherits:
+       !include foo.yaml
+
+   parent:
+       bus: spi
+
+   properties:
+       compatible:
+           constraint: "company,device"
+           type: string-array
+
+       frequency:
+           type: int
+           category: optional
+
+   sub-node:
+       properties:
+           child-prop:
+               type: int
+               category: required
+
+This should now be written like this:
+
+.. code-block:: yaml
+
+   title: ...
+   description: ...
+
+   compatible: "company,device"
+
+   include: foo.yaml
+
+   parent-bus: spi
+
+   properties:
+       frequency:
+           type: int
+           required: false
+
+   child-node:
+       title: ...
+       description: ...
+
+       properties:
+           child-prop:
+               type: int
+               required: true
+
+The legacy syntax is still supported for backwards compatibility, but generates
+deprecation warnings. Support will be dropped in the Zephyr 2.3 release.
 
 Include files generation
 ************************

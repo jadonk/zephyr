@@ -3,11 +3,9 @@
 title: Device.props test
 description: Device.props test
 
-properties:
-    compatible:
-        constraint: "props"
-        type: string-array
+compatible: "props"
 
+properties:
     nonexistent-boolean:
         type: boolean
 
@@ -16,6 +14,7 @@ properties:
 
     int:
         type: int
+        const: 1
 
     array:
         type: array
@@ -25,9 +24,16 @@ properties:
 
     string:
         type: string
+        const: "foo"
 
     string-array:
         type: string-array
 
     phandle-ref:
         type: phandle
+
+    phandle-refs:
+        type: phandles
+
+    phandle-refs-and-vals:
+        type: phandle-array

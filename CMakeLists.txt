@@ -40,7 +40,7 @@ enable_language(C CXX ASM)
 
 # Verify that the toolchain can compile a dummy file, if it is not we
 # won't be able to test for compatibility with certain C flags.
-check_c_compiler_flag("" toolchain_is_ok)
+zephyr_check_compiler_flag(C "" toolchain_is_ok)
 assert(toolchain_is_ok "The toolchain is unable to build a dummy C file. See CMakeError.log.")
 
 # In some cases the "final" things are not used at all and "_prebuilt"
@@ -467,7 +467,6 @@ if(EXISTS ${CMAKE_BINARY_DIR}/zephyr_modules.txt)
     # lazy regexes (it supports greedy only).
     string(REGEX REPLACE "\"(.*)\":\".*\"" "\\1" module_name ${module})
     string(REGEX REPLACE "\".*\":\"(.*)\"" "\\1" module_path ${module})
-    message("Including module: ${module_name} in path: ${module_path}")
     # Note the second, binary_dir parameter requires the added
     # subdirectory to have its own, local cmake target(s). If not then
     # this binary_dir is created but stays empty. Object files land in

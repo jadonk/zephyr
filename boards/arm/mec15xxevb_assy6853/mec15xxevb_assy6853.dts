@@ -48,3 +48,19 @@
 	vw_girq = <24>;
 	pc_girq = <15>;
 };
+
+&timer3 {
+	status = "okay";
+};
+
+&ps2_0 {
+	status = "okay";
+};
+
+&ps2_1 {
+	status = "okay";
+};
+
+&pwm0 {
+	status = "okay";
+};

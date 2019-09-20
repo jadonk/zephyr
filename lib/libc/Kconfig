@@ -77,7 +77,7 @@ config MINIMAL_LIBC_MALLOC_ARENA_SIZE
 config MINIMAL_LIBC_MALLOC_DEBUG
 	bool "Print verbose information about calls to malloc, free, etc"
 	depends on !NEWLIB_LIBC
-	selects MINIMAL_LIBC_MALLOC_STATS
+	select MINIMAL_LIBC_MALLOC_STATS
 	default false
 	help
 	  This function replaces malloc, free, calloc, and realloc with

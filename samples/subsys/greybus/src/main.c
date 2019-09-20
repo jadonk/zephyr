@@ -166,12 +166,12 @@ static void *gb_xport_alloc_buf(size_t size) {
 	if (NULL == r) {
 		gb_error("Failed to allocate buffer of size %u\n", (unsigned)size);
 	} else {
-		printk("Allocated buffer of size %u at %p\n", (unsigned)size, r);
+		gb_info("Allocated buffer of size %u at %p\n", (unsigned)size, r);
 	}
 	return r;
 }
 static void gb_xport_free_buf(void *ptr) {
-	printk("Freeing buffer at %p\n", ptr);
+	gb_info("Freeing buffer at %p\n", ptr);
 	free(ptr);
 }
 
@@ -234,7 +234,7 @@ void main(void)
 	tty_set_tx_buf(&app_serial, app_serial_txbuf, sizeof(app_serial_txbuf));
 	tty_set_rx_buf(&app_serial, app_serial_rxbuf, sizeof(app_serial_rxbuf));
 
-	printk("Registering platform drivers..\n");
+	gb_info("Registering platform drivers..\n");
 
 	register_gb_platform_drivers();
 
@@ -258,7 +258,7 @@ start_over:
 
 #else
 
-	printk("Awaiting manifest..\n");
+	gb_info("Awaiting manifest..\n");
 
 	// blink an led once to indicate that the manifest is expected
 	blink(red_led_dev, red_led_pin, 1, 100000);
@@ -283,9 +283,9 @@ start_over:
 	// blink an led twice to indicate that the manifest was received
 	blink(red_led_dev, red_led_pin, 2, 100000);
 
-	printk("Received manifest\n");
+	gb_info("Received manifest\n");
 
-	printk("Parsing manifest\n");
+	gb_info("Parsing manifest\n");
 
 	r = manifest_parse(manifest, manifest_size);
 	if (true != r) {
@@ -295,12 +295,12 @@ start_over:
 		goto start_over;
 	}
 
-	printk("Parsed manifest\n");
+	gb_info("Parsed manifest\n");
 
 	set_manifest_blob(manifest);
 #endif
 
-	printk("Calling gb_init()\n");
+	gb_info("Calling gb_init()\n");
 
 	r = gb_init((struct gb_transport_backend *)&gb_xport);
 	if (0 != r) {
@@ -310,11 +310,11 @@ start_over:
 		goto start_over;
 	}
 
-	printk("Calling enable_cports()\n");
+	gb_info("Calling enable_cports()\n");
 	enable_cports();
 
 #ifndef CONFIG_GREYBUS_STATIC_MANIFEST
-	printk("Sending back success message()\n");
+	gb_info("Sending back success message()\n");
 	resp.result = GB_OP_SUCCESS;
 	sendMessage(&resp);
 #endif
@@ -322,12 +322,12 @@ start_over:
 	// Turn on the red LED to indicate the device is 'online'
 	gpio_pin_write(red_led_dev, red_led_pin, 1);
 
-	printk("Greybus is active.\n");
+	gb_info("Greybus is active.\n");
 
 	msg = NULL;
 	for( size_t i = 0;; i++) {
 
-		printk("Awaiting message..\n");
+		gb_info("Awaiting message..\n");
 
 		// get messages and pass them to greybus
 		r = getMessage(&msg, GB_TYPE_ANY);
@@ -336,14 +336,14 @@ start_over:
 			continue;
 		}
 
-		printk("Received message\n");
+		gb_info("Received message\n");
 
 		unsigned int cport = ((uint16_t)msg->pad[1] << 8) | msg->pad[0];
 		//blink(red_led_dev, red_led_pin, 1, 10000);
 
 		r = greybus_rx_handler(cport, msg, sys_le16_to_cpu(msg->size));
 		if ( 0 == r ) {
-			printk("Handled message!\n");
+			gb_info("Handled message!\n");
 		} else {
 			gb_error("failed to handle message %u: size: %u, id: %u, type: %u\n", i, sys_le16_to_cpu(msg->size), sys_le16_to_cpu(msg->id), msg->type);
 		}

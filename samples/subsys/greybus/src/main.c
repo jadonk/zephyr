@@ -168,20 +168,9 @@ static int gb_xport_send(unsigned int cport, const void *buf, size_t len) {
 	return 0;
 }
 static void *gb_xport_alloc_buf(size_t size) {
-	void *r;
-	r = calloc(1,size);
-	if (NULL == r) {
-		gb_error("Failed to allocate buffer of size %u\n", (unsigned)size);
-	} else {
-		if ( 0 == size ) {
-			printk("");
-		}
-		gb_info("Allocated buffer of size %u at %p\n", (unsigned)size, r);
-	}
-	return r;
+	return malloc(size);
 }
 static void gb_xport_free_buf(void *ptr) {
-	gb_info("Freeing buffer at %p\n", ptr);
 	free(ptr);
 }
 

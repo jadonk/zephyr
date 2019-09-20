@@ -18,10 +18,27 @@ unsigned long int strtoul(const char *str, char **endptr, int base);
 long int strtol(const char *str, char **endptr, int base);
 int atoi(const char *s);
 
+#ifdef CONFIG_MALLOC_DEBUG
+
+void *z_malloc_debug(size_t size);
+void z_free_debug(void *ptr);
+void *z_calloc_debug(size_t nmemb, size_t size);
+void *z_realloc_debug(void *ptr, size_t size);
+
+#define malloc(size) z_malloc_debug(__FILE__, __func__, __LINE__, size)
+#define free(ptr) z_free_debug(__FILE__, __func__, __LINE__, ptr)
+#define calloc(nmemb, size) z_calloc_debug(__FILE__, __func__, __LINE__, nmemb, size)
+#define realloc(ptr, size) z_realloc_debug(__FILE__, __func__, __LINE__, ptr, size)
+
+#else /* CONFIG_MALLOC_DEBUG */
+
 void *malloc(size_t size);
 void free(void *ptr);
 void *calloc(size_t nmemb, size_t size);
 void *realloc(void *ptr, size_t size);
+
+#endif /* CONFIG_MALLOC_DEBUG */
+
 void *reallocarray(void *ptr, size_t nmemb, size_t size);
 
 void *bsearch(const void *key, const void *array,

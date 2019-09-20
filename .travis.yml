@@ -37,7 +37,7 @@ before_script:
   - sudo sh .ci/scripts/build-and-install-dtc.sh
 
   # Zephyr requires an arm bare-metal toolchain and does not (yet) support the toolchain in Ubuntu's repositories
-  - sudo sh .ci/scripts/install-gnuarmemb.sh
+  #- sudo sh .ci/scripts/install-gnuarmemb.sh
 
   # For CI, we need to build Zephyr wihtout west. The process is mostly documented here:
   # https://docs.zephyrproject.org/latest/getting_started/index.html

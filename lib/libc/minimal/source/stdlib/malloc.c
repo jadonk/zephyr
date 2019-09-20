@@ -163,7 +163,7 @@ void *calloc(size_t nmemb, size_t size)
 }
 
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
-void *z_free_realloc(const char *file, const char *func, const int line, void *ptr, size_t requested_size)
+void *z_realloc_debug(const char *file, const char *func, const int line, void *ptr, size_t requested_size)
 {
 	printk("realloc: %s:%s():%d %p %u\n", file, func, line, ptr, (unsigned)requested_size);
 #else /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */

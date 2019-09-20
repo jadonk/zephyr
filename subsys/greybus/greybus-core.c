@@ -918,7 +918,10 @@ void gb_operation_unref(struct gb_operation *operation)
     DEBUGASSERT(operation);
     DEBUGASSERT(atomic_get(&operation->ref_count) > 0);
 
-    uint32_t ref_count = atomic_dec(&operation->ref_count);
+    /* zephyr atomic_dec(), via z_impl_atomic_sub(), returns the value
+     * of the variable before it was decremented (much like the behaviour
+     * defined in stdatomic.h with atomic_fetch_sub() */
+    uint32_t ref_count = atomic_dec(&operation->ref_count) - 1;
     if (ref_count != 0) {
         return;
     }

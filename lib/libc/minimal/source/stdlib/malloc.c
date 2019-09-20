@@ -105,7 +105,7 @@ void free(void *ptr)
 }
 
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
-void z_free_calloc(const char *file, const char *func, const int line, size_t nmemb, size_t size)
+void *z_free_calloc(const char *file, const char *func, const int line, size_t nmemb, size_t size)
 {
 	printk("calloc: %s:%s():%d %u %u\n", file, func, line, (unsigned)nmemb, (unsigned)size);
 #else /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */
@@ -129,7 +129,7 @@ void *calloc(size_t nmemb, size_t size)
 }
 
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_DEBUG
-void z_free_realloc(const char *file, const char *func, const int line, void *ptr, size_t requested_size)
+void *z_free_realloc(const char *file, const char *func, const int line, void *ptr, size_t requested_size)
 {
 	printk("realloc: %s:%s():%d %p %u\n", file, func, line, ptr, (unsigned)requested_size);
 #else /* CONFIG_MINIMAL_LIBC_MALLOC_DEBUG */

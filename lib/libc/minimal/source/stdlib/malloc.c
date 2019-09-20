@@ -55,6 +55,8 @@ void *malloc(size_t size)
 
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_STATS
 	struct sys_mem_pool_block *blk;
+	size_t struct_blk_size = WB_UP(sizeof(struct sys_mem_pool_block));
+	size_t block_size;
 	/* Stored right before the pointer passed to the user */
 	blk = (struct sys_mem_pool_block *)((char *)ptr - struct_blk_size);
 
@@ -110,6 +112,8 @@ void free(void *ptr)
 
 #ifdef CONFIG_MINIMAL_LIBC_MALLOC_STATS
 	struct sys_mem_pool_block *blk;
+	size_t struct_blk_size = WB_UP(sizeof(struct sys_mem_pool_block));
+	size_t block_size;
 	/* Stored right before the pointer passed to the user */
 	blk = (struct sys_mem_pool_block *)((char *)ptr - struct_blk_size);
 

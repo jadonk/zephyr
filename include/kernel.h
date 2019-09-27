@@ -23,6 +23,11 @@
 extern "C" {
 #endif
 
+#ifdef CONFIG_BOOT_TIME_MEASUREMENT
+extern u32_t __main_time_stamp; /* timestamp when main task starts */
+extern u32_t __idle_time_stamp; /* timestamp when CPU goes idle */
+#endif
+
 /**
  * @brief Kernel APIs
  * @defgroup kernel_apis Kernel APIs
@@ -1839,8 +1844,11 @@ struct k_queue {
 #define _K_QUEUE_INITIALIZER(obj) \
 	{ \
 	.data_q = SYS_SLIST_STATIC_INIT(&obj.data_q), \
-	.wait_q = Z_WAIT_Q_INIT(&obj.wait_q), \
-	_POLL_EVENT_OBJ_INIT(obj) \
+	.lock = { }, \
+	{ \
+		.wait_q = Z_WAIT_Q_INIT(&obj.wait_q), \
+		_POLL_EVENT_OBJ_INIT(obj) \
+	}, \
 	_OBJECT_TRACING_INIT \
 	}
 

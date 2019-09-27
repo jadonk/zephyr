@@ -28,16 +28,16 @@
 
 #include <stdarg.h>
 #include <greybus/debug.h>
-//#include <arch/irq.h>
 #include <irq.h>
+#include <zephyr.h>
 
-#if defined(CONFIG_GB_LOG_ERROR)
+#if defined(CONFIG_GREYBUS_LOG_ERROR)
 #define GB_LOG_LEVEL (GB_LOG_ERROR)
-#elif defined(CONFIG_GB_LOG_WARNING)
+#elif defined(CONFIG_GREYBUS_LOG_WARNING)
 #define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING)
-#elif defined(CONFIG_GB_LOG_DEBUG)
+#elif defined(CONFIG_GREYBUS_LOG_DEBUG)
 #define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG)
-#elif defined(CONFIG_GB_LOG_DUMP)
+#elif defined(CONFIG_GREYBUS_LOG_DUMP)
 #define GB_LOG_LEVEL (GB_LOG_ERROR | GB_LOG_WARNING | GB_LOG_DEBUG | \
                       GB_LOG_DUMP)
 #else
@@ -54,7 +54,7 @@ void _gb_log(const char *fmt, ...)
 
     va_start(ap, fmt);
     flags = irq_lock();
-    lowvsyslog(fmt, ap);
+    printk(fmt, ap);
     irq_unlock(flags);
     va_end(ap);
 }
@@ -62,22 +62,22 @@ void _gb_log(const char *fmt, ...)
 void _gb_dump(const char *func, __u8 *buf, size_t size)
 {
     int i, count;
-    irqstate_t flags;
+    int flags;
 
     flags = irq_lock();
-    lowsyslog("%s:\n", func);
+    printk("%s:\n", func);
     count = 0;
     for (i = 0; i < size; i++) {
-        lowsyslog( "%02x ", buf[i]);
+        printk( "%02x ", buf[i]);
         /**
          * Add line-breaks every so often to divide the dump into readable rows
          * of bytes.
          */
         if (++count == GB_DUMP_LINE_LENGTH) {
-            lowsyslog("\n");
+            printk("\n");
             count = 0;
         }
     }
-    lowsyslog("\n");
+    printk("\n");
     irq_unlock(flags);
 }

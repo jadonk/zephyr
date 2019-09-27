@@ -178,12 +178,8 @@ SECTION_FUNC(TEXT, _interrupt_enter)
 
 alreadyOnIntStack:
 
-#ifndef CONFIG_X86_IAMCU
-	/* EAX has the interrupt handler argument, needs to go on
-	 * stack for sys V calling convention
-	 */
-	push	%eax
-#endif
+	push	%eax	/* interrupt handler argument */
+
 #ifdef CONFIG_EXECUTION_BENCHMARKING
 	/* Save the eax and edx registers before reading the time stamp
 	* once done pop the values
@@ -202,18 +198,18 @@ alreadyOnIntStack:
 #endif
 	/* Now call the interrupt handler */
 	INDIRECT_CALL(%edx)
-#ifndef CONFIG_X86_IAMCU
 	/* Discard ISR argument */
 	addl	$0x4, %esp
-#endif
 #ifdef CONFIG_NESTED_INTERRUPTS
 	cli			/* disable interrupts again */
 #endif
 
-#if defined(CONFIG_X2APIC)
-	call	z_x2apic_eoi
-#else /* xAPIC EOI */
 	xorl	%eax, %eax
+#if defined(CONFIG_X2APIC)
+	xorl	%edx, %edx
+	movl	$(X86_X2APIC_BASE_MSR + (LOAPIC_EOI >> 4)), %ecx
+	wrmsr
+#else /* xAPIC */
 	movl	%eax, (CONFIG_LOAPIC_BASE_ADDRESS + LOAPIC_EOI)
 #endif
 
@@ -231,14 +227,14 @@ alreadyOnIntStack:
 	je	noReschedule
 
 	/*
-	 * Set the _INT_ACTIVE bit in the k_thread to allow the upcoming call to
-	 * __swap() to determine whether non-floating registers need to be
+	 * Set X86_THREAD_FLAG_INT bit in k_thread to allow the upcoming call
+	 * to __swap() to determine whether non-floating registers need to be
 	 * preserved using the lazy save/restore algorithm, or to indicate to
 	 * debug tools that a preemptive context switch has occurred.
 	 */
 
 #if defined(CONFIG_LAZY_FP_SHARING)
-	orb	$_INT_ACTIVE, _thread_offset_to_thread_state(%edx)
+	orb	$X86_THREAD_FLAG_INT, _thread_offset_to_flags(%edx)
 #endif
 
 	/*
@@ -255,16 +251,9 @@ alreadyOnIntStack:
 	call	z_check_stack_sentinel
 #endif
 	pushfl			/* push KERNEL_LOCK_KEY argument */
-#ifdef CONFIG_X86_IAMCU
-	/* IAMCU first argument goes into a register, not the stack.
-	 */
-	popl	%eax
-#endif
 	call	__swap
-
-#ifndef CONFIG_X86_IAMCU
 	addl 	$4, %esp	/* pop KERNEL_LOCK_KEY argument */
-#endif
+
 	/*
 	 * The interrupted thread has now been scheduled,
 	 * as the result of a _later_ invocation of __swap().
@@ -276,12 +265,12 @@ alreadyOnIntStack:
 #if defined(CONFIG_LAZY_FP_SHARING)
 	/*
 	 * __swap() has restored the floating point registers, if needed.
-	 * Clear the _INT_ACTIVE bit in the interrupted thread's state
+	 * Clear X86_THREAD_FLAG_INT in the interrupted thread's state
 	 * since it has served its purpose.
 	 */
 
 	movl	_kernel + _kernel_offset_to_current, %eax
-	andb	$~_INT_ACTIVE, _thread_offset_to_thread_state(%eax)
+	andb	$~X86_THREAD_FLAG_INT, _thread_offset_to_flags(%eax)
 #endif /* CONFIG_LAZY_FP_SHARING */
 
 	/* Restore volatile registers and return to the interrupted thread */
@@ -331,12 +320,7 @@ handle_idle:
 	pushl	%eax
 	pushl	%edx
 	/* Populate 'ticks' argument to z_sys_power_save_idle_exit */
-#ifdef CONFIG_X86_IAMCU
-	movl	_kernel_offset_to_idle(%ecx), %eax
-#else
-	/* SYS V calling convention */
 	push	_kernel_offset_to_idle(%ecx)
-#endif
 	/* Zero out _kernel.idle */
 	movl	$0, _kernel_offset_to_idle(%ecx)
 
@@ -348,10 +332,8 @@ handle_idle:
 	 */
 
 	call	z_sys_power_save_idle_exit
-#ifndef CONFIG_X86_IAMCU
-	/* SYS V: discard 'ticks' argument passed on the stack */
+	/* discard 'ticks' argument passed on the stack */
 	add	$0x4, %esp
-#endif
 	popl	%edx
 	popl	%eax
 	jmp	alreadyOnIntStack
@@ -409,11 +391,7 @@ SECTION_FUNC(TEXT, z_SpuriousIntHandler)
 	leal	44(%esp), %ecx   /* Calculate ESP before exception occurred */
 	pushl	%ecx             /* Save calculated ESP */
 
-#ifndef CONFIG_X86_IAMCU
-	pushl	%esp			/* push cur stack pointer: pEsf arg */
-#else
-	mov	%esp, %eax
-#endif
+	pushl	%esp		/* push cur stack pointer: pEsf arg */
 
 	/* re-enable interrupts */
 	sti

@@ -39,11 +39,18 @@
 #include <greybus-utils/utils.h>
 //#include <nuttx/util.h>
 
+#ifdef CONFIG_GREYBUS_STATIC_MANIFEST
+#include <greybus/static-manifest.h>
+#endif
+
 #undef ALIGN
 #undef PAD
 #define PAD(x,pot) (((x) & (pot-1)) ? (((x) & ~(pot-1)) + pot) : (x))
 // "align" (really pad) to a 4-byte boundary
 #define ALIGN(x) PAD(x,4)
+
+// not yet a part of zephyr minimal libc??
+extern char *strtok(char *str, const char *delim);
 
 extern void gb_control_register(int cport, int bundle);
 extern void gb_gpio_register(int cport, int bundle);
@@ -72,7 +79,11 @@ static struct greybus g_greybus = {
     .cports = LIST_INIT(g_greybus.cports),
 };
 
+#ifdef CONFIG_GREYBUS_STATIC_MANIFEST
+static unsigned char *bridge_manifest = (unsigned char *)manifest_mnfb;
+#else
 static unsigned char *bridge_manifest;
+#endif
 
 static void *alloc_cport(void)
 {

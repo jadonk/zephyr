@@ -11,6 +11,7 @@ enum {
 	BT_MESH_MOD_BIND_PENDING = BIT(0),
 	BT_MESH_MOD_SUB_PENDING = BIT(1),
 	BT_MESH_MOD_PUB_PENDING = BIT(2),
+	BT_MESH_MOD_DATA_PRESENT = BIT(3),
 };
 
 void bt_mesh_elem_register(struct bt_mesh_elem *elem, u8_t count);
@@ -19,11 +20,6 @@ u8_t bt_mesh_elem_count(void);
 
 /* Find local element based on unicast or group address */
 struct bt_mesh_elem *bt_mesh_elem_find(u16_t addr);
-
-struct bt_mesh_model *bt_mesh_model_find_vnd(struct bt_mesh_elem *elem,
-					     u16_t company, u16_t id);
-struct bt_mesh_model *bt_mesh_model_find(struct bt_mesh_elem *elem,
-					 u16_t id);
 
 u16_t *bt_mesh_model_find_group(struct bt_mesh_model *mod, u16_t addr);
 

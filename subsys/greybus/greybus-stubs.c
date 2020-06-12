@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <errno.h>
 #include <unipro/unipro.h>
 
@@ -9,7 +10,7 @@ void wd_cancel(struct wdog_s *wd) {
 void wd_delete(struct wdog_s *wd) {
 	(void)wd;
 }
-void wd_start(struct wdog_s *wd, unsigned long delay, void (*callback)(int, uint32_t, ...), int integer, u16_t cport) {
+void wd_start(struct wdog_s *wd, unsigned long delay, void (*callback)(int, uint32_t, ...), int integer, uint16_t cport) {
 	(void)wd;
 }
 void wd_static(struct wdog_s *wd) {

@@ -27,8 +27,8 @@
  *
  * Author: Fabien Parent <fparent@baylibre.com>
  */
+#include <zephyr.h>
 
-//#include <config.h>
 #include <list.h>
 #include <unipro/unipro.h>
 #include <greybus/greybus.h>
@@ -48,6 +48,23 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+
+#if !defined(CONFIG_POSIX_API)
+/*
+ * Currently CONFIG_POSIX_API is incompatible with
+ * CONFIG_NET_SOCKETS_POSIX_NAMES
+ */
+#define clock_gettime _m_clock_gettime
+static int _m_clock_gettime(clockid_t clk_id, struct timespec *tp) {
+	ARG_UNUSED(clk_id);
+
+	uint64_t uptime_ms = k_uptime_get();
+	tp->tv_sec = uptime_ms / 1000;
+	tp->tv_nsec = (uptime_ms % 1000) * 1000000;
+
+	return 0;
+}
+#endif
 
 #define DEFAULT_STACK_SIZE      2048
 #define TIMEOUT_IN_MS           1000

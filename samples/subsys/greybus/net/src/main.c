@@ -542,7 +542,7 @@ static int gb_xport_send(unsigned int cport, const void *buf, size_t len)
 		return -EINVAL;
 	}
 
-	D("%s: cport: %u, buf: %p, len: %u", clientstr, cport, buf, len);
+	//D("%s: cport: %u, buf: %p, len: %u", clientstr, cport, buf, len);
 
 	r = sendMessage(fd, msg);
 

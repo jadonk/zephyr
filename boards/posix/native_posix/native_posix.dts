@@ -6,6 +6,7 @@
 
 /dts-v1/;
 #include <posix/posix.dtsi>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	model = "Native POSIX Board";
@@ -94,4 +95,12 @@
 		label = "ENTROPY_0";
 	};
 
+	gpio0: gpio@800 {
+		status = "okay";
+		compatible = "zephyr,sim-gpio";
+		reg = <0x800 0x4>;
+		label = "GPIO_0";
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
 };

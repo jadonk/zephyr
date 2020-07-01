@@ -1,0 +1,22 @@
+# Copyright 2020, Friedt Professional Engineering Services, Inc
+# SPDX-License-Identifier: Apache-2.0
+
+description: GPIO Simulator
+
+compatible: "zephyr,sim-gpio"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+    reg:
+      required: true
+
+    label:
+      required: true
+
+    "#gpio-cells":
+      const: 2
+
+gpio-cells:
+  - pin
+  - flags

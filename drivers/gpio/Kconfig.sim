@@ -1,0 +1,18 @@
+# Simulated GPIO configuration options
+
+# Copyright (c) 2020 Friedt Professional Engineering Services, Inc
+# SPDX-License-Identifier: Apache-2.0
+
+config GPIO_SIM
+	bool "Simulated GPIO driver"
+	default n
+	help
+	  Enable the simulated GPIO driver. Mainly used for testing, this
+	  driver allows for an arbitrary number of simulated GPIO controllers
+	  to be instantiated. Furthermore, the simulated pins can be "wired"
+	  using using the regular GPIO callback API and the additional API
+	  available in drivers/gpio/gpio_sim.h . Configuration for each
+	  GPIO instance is accomplished using device tree and an example of
+	  such a configuration is in
+	  tests/drivers/gpio/gpio_basic_api/boards/native_posix_64.overlay
+	  If unsure, say N.

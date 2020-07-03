@@ -42,8 +42,15 @@
 
 #include <sys/atomic.h>
 #include <sys/byteorder.h>
+#if defined(CONFIG_BOARD_NATIVE_POSIX_64BIT) \
+    || defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
+    || defined(CONFIG_BOARD_NRF52_BSIM)
+#include <pthread.h>
+#include <semaphore.h>
+#else
 #include <posix/pthread.h>
 #include <posix/semaphore.h>
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -363,7 +370,7 @@ static void gb_process_response(struct gb_operation_hdr *hdr,
 
 static void *gb_pending_message_worker(void *data)
 {
-    const int cportid = (int) data;
+    const int cportid = (intptr_t) data;
     int flags;
     struct gb_operation *operation;
     struct list_head *head;
@@ -624,7 +631,7 @@ int _gb_register_driver(unsigned int cport, int bundle_id,
 #endif
 
     retval = pthread_create(&g_cport[cport].thread, &thread_attr,
-                            gb_pending_message_worker, (unsigned*) cport);
+                            gb_pending_message_worker, (void *)((intptr_t) cport));
     if (retval)
         goto pthread_create_error;
 

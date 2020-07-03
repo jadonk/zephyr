@@ -39,6 +39,14 @@
 #include <greybus-utils/utils.h>
 //#include <nuttx/util.h>
 
+#if defined(CONFIG_BOARD_NATIVE_POSIX_64BIT) \
+    || defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
+    || defined(CONFIG_BOARD_NRF52_BSIM)
+#include <semaphore.h>
+#else
+#include <posix/semaphore.h>
+#endif
+
 #ifdef CONFIG_GREYBUS_STATIC_MANIFEST
 #include <greybus/static-manifest.h>
 #endif

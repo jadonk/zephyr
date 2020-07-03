@@ -33,7 +33,14 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#if defined(CONFIG_BOARD_NATIVE_POSIX_64BIT) \
+    || defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
+    || defined(CONFIG_BOARD_NRF52_BSIM)
+#include <pthread.h>
+#include <semaphore.h>
+#else
 #include <posix/pthread.h>
+#endif
 
 #include <sys/atomic.h>
 #include <list.h>

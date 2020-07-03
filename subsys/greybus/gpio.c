@@ -35,6 +35,14 @@
 #include <sys/byteorder.h>
 #include <drivers/gpio.h>
 
+#if defined(CONFIG_BOARD_NATIVE_POSIX_64BIT) \
+    || defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
+    || defined(CONFIG_BOARD_NRF52_BSIM)
+#include <semaphore.h>
+#else
+#include <posix/semaphore.h>
+#endif
+
 #include <greybus-utils/platform.h>
 
 #define GB_GPIO_VERSION_MAJOR 0

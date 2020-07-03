@@ -16,7 +16,6 @@ void timesync_disable();
 void timesync_authoritative();
 void timesync_get_last_event();
 void gb_loopback_log_exit();
-void pthread_attr_setstacksize();
 void gb_loopback_log_entry();
 
 #endif /* __GREYBUS_STUBS_H__ */

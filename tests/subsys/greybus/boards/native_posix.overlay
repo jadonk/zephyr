@@ -1,0 +1,42 @@
+/*
+ * Copyright (c) 2020 Friedt Professional Engineering Services, Inc
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	resources {
+		compatible = "test,greybus";
+	};
+
+	greybus0 {
+		compatible = "zephyr,greybus-interface";
+		label = "GREYBUS_0";
+		greybus-interface;
+	};
+};
+
+&{/greybus0} {
+	status = "okay";
+
+	gbbundle0 {
+		status = "okay";
+		compatible = "zephyr,greybus-bundle";
+		label = "GBBUNDLE_0";
+		greybus-bundle;
+
+		gbcontrol0 {
+			status = "okay";
+			compatible = "zephyr,greybus-control";
+			label = "GBCONTROL_0";
+			greybus-controller;
+		};
+		
+		gbgpio0 {
+			status = "okay";
+			compatible = "zephyr,greybus-gpio-controller";
+			label = "GBGPIO_0";
+			greybus-gpio-controller = <&gpio0>;
+		};
+	};
+};

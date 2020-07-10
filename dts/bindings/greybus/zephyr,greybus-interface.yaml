@@ -1,0 +1,26 @@
+# Copyright (c) 2020, Friedt Professional Engineering Services, Inc
+# SPDX-License-Identifier: Apache-2.0
+
+# Common fields for GPIO controllers
+
+description: Greybus Interface
+
+compatible: "zephyr,greybus-interface"
+
+include: [base.yaml]
+
+properties:
+    "greybus-interface":
+      type: boolean
+      required: true
+      description: Conveys this node is an instance of Greybus Platform Data
+    "#address-cells":
+      type: int
+      required: false
+      default: 1
+      const: 1
+    "#size-cells":
+      type: int
+      required: false
+      default: 0
+      const: 0

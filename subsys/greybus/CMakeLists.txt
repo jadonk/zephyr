@@ -8,6 +8,8 @@ zephyr_library_sources(
 	greybus-stubs.c
 	greybus-core.c
 	greybus-manifest.c
+	manifest.c
+	manifest-generator.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_GREYBUS_CONTROL        control-gpb.c)

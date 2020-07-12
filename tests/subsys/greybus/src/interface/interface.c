@@ -1,7 +1,10 @@
 #define DT_DRV_COMPAT zephyr_greybus_interface
 
+#include <stddef.h>
 #include <device.h>
+#include <errno.h>
 #include <zephyr.h>
+#include <greybus/manifecto/manifest.h>
 
 #define LOG_LEVEL 11
 #include <logging/log.h>
@@ -12,12 +15,23 @@ struct greybus_interface_config {
 };
 
 struct greybus_interface_data {
+    manifest_t manifest;
 };
 
 static int greybus_interface_init(struct device *dev) {
 
-	struct greybus_interface_data *drv_data =
+    int r;
+	struct greybus_interface_data *const drv_data =
 			(struct greybus_interface_data *)dev->driver_data;
+
+    drv_data->manifest = manifest_new();
+    if (NULL == drv_data->manifest) {
+        return -ENOMEM;
+    }
+
+
+
+    manifest_fini(&drv_data->manifest);
 
     return 0;
 }

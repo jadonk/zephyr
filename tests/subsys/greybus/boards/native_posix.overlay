@@ -14,10 +14,25 @@
 		label = "GREYBUS_0";
 		greybus-interface;
 	};
+
+	gbstring0 {
+		status = "okay";
+		compatible = "zephyr,greybus-string";
+		greybus-string = "Zephyr Project RTOS";
+	};
+
+	gbstring1 {
+		status = "okay";
+		compatible = "zephyr,greybus-string";
+		greybus-string = "Greybus Service Sample Application";
+	};
 };
 
 &{/greybus0} {
 	status = "okay";
+
+	vendor-string-id = <&gbstring0>;
+	product-string-id = <&gbstring1>;
 
 	gbbundle0 {
 		status = "okay";

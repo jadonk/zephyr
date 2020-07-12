@@ -13,7 +13,15 @@ properties:
     "greybus-interface":
       type: boolean
       required: true
-      description: Conveys this node is an instance of Greybus Platform Data
+      description: DeviceTree representation of a Greybus manifest string descriptor
+    "vendor-string-id":
+      type: phandle
+      required: true
+      description: "Reference to greybus-string describing the vendor"
+    "product-string-id":
+      type: phandle
+      required: true
+      description: "Reference to greybus-string describing the product"
     "#address-cells":
       type: int
       required: false

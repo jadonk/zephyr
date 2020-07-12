@@ -1,0 +1,24 @@
+# Copyright (c) 2020, Friedt Professional Engineering Services, Inc
+# SPDX-License-Identifier: Apache-2.0
+
+description: Greybus Manifest String Descriptor
+
+compatible: "zephyr,greybus-string"
+
+include: [base.yaml]
+
+properties:
+    "greybus-string":
+      type: string
+      required: true
+      description: Foo
+    "#address-cells":
+      type: int
+      required: false
+      default: 1
+      const: 1
+    "#size-cells":
+      type: int
+      required: false
+      default: 0
+      const: 0

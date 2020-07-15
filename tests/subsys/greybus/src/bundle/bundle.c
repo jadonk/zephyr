@@ -35,6 +35,6 @@ static int greybus_bundle_init(struct device *dev) {
         					greybus_bundle_init, NULL,               \
                             &greybus_bundle_config_##_num, POST_KERNEL,               \
                             CONFIG_KERNEL_INIT_PRIORITY_DEVICE,                 \
-                            NULL)
+                            NULL);
 
 DT_INST_FOREACH_STATUS_OKAY(DEFINE_GREYBUS_BUNDLE);

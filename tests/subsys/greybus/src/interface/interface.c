@@ -1,6 +1,5 @@
 #define DT_DRV_COMPAT zephyr_greybus_interface
 
-#include <stddef.h>
 #include <device.h>
 #include <errno.h>
 #include <zephyr.h>
@@ -20,7 +19,7 @@ struct greybus_interface_data {
 
 static int greybus_interface_init(struct device *dev) {
 
-    int r;
+    //int r;
 	struct greybus_interface_data *const drv_data =
 			(struct greybus_interface_data *)dev->driver_data;
 
@@ -28,8 +27,6 @@ static int greybus_interface_init(struct device *dev) {
     if (NULL == drv_data->manifest) {
         return -ENOMEM;
     }
-
-
 
     manifest_fini(&drv_data->manifest);
 
@@ -46,7 +43,7 @@ static int greybus_interface_init(struct device *dev) {
         static struct greybus_interface_data								\
 			greybus_interface_data_##_num;  								\
         																	\
-        DEVICE_AND_API_INIT(gpio_interface_##_num, DT_INST_LABEL(_num),		\
+        DEVICE_AND_API_INIT(greybus_interface_##_num, DT_INST_LABEL(_num),		\
                             greybus_interface_init,							\
 							&greybus_interface_data_##_num,					\
                             &greybus_interface_config_##_num, POST_KERNEL,	\

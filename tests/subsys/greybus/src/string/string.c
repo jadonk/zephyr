@@ -34,6 +34,6 @@ static int greybus_string_init(struct device *dev) {
                             greybus_string_init, NULL,               \
                             &greybus_string_config_##_num, POST_KERNEL,               \
                             CONFIG_KERNEL_INIT_PRIORITY_DEVICE,                 \
-                            NULL)
+                            NULL);
 
 DT_INST_FOREACH_STATUS_OKAY(DEFINE_GREYBUS_STRING);

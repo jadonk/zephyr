@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+ #include <dt-bindings/greybus/greybus.h>
 
 / {
 	resources {
@@ -10,35 +11,44 @@
 	};
 
 	greybus0 {
-		compatible = "zephyr,greybus-interface";
+		compatible = "zephyr,greybus";
 		label = "GREYBUS_0";
-		greybus-interface;
-	};
-
-	gbstring0 {
-		status = "okay";
-		compatible = "zephyr,greybus-string";
-		greybus-string = "Zephyr Project RTOS";
-	};
-
-	gbstring1 {
-		status = "okay";
-		compatible = "zephyr,greybus-string";
-		greybus-string = "Greybus Service Sample Application";
+		greybus;
 	};
 };
 
 &{/greybus0} {
 	status = "okay";
 
-	vendor-string-id = <&gbstring0>;
-	product-string-id = <&gbstring1>;
+	gbstring0: gbstring0 {
+		status = "okay";
+		compatible = "zephyr,greybus-string";
+		label = "GBSTRING_0";
+		greybus-string = "Zephyr Project RTOS";
+	};
+
+	gbstring1: gbstring1 {
+		status = "okay";
+		compatible = "zephyr,greybus-string";
+		label = "GBSTRING_1";
+		greybus-string = "Greybus Service Sample Application";
+	};
+
+	gbinterface0 {
+		status = "okay";
+		compatible = "zephyr,greybus-interface";
+		label = "GBINTERFACE_0";
+		vendor-string-id = <&gbstring0>;
+		product-string-id = <&gbstring1>;
+		greybus-interface;
+	};
 
 	gbbundle0 {
 		status = "okay";
 		compatible = "zephyr,greybus-bundle";
 		label = "GBBUNDLE_0";
 		greybus-bundle;
+		bundle-class = <BUNDLE_CLASS_CONTROL>;
 
 		gbcontrol0 {
 			status = "okay";
@@ -46,7 +56,15 @@
 			label = "GBCONTROL_0";
 			greybus-controller;
 		};
-		
+	};
+	
+	gbbundle1 {
+		status = "okay";
+		compatible = "zephyr,greybus-bundle";
+		label = "GBBUNDLE_1";
+		greybus-bundle;
+		bundle-class = <BUNDLE_CLASS_BRIDGED_PHY>;		
+				
 		gbgpio0 {
 			status = "okay";
 			compatible = "zephyr,greybus-gpio-controller";

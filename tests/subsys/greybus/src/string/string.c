@@ -15,10 +15,10 @@ struct greybus_string_config {
 
 static int greybus_string_init(struct device *dev) {
 	ARG_UNUSED(dev);
-//	const struct greybus_string_config *config =
-//			(const struct greybus_string_config *)dev->config_info;
+	const struct greybus_string_config *config =
+			(const struct greybus_string_config *)dev->config_info;
 
-	//LOG_INF("probed %u: %s", config->num, config->string_);
+	LOG_INF("probed %u: %s", config->id, config->string);
 
     return 0;
 }
@@ -30,10 +30,9 @@ static int greybus_string_init(struct device *dev) {
 			.string = DT_INST_PROP(_num, greybus_string),                         \
         };                                                                      \
                                                                                 \
-        DEVICE_AND_API_INIT(greybus_string_##_num, DT_INST_LABEL(_num),               \
+        DEVICE_INIT(greybus_string_##_num, DT_INST_LABEL(_num),               \
                             greybus_string_init, NULL,               \
                             &greybus_string_config_##_num, POST_KERNEL,               \
-                            CONFIG_KERNEL_INIT_PRIORITY_DEVICE,                 \
-                            NULL);
+                            CONFIG_KERNEL_INIT_PRIORITY_DEVICE);
 
 DT_INST_FOREACH_STATUS_OKAY(DEFINE_GREYBUS_STRING);

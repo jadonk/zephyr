@@ -16,10 +16,10 @@ struct greybus_bundle_config {
 
 static int greybus_bundle_init(struct device *dev) {
 	ARG_UNUSED(dev);
-//	const struct greybus_bundle_config *config =
-//			(const struct greybus_bundle_config *)dev->config_info;
+	const struct greybus_bundle_config *config =
+			(const struct greybus_bundle_config *)dev->config_info;
 
-	//LOG_INF("probed %u %u", config->id, config->class_);
+	LOG_INF("probed %u: %u", config->id, config->class);
 
     return 0;
 }

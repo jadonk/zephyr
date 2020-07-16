@@ -10,9 +10,8 @@
 		compatible = "test,greybus";
 	};
 
-	greybus0 {
+	greybus0: greybus0 {
 		compatible = "zephyr,greybus";
-		label = "GREYBUS_0";
 		greybus;
 	};
 };
@@ -23,21 +22,18 @@
 	gbstring0: gbstring0 {
 		status = "okay";
 		compatible = "zephyr,greybus-string";
-		label = "GBSTRING_0";
 		greybus-string = "Zephyr Project RTOS";
 	};
 
 	gbstring1: gbstring1 {
 		status = "okay";
 		compatible = "zephyr,greybus-string";
-		label = "GBSTRING_1";
 		greybus-string = "Greybus Service Sample Application";
 	};
 
 	gbinterface0 {
 		status = "okay";
 		compatible = "zephyr,greybus-interface";
-		label = "GBINTERFACE_0";
 		vendor-string-id = <&gbstring0>;
 		product-string-id = <&gbstring1>;
 		greybus-interface;
@@ -46,30 +42,42 @@
 	gbbundle0 {
 		status = "okay";
 		compatible = "zephyr,greybus-bundle";
-		label = "GBBUNDLE_0";
 		greybus-bundle;
+		/* Control Bundle 0
+		 * Note: control bundle 0 and control cport 0 are optional
+		 * Since instance numbers automatically begin at 0, the id
+		 * is a mandatory field for bundles and cports.
+		 */
+		id = <CONTROL_BUNDLE_ID>;
 		bundle-class = <BUNDLE_CLASS_CONTROL>;
 
 		gbcontrol0 {
 			status = "okay";
 			compatible = "zephyr,greybus-control";
-			label = "GBCONTROL_0";
 			greybus-controller;
+			/* Control CPort 0
+			 * Note: control bundle 0 and control cport 0 are optional
+			 * Since instance numbers automatically begin at 0, the id
+			 * is a mandatory field for bundles and cports.
+			 */
+			id = <CONTROL_CPORT_ID>;
+			cport-protocol = <CPORT_PROTOCOL_CONTROL>; 
 		};
 	};
 	
 	gbbundle1 {
 		status = "okay";
 		compatible = "zephyr,greybus-bundle";
-		label = "GBBUNDLE_1";
 		greybus-bundle;
+		id = <1>;
 		bundle-class = <BUNDLE_CLASS_BRIDGED_PHY>;		
 				
 		gbgpio0 {
 			status = "okay";
 			compatible = "zephyr,greybus-gpio-controller";
-			label = "GBGPIO_0";
 			greybus-gpio-controller = <&gpio0>;
+			id = <1>;
+			cport-protocol = <CPORT_PROTOCOL_GPIO>;
 		};
 	};
 };

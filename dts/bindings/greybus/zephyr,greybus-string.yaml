@@ -8,6 +8,10 @@ compatible: "zephyr,greybus-string"
 include: [base.yaml]
 
 properties:
+    "id":
+      type: int
+      required: true
+      description: Bar
     "greybus-string":
       type: string
       required: true

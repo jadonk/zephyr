@@ -16,7 +16,7 @@ properties:
       description: Conveys this node is an instance of a Greybus Controller
     "cport-protocol":
       type: int
-      required: true
       # Control protocol
+      default: 0x00
       const: 0x00
       description: The Control CPort protocol

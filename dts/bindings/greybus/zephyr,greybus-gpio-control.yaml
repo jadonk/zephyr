@@ -16,7 +16,7 @@ properties:
       description: Conveys which GPIO port is associated with this Greybus GPIO Controller instance
     "cport-protocol":
       type: int
-      required: true
       # GPIO protocol
+      default: 0x02
       const: 0x02
       description: The GPIO CPort protocol

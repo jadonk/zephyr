@@ -5,7 +5,7 @@
 
 description: Greybus CPort Descriptor
 
-# cannot be directly instantiated
+# should not be directly instantiated
 # compatible: "zephyr,greybus-cport"
 
 include: [base.yaml]

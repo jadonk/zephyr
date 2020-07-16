@@ -187,7 +187,7 @@ int manifest_add_interface_desc(manifest_t manifest, uint16_t vendor_id,
   }
 
   for (size_t i = 0; i < man->num_descriptors; ++i) {
-    if (DESC_TYPE_INTERFACE != man->descriptors[i]->type) {
+    if (DESC_TYPE_INTERFACE == man->descriptors[i]->type) {
       return -EALREADY;
     }
   }

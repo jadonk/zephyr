@@ -38,8 +38,8 @@ int manifest_add_option(manifest_t manifest, const char *section_name,
                         const char *option_name, const char *option_value);
 
 int manifest_add_header(manifest_t manifest, uint8_t major_, uint8_t minor_);
-int manifest_add_interface_desc(manifest_t manifest, uint16_t vendor_id,
-                                uint16_t product_id);
+int manifest_add_interface_desc(manifest_t manifest, uint16_t vendor_string_id,
+                                uint16_t product_string_id);
 int manifest_add_string_desc(manifest_t manifest, uint8_t id,
                              const char *string_);
 int manifest_add_bundle_desc(manifest_t manifest, uint8_t id,

@@ -8,36 +8,63 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_test_string);
 
+#include "bus.h"
+
 struct greybus_string_config {
-    const uint8_t id;
-    const char *const string;
+    const uint16_t id;
+    const char *const string_;
+    const char *const bus_name;
 };
 
 static int greybus_string_init(struct device *dev) {
-
 	const struct greybus_string_config *config =
 			(const struct greybus_string_config *)dev->config_info;
 
-	LOG_INF("probed string %u: %s", config->id, config->string);
+	struct device *bus;
+	struct bus_api *api;
+	int r;
+
+	bus = device_get_binding(config->bus_name);
+	if (NULL == bus) {
+		LOG_ERR("greybus string: device_get_binding() failed for '%s'", config->bus_name);
+		return -EAGAIN;
+	}
+
+	api = (struct bus_api *)bus->driver_api;
+	if (NULL == api) {
+		LOG_ERR("greybus string: driver_api was NULL");
+		return -EINVAL;
+	}
+
+	r = api->add_string(bus, config->id, config->string_);
+	if (r < 0) {
+		LOG_ERR("greybus string: add_string() failed: %d", r);
+		return r;
+	}
+
+	LOG_INF("probed greybus string %u: %s", config->id, config->string_);
 
     return 0;
 }
 
-#if 0
+extern int defer_init(struct device *, int (*init)(struct device *));
+static int defer_greybus_string_init(struct device *dev) {
+	return defer_init(dev, &greybus_string_init);
+}
+
 #define DEFINE_GREYBUS_STRING(_num)                                     \
 																		\
         static const struct greybus_string_config 						\
 			greybus_string_config_##_num = {      						\
-				.id = _num,                                 			\
-				.string = DT_INST_PROP(_num, greybus_string),           \
+				.id = (uint16_t)DT_INST_PROP(_num, id),					\
+				.string_ = DT_INST_PROP(_num, greybus_string),			\
+				.bus_name = 											\
+					DT_LABEL(DT_PARENT(DT_DRV_INST(_num))),				\
         };                                                              \
                                                                         \
-        DEVICE_INIT(greybus_string_##_num, DT_INST_LABEL(_num),         \
-                            greybus_string_init, NULL,               	\
+        DEVICE_INIT(greybus_string_##_num, "GBSTRING_" #_num,			\
+        		defer_greybus_string_init, NULL,               	\
                             &greybus_string_config_##_num, POST_KERNEL,	\
                             CONFIG_KERNEL_INIT_PRIORITY_DEVICE);
-#else
-#define DEFINE_GREYBUS_STRING(_num)
-#endif
 
 DT_INST_FOREACH_STATUS_OKAY(DEFINE_GREYBUS_STRING);

@@ -27,11 +27,18 @@ static int greybus_init(struct device *dev) {
 			(const struct greybus_config *)dev->config_info;
 	struct greybus_data *const data =
 			(struct greybus_data *)dev->driver_data;
+	int r;
 
 	data->manifest = manifest_new();
 	if (NULL == data->manifest) {
 		LOG_ERR("manifest_new() failed");
 		return -ENOMEM;
+	}
+
+	r = manifest_add_header(data->manifest, config->version_major, config->version_minor);
+	if (r < 0) {
+		LOG_ERR("manifest_add_header() failed: %d", r);
+		return r;
 	}
 
 	LOG_INF("probed greybus: %u major: %u minor: %u",

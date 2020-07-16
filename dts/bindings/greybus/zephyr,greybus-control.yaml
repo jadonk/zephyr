@@ -7,20 +7,16 @@ description: Greybus Control
 
 compatible: "zephyr,greybus-control"
 
-include: [base.yaml]
+include: ["zephyr,greybus-cport.yaml"]
 
 properties:
     "greybus-controller":
       type: boolean
       required: true
       description: Conveys this node is an instance of a Greybus Controller
-    "#address-cells":
+    "cport-protocol":
       type: int
-      required: false
-      default: 1
-      const: 1
-    "#size-cells":
-      type: int
-      required: false
-      default: 0
-      const: 0
+      required: true
+      # Control protocol
+      const: 0x00
+      description: The Control CPort protocol

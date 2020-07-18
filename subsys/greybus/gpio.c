@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2015 Google Inc.
+ * Copyright (c) 2020, Friedt Professional Engineering Services, Inc
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,386 +27,469 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Author: Fabien Parent <fparent@baylibre.com>
+ * Author: Christopher Friedt <chrisfriedt@gmail.com>
  */
 
-#include <greybus/greybus.h>
-#include <greybus/debug.h>
-#include "gpio-gb.h"
-
-#include <sys/byteorder.h>
 #include <drivers/gpio.h>
+#include <greybus/debug.h>
+#include <greybus/greybus.h>
+#include <greybus/platform.h>
+#include <sys/byteorder.h>
 
 #if defined(CONFIG_BOARD_NATIVE_POSIX_64BIT) \
-    || defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
-    || defined(CONFIG_BOARD_NRF52_BSIM)
+	|| defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
+	|| defined(CONFIG_BOARD_NRF52_BSIM)
 #include <semaphore.h>
 #else
 #include <posix/semaphore.h>
 #endif
 
-#include <greybus-utils/platform.h>
+#include "gpio-gb.h"
 
 #define GB_GPIO_VERSION_MAJOR 0
 #define GB_GPIO_VERSION_MINOR 1
 
-static int g_gpio_cport;
-
-static uint8_t gb_gpio_default_line_count(void) {
-	return 0;
-}
-static int gb_gpio_default_activate(uint8_t which) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_deactivate(uint8_t which) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_get_direction(uint8_t which) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_direction_in(uint8_t which) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_direction_out(uint8_t which, uint8_t val) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_get_value(uint8_t which) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_set_value(uint8_t which, uint8_t val) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_set_debounce(uint8_t which, uint16_t usec) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_irq_mask(uint8_t which) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_irq_unmask(uint8_t which) {
-	return -ENOSYS;
-}
-static int gb_gpio_default_irq_type(uint8_t which, uint8_t type) {
-	return -ENOSYS;
-}
-
-static const struct gb_gpio_platform_driver gb_gpio_platform_driver_default = {
-	.line_count = gb_gpio_default_line_count,
-	.activate = gb_gpio_default_activate,
-	.deactivate = gb_gpio_default_deactivate,
-	.get_direction = gb_gpio_default_get_direction,
-	.direction_in = gb_gpio_default_direction_in,
-	.direction_out = gb_gpio_default_direction_out,
-	.get_value = gb_gpio_default_get_value,
-	.set_value = gb_gpio_default_set_value,
-	.set_debounce = gb_gpio_default_set_debounce,
-	.irq_mask = gb_gpio_default_irq_mask,
-	.irq_unmask = gb_gpio_default_irq_unmask,
-	.irq_type = gb_gpio_default_irq_type,
-};
-
-static struct gb_gpio_platform_driver *plat = (struct gb_gpio_platform_driver *)&gb_gpio_platform_driver_default;
-
-void gb_gpio_register_platform_driver(struct gb_gpio_platform_driver *drv) {
-	if (NULL == drv) {
-		return;
-	}
-	plat = drv;
-}
-
 static uint8_t gb_gpio_protocol_version(struct gb_operation *operation)
 {
-    struct gb_gpio_proto_version_response *response;
+	struct gb_gpio_proto_version_response *response;
 
-    response = gb_operation_alloc_response(operation, sizeof(*response));
-    if (!response)
-        return GB_OP_NO_MEMORY;
+	response = gb_operation_alloc_response(operation, sizeof(*response));
+	if (!response)
+		return GB_OP_NO_MEMORY;
 
-    response->major = GB_GPIO_VERSION_MAJOR;
-    response->minor = GB_GPIO_VERSION_MINOR;
-    return GB_OP_SUCCESS;
+	response->major = GB_GPIO_VERSION_MAJOR;
+	response->minor = GB_GPIO_VERSION_MINOR;
+	return GB_OP_SUCCESS;
 }
 
 static uint8_t gb_gpio_line_count(struct gb_operation *operation)
 {
-    struct gb_gpio_line_count_response *response;
-    uint8_t count;
+	struct gb_gpio_line_count_response *response;
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	uint8_t count;
 
-    response = gb_operation_alloc_response(operation, sizeof(*response));
-    if (!response)
-        return GB_OP_NO_MEMORY;
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    count = plat->line_count();
-    if (!count)
-        return GB_OP_UNKNOWN_ERROR;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    response->count = count - 1;
+	response = gb_operation_alloc_response(operation, sizeof(*response));
+	if (!response)
+		return GB_OP_NO_MEMORY;
 
-    return GB_OP_SUCCESS;
+	count = popcount(cfg->port_pin_mask);
+	if (!count)
+		return GB_OP_UNKNOWN_ERROR;
+
+	response->count = count - 1;
+
+	return GB_OP_SUCCESS;
 }
 
 static uint8_t gb_gpio_activate(struct gb_operation *operation)
 {
-    struct gb_gpio_activate_request *request =
-        gb_operation_get_request_payload(operation);
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_activate_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    return gb_errno_to_op_result(plat->activate(request->which));
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
+
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	/* No "activation" in Zephyr. Maybe power mgmt in the future */
+
+	return GB_OP_SUCCESS;
 }
 
 static uint8_t gb_gpio_deactivate(struct gb_operation *operation)
 {
-    struct gb_gpio_deactivate_request *request =
-        gb_operation_get_request_payload(operation);
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_activate_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    return gb_errno_to_op_result(plat->deactivate(request->which));
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
+
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	/* No "deactivation" in Zephyr. Maybe power mgmt in the future */
+
+	return GB_OP_SUCCESS;
 }
 
 static uint8_t gb_gpio_get_direction(struct gb_operation *operation)
 {
-    struct gb_gpio_get_direction_response *response;
-    struct gb_gpio_get_direction_request *request =
-        gb_operation_get_request_payload(operation);
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_get_direction_response *response;
+	struct gb_gpio_get_direction_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    response = gb_operation_alloc_response(operation, sizeof(*response));
-    if (!response)
-        return GB_OP_NO_MEMORY;
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
 
-    response->direction = plat->get_direction(request->which);
-    return GB_OP_SUCCESS;
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	response = gb_operation_alloc_response(operation, sizeof(*response));
+	if (!response)
+		return GB_OP_NO_MEMORY;
+
+	bool dir = gpio_pin_get_direction(dev, request->which);
+	/* In Greybus 0 := output, 1 := input. Zephyr is the opposite */
+	response->direction = !dir;
+	return GB_OP_SUCCESS;
 }
 
 static uint8_t gb_gpio_direction_in(struct gb_operation *operation)
 {
-    struct gb_gpio_direction_in_request *request =
-        gb_operation_get_request_payload(operation);
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_direction_in_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    plat->direction_in(request->which);
-    return GB_OP_SUCCESS;
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
+
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	return gb_errno_to_op_result(gpio_pin_configure(dev, (gpio_pin_t)request->which, GPIO_INPUT));
 }
 
 static uint8_t gb_gpio_direction_out(struct gb_operation *operation)
 {
-    struct gb_gpio_direction_out_request *request =
-        gb_operation_get_request_payload(operation);
+	int ret;
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_direction_out_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    plat->direction_out(request->which, request->value);
-    return GB_OP_SUCCESS;
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
+
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	ret = gpio_pin_configure(dev, request->which, GPIO_OUTPUT);
+	if (ret != 0) {
+		return gb_errno_to_op_result(-ret);
+	}
+
+	ret = gpio_pin_set(dev, request->which, request->value);
+	if (ret != 0) {
+		return gb_errno_to_op_result(-ret);
+	}
+
+	return GB_OP_SUCCESS;
 }
 
 static uint8_t gb_gpio_get_value(struct gb_operation *operation)
 {
-    struct gb_gpio_get_value_response *response;
-    struct gb_gpio_get_value_request *request =
-        gb_operation_get_request_payload(operation);
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_get_value_response *response;
+	struct gb_gpio_get_value_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    response = gb_operation_alloc_response(operation, sizeof(*response));
-    if (!response)
-        return GB_OP_NO_MEMORY;
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
 
-    response->value = plat->get_value(request->which);
-    return GB_OP_SUCCESS;
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	response = gb_operation_alloc_response(operation, sizeof(*response));
+	if (!response)
+		return GB_OP_NO_MEMORY;
+
+	response->value = gpio_pin_get(dev, (gpio_pin_t)request->which);
+	return GB_OP_SUCCESS;
 }
 
 static uint8_t gb_gpio_set_value(struct gb_operation *operation)
 {
-    struct gb_gpio_set_value_request *request =
-        gb_operation_get_request_payload(operation);
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_set_value_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    plat->set_value(request->which, request->value);
-    return GB_OP_SUCCESS;
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
+
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	int r = gpio_pin_set(dev, request->which, request->value);
+
+	return gb_errno_to_op_result(gpio_pin_set(dev, request->which, request->value));
 }
 
 static uint8_t gb_gpio_set_debounce(struct gb_operation *operation)
 {
-    struct gb_gpio_set_debounce_request *request =
-        gb_operation_get_request_payload(operation);
-    int ret;
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_set_debounce_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    ret = plat->set_debounce(request->which, sys_le16_to_cpu(request->usec));
-    if (ret)
-        return GB_OP_UNKNOWN_ERROR;
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
 
-    return GB_OP_SUCCESS;
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	if (sys_le16_to_cpu(request->usec) > 0) {
+		return gb_errno_to_op_result(gpio_pin_configure(dev, (gpio_pin_t)request->which, GPIO_INT_DEBOUNCE));
+	}
+
+	return GB_OP_SUCCESS;
 }
 
 static uint8_t gb_gpio_irq_mask(struct gb_operation *operation)
 {
-    struct gb_gpio_irq_mask_request *request =
-        gb_operation_get_request_payload(operation);
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_irq_mask_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    plat->irq_mask(request->which);
-    return GB_OP_SUCCESS;
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
+
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	return gb_errno_to_op_result(gpio_pin_interrupt_configure(dev, request->which, GPIO_INT_DISABLE));
 }
 
 static uint8_t gb_gpio_irq_unmask(struct gb_operation *operation)
 {
-    struct gb_gpio_irq_unmask_request *request =
-        gb_operation_get_request_payload(operation);
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_irq_unmask_request *request =
+		gb_operation_get_request_payload(operation);
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    plat->irq_unmask(request->which);
-    return GB_OP_SUCCESS;
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
+
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	return gb_errno_to_op_result(gpio_pin_interrupt_configure(dev, request->which, GPIO_INT_ENABLE | GPIO_INT_EDGE_RISING));
 }
 
 int gb_gpio_irq_event(int irq, void *context, void *priv)
 {
-    struct gb_gpio_irq_event_request *request;
-    struct gb_operation *operation;
+	struct gb_gpio_irq_event_request *request;
+	struct gb_operation *operation;
+	struct device *dev = (struct device *)context;
+	int cport = gb_device_to_cport(dev);
 
-    operation = gb_operation_create(g_gpio_cport, GB_GPIO_TYPE_IRQ_EVENT,
-                                    sizeof(*request));
-    if (!operation)
-        return OK;
+	if (cport < 0) {
+		return -EINVAL;
+	}
 
-    request = gb_operation_get_request_payload(operation);
-    request->which = irq;
+	operation = gb_operation_create(cport, GB_GPIO_TYPE_IRQ_EVENT,
+									sizeof(*request));
+	if (!operation)
+		return OK;
 
-    /* Host is responsible for unmasking. */
-    plat->irq_mask(irq);
+	request = gb_operation_get_request_payload(operation);
+	request->which = irq;
 
-    /* Send unidirectional operation. */
-    gb_operation_send_request_nowait(operation, NULL, false);
+	/* Host is responsible for unmasking. */
+	gpio_pin_interrupt_configure(dev, request->which, GPIO_INT_MODE_DISABLED);
 
-    gb_operation_destroy(operation);
+	/* Send unidirectional operation. */
+	gb_operation_send_request_nowait(operation, NULL, false);
 
-    return OK;
+	gb_operation_destroy(operation);
+
+	return OK;
 }
 
 static uint8_t gb_gpio_irq_type(struct gb_operation *operation)
 {
-    int ret;
-    int trigger;
-    struct gb_gpio_irq_type_request *request =
-        gb_operation_get_request_payload(operation);
+	struct device *dev;
+	const struct gpio_driver_config *cfg;
+	struct gb_gpio_irq_type_request *request =
+		gb_operation_get_request_payload(operation);
+	enum gpio_int_mode mode;
+	enum gpio_int_trig trigger;
 
-    if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
-        gb_error("dropping short message\n");
-        return GB_OP_INVALID;
-    }
+	dev = gb_cport_to_device(operation->cport);
+	if (dev == NULL) {
+		return GB_OP_INVALID;
+	}
 
-    if (request->which >= plat->line_count())
-        return GB_OP_INVALID;
+	cfg = (const struct gpio_driver_config *)dev->config_info;
+	__ASSERT_NO_MSG(cfg != NULL);
 
-    switch(request->type) {
-    case GB_GPIO_IRQ_TYPE_EDGE_RISING:
-    case GB_GPIO_IRQ_TYPE_EDGE_FALLING:
-    case GB_GPIO_IRQ_TYPE_EDGE_BOTH:
-    case GB_GPIO_IRQ_TYPE_LEVEL_HIGH:
-    case GB_GPIO_IRQ_TYPE_LEVEL_LOW:
-    	trigger = request->type;
-    	break;
-    default:
-        return GB_OP_INVALID;
-    }
-    ret = plat->irq_type(request->which, trigger);
-    if (ret)
-        return GB_OP_INVALID;
-//    ret = gpio_irq_attach(request->which, gb_gpio_irq_event, NULL);
-//    if (ret)
-//        return GB_OP_UNKNOWN_ERROR;
-    return GB_OP_SUCCESS;
+	if (gb_operation_get_request_payload_size(operation) < sizeof(*request)) {
+		gb_error("dropping short message\n");
+		return GB_OP_INVALID;
+	}
+
+	if (request->which >= popcount(cfg->port_pin_mask))
+		return GB_OP_INVALID;
+
+	switch(request->type) {
+	case GB_GPIO_IRQ_TYPE_EDGE_RISING:
+		mode = GPIO_INT_MODE_EDGE;
+		trigger = GPIO_INT_TRIG_HIGH;
+		break;
+	case GB_GPIO_IRQ_TYPE_EDGE_FALLING:
+		mode = GPIO_INT_MODE_EDGE;
+		trigger = GPIO_INT_TRIG_LOW;
+		break;
+	case GB_GPIO_IRQ_TYPE_EDGE_BOTH:
+		mode = GPIO_INT_MODE_EDGE;
+		trigger = GPIO_INT_TRIG_BOTH;
+		break;
+	case GB_GPIO_IRQ_TYPE_LEVEL_HIGH:
+		mode = GPIO_INT_MODE_LEVEL;
+		trigger = GPIO_INT_TRIG_HIGH;
+		break;
+	case GB_GPIO_IRQ_TYPE_LEVEL_LOW:
+		mode = GPIO_INT_MODE_LEVEL;
+		trigger = GPIO_INT_TRIG_HIGH;
+		break;
+	default:
+		return GB_OP_INVALID;
+	}
+
+	return gb_errno_to_op_result(gpio_pin_interrupt_configure(dev, request->which, mode | trigger));
 }
 
 static struct gb_operation_handler gb_gpio_handlers[] = {
-    GB_HANDLER(GB_GPIO_TYPE_PROTOCOL_VERSION, gb_gpio_protocol_version),
-    GB_HANDLER(GB_GPIO_TYPE_LINE_COUNT, gb_gpio_line_count),
-    GB_HANDLER(GB_GPIO_TYPE_ACTIVATE, gb_gpio_activate),
-    GB_HANDLER(GB_GPIO_TYPE_DEACTIVATE, gb_gpio_deactivate),
-    GB_HANDLER(GB_GPIO_TYPE_GET_DIRECTION, gb_gpio_get_direction),
-    GB_HANDLER(GB_GPIO_TYPE_DIRECTION_IN, gb_gpio_direction_in),
-    GB_HANDLER(GB_GPIO_TYPE_DIRECTION_OUT, gb_gpio_direction_out),
-    GB_HANDLER(GB_GPIO_TYPE_GET_VALUE, gb_gpio_get_value),
-    GB_HANDLER(GB_GPIO_TYPE_SET_VALUE, gb_gpio_set_value),
-    GB_HANDLER(GB_GPIO_TYPE_SET_DEBOUNCE, gb_gpio_set_debounce),
-    GB_HANDLER(GB_GPIO_TYPE_IRQ_TYPE, gb_gpio_irq_type),
-    GB_HANDLER(GB_GPIO_TYPE_IRQ_MASK, gb_gpio_irq_mask),
-    GB_HANDLER(GB_GPIO_TYPE_IRQ_UNMASK, gb_gpio_irq_unmask),
+	GB_HANDLER(GB_GPIO_TYPE_PROTOCOL_VERSION, gb_gpio_protocol_version),
+	GB_HANDLER(GB_GPIO_TYPE_LINE_COUNT, gb_gpio_line_count),
+	GB_HANDLER(GB_GPIO_TYPE_ACTIVATE, gb_gpio_activate),
+	GB_HANDLER(GB_GPIO_TYPE_DEACTIVATE, gb_gpio_deactivate),
+	GB_HANDLER(GB_GPIO_TYPE_GET_DIRECTION, gb_gpio_get_direction),
+	GB_HANDLER(GB_GPIO_TYPE_DIRECTION_IN, gb_gpio_direction_in),
+	GB_HANDLER(GB_GPIO_TYPE_DIRECTION_OUT, gb_gpio_direction_out),
+	GB_HANDLER(GB_GPIO_TYPE_GET_VALUE, gb_gpio_get_value),
+	GB_HANDLER(GB_GPIO_TYPE_SET_VALUE, gb_gpio_set_value),
+	GB_HANDLER(GB_GPIO_TYPE_SET_DEBOUNCE, gb_gpio_set_debounce),
+	GB_HANDLER(GB_GPIO_TYPE_IRQ_TYPE, gb_gpio_irq_type),
+	GB_HANDLER(GB_GPIO_TYPE_IRQ_MASK, gb_gpio_irq_mask),
+	GB_HANDLER(GB_GPIO_TYPE_IRQ_UNMASK, gb_gpio_irq_unmask),
 };
 
 struct gb_driver gpio_driver = {
-    .op_handlers = (struct gb_operation_handler*) gb_gpio_handlers,
-    .op_handlers_count = ARRAY_SIZE(gb_gpio_handlers),
+	.op_handlers = (struct gb_operation_handler*) gb_gpio_handlers,
+	.op_handlers_count = ARRAY_SIZE(gb_gpio_handlers),
 };
 
 void gb_gpio_register(int cport, int bundle)
 {
-    g_gpio_cport = cport;
-    gb_register_driver(cport, bundle, &gpio_driver);
+	gb_register_driver(cport, bundle, &gpio_driver);
 }

@@ -20,8 +20,8 @@
 
 #include <greybus/debug.h>
 #include <greybus/greybus.h>
+#include <greybus/platform.h>
 #include <greybus-utils/manifest.h>
-#include <greybus-utils/platform.h>
 
 #include <drivers/gpio.h>
 
@@ -79,7 +79,7 @@ enum { GB_TYPE_MANIFEST_SET = 0x42,
 };
 
 static int getMessage(int fd, struct gb_operation_hdr **msg,
-		      const u8_t expected_msg_type);
+		      const uint8_t expected_msg_type);
 
 static int sendMessage(int fd, struct gb_operation_hdr *msg);
 
@@ -332,7 +332,7 @@ int accept_loop(void)
 }
 
 static int getMessage(int fd, struct gb_operation_hdr **msg,
-		      const u8_t expected_msg_type)
+		      const uint8_t expected_msg_type)
 {
 	int r;
 	void *tmp;
@@ -568,11 +568,26 @@ static const struct gb_transport_backend gb_xport = {
 	.free_buf = gb_xport_free_buf,
 };
 
-const struct gb_gpio_platform_driver gb_gpio_sample;
 static void register_gb_platform_drivers()
 {
-	gb_gpio_register_platform_driver(
-		(struct gb_gpio_platform_driver *)&gb_gpio_sample);
+	/* Platform drivers are no longer required.
+	 * All that is required is a bijection
+	 * of cports and devices */
+
+	const unsigned int cport = 1;
+	const char *port = DT_GPIO_LABEL(DT_ALIAS(led0), gpios);
+	const unsigned pin = DT_GPIO_PIN(DT_ALIAS(led0), gpios);
+	D("led0 = %s pin %u", port, pin);
+
+	struct device *dev = device_get_binding(port);
+	__ASSERT(dev != NULL, "failed to get binding for led0");
+	D("device %s is bound to %p", port, dev);
+
+	int r = gb_add_cport_device_mapping(cport, dev);
+	(void)r;
+	__ASSERT(r == 0, "failed to add (cport: %u dev: %p", cport, dev);
+
+	D("mapped cport %u to device %s", cport, port);
 }
 
 static int gbsetup(void)
@@ -613,117 +628,8 @@ static int gbsetup(void)
 
 	return 0;
 }
+
 int main(int argc, char *argv[])
 {
 	return gbsetup() || netsetup() || accept_loop();
 }
-
-/*
- * Simple Greybus GPIO abstraction that only uses 1 gpio
- */
-
-static const gpio_pin_t green_led_pin = DT_GPIO_PIN(DT_ALIAS(led0), gpios);
-static bool green_led_direction = 1; // make it an input by default
-
-static uint8_t gb_gpio_sample_line_count(void)
-{
-	return 1;
-}
-static int gb_gpio_sample_activate(uint8_t which)
-{
-	return 0;
-}
-static int gb_gpio_sample_deactivate(uint8_t which)
-{
-	return 0;
-}
-static int gb_gpio_sample_get_direction(uint8_t which)
-{
-	if (0 != which) {
-		return -ENODEV;
-	}
-
-	return green_led_direction;
-}
-static int gb_gpio_sample_direction_in(uint8_t which)
-{
-	if (0 != which) {
-		return -ENODEV;
-	}
-
-	struct device *green_led_dev;
-	green_led_dev = device_get_binding(DT_GPIO_LABEL(DT_ALIAS(led0), gpios));
-	gpio_pin_configure(green_led_dev, green_led_pin, GPIO_INPUT);
-
-	return 0;
-}
-static int gb_gpio_sample_direction_out(uint8_t which, uint8_t val)
-{
-	struct device *green_led_dev;
-
-	if (0 != which) {
-		return -ENODEV;
-	}
-
-	green_led_dev = device_get_binding(DT_GPIO_LABEL(DT_ALIAS(led0), gpios));
-	gpio_pin_configure(green_led_dev, green_led_pin, GPIO_OUTPUT);
-	gpio_pin_set(green_led_dev, green_led_pin, val);
-
-	return 0;
-}
-static int gb_gpio_sample_get_value(uint8_t which)
-{
-	struct device *green_led_dev;
-
-	if (0 != which) {
-		return -ENODEV;
-	}
-
-	green_led_dev = device_get_binding(DT_GPIO_LABEL(DT_ALIAS(led0), gpios));
-
-	return gpio_pin_get(green_led_dev, green_led_pin);
-}
-static int gb_gpio_sample_set_value(uint8_t which, uint8_t val)
-{
-	struct device *green_led_dev;
-
-	if (0 != which) {
-		return -ENODEV;
-	}
-
-	green_led_dev = device_get_binding(DT_GPIO_LABEL(DT_ALIAS(led0), gpios));
-	gpio_pin_set(green_led_dev, green_led_pin, val);
-
-	return 0;
-}
-static int gb_gpio_sample_set_debounce(uint8_t which, uint16_t usec)
-{
-	return -ENOSYS;
-}
-static int gb_gpio_sample_irq_mask(uint8_t which)
-{
-	return -ENOSYS;
-}
-static int gb_gpio_sample_irq_unmask(uint8_t which)
-{
-	return -ENOSYS;
-}
-static int gb_gpio_sample_irq_type(uint8_t which, uint8_t type)
-{
-	return -ENOSYS;
-}
-
-const struct gb_gpio_platform_driver gb_gpio_sample = {
-	.line_count = gb_gpio_sample_line_count,
-	.activate = gb_gpio_sample_activate,
-	.deactivate = gb_gpio_sample_deactivate,
-	.get_direction = gb_gpio_sample_get_direction,
-	.direction_in = gb_gpio_sample_direction_in,
-	.direction_out = gb_gpio_sample_direction_out,
-	.get_value = gb_gpio_sample_get_value,
-	.set_value = gb_gpio_sample_set_value,
-	.set_debounce = gb_gpio_sample_set_debounce,
-	.irq_mask = gb_gpio_sample_irq_mask,
-	.irq_unmask = gb_gpio_sample_irq_unmask,
-	.irq_type = gb_gpio_sample_irq_type,
-};

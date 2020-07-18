@@ -298,8 +298,6 @@ static uint8_t gb_gpio_set_value(struct gb_operation *operation)
 	if (request->which >= popcount(cfg->port_pin_mask))
 		return GB_OP_INVALID;
 
-	int r = gpio_pin_set(dev, request->which, request->value);
-
 	return gb_errno_to_op_result(gpio_pin_set(dev, request->which, request->value));
 }
 

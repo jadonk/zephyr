@@ -32,6 +32,7 @@ int manifest_mnfs_parse_file(manifest_t manifest, const char *file);
 int manifest_mnfb_gen(manifest_t manifest);
 size_t manifest_mnfb_size(manifest_t manifest);
 uint8_t *manifest_mnfb_data(manifest_t manifest);
+int manifest_mnfb_give(manifest_t manifest, uint8_t **mnfb, size_t *mnfb_size);
 
 int manifest_add_section(manifest_t manifest, const char *section_name);
 int manifest_add_option(manifest_t manifest, const char *section_name,
@@ -46,6 +47,7 @@ int manifest_add_bundle_desc(manifest_t manifest, uint8_t id,
                              BundleClass class_);
 int manifest_add_cport_desc(manifest_t manifest, uint8_t id, BundleClass class_,
                             CPortProtocol protocol);
+int manifest_num_cports(manifest_t manifest);
 
 
 #ifdef __cplusplus

@@ -9,6 +9,8 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_test_gpio_control);
 
+#include <greybus/platform.h>
+
 #include "bus.h"
 
 struct greybus_gpio_control_config {
@@ -56,6 +58,14 @@ static int greybus_gpio_control_init(struct device *dev) {
 		LOG_ERR("gpio control: failed to get driver_api for '%s'", config->bus_name);
 		return r;
     }
+
+    r = gb_add_cport_device_mapping(config->id, drv_data->greybus_gpio_controller);
+    if (r < 0) {
+		LOG_ERR("gpio control: failed to add mapping between %u and %s", config->id, dev->name);
+		return r;
+    }
+
+		LOG_INF("added mapping between cport %u and device %s", config->id, dev->name);
 
     LOG_INF("probed cport %u: class: %u protocol: %u", config->id,
 		BUNDLE_CLASS_BRIDGED_PHY, CPORT_PROTOCOL_GPIO);

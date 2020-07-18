@@ -21,12 +21,12 @@ struct greybus_data {
 	manifest_t manifest;
 };
 
-static int greybus_init(struct device *dev) {
+static int greybus_init(struct device *bus) {
 
 	const struct greybus_config *const config =
-			(const struct greybus_config *)dev->config_info;
+			(const struct greybus_config *)bus->config_info;
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 	int r;
 
 	data->manifest = manifest_new();
@@ -47,45 +47,66 @@ static int greybus_init(struct device *dev) {
     return 0;
 }
 
-static int greybus_add_interface(struct device *dev, uint16_t vendor_string_id,
+static int greybus_add_interface(struct device *bus, uint16_t vendor_string_id,
 		uint16_t product_string_id) {
 
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
 	return manifest_add_interface_desc(data->manifest, vendor_string_id, product_string_id);
 }
 
-static int greybus_add_string(struct device *dev, uint8_t id, const char *string_) {
+static int greybus_add_string(struct device *bus, uint8_t id, const char *string_) {
 
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
 	return manifest_add_string_desc(data->manifest, id, string_);
 }
 
-static int greybus_add_bundle(struct device *dev, uint8_t id, BundleClass class_) {
+static int greybus_add_bundle(struct device *bus, uint8_t id, BundleClass class_) {
 
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
 	return manifest_add_bundle_desc(data->manifest, id, class_);
 }
 
-static int greybus_add_cport(struct device *dev, uint8_t id, BundleClass class_, CPortProtocol protocol) {
+static int greybus_add_cport(struct device *bus, uint8_t id, BundleClass class_, CPortProtocol protocol) {
 
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
 	return manifest_add_cport_desc(data->manifest, id, class_, protocol);
 }
 
-static manifest_t greybus_get_manifest(struct device *dev) {
+static int greybus_gen_mnfb(struct device *bus, uint8_t **mnfb, size_t *mnfb_size) {
+
+	int r;
+	struct greybus_data *const data =
+			(struct greybus_data *)bus->driver_data;
+
+	r = manifest_mnfb_gen(data->manifest);
+	if (r < 0) {
+		return r;
+	}
+
+	return manifest_mnfb_give(data->manifest, mnfb, mnfb_size);
+}
+
+static int greybus_num_cports(struct device *bus) {
+	struct greybus_data *const data =
+		(struct greybus_data *)bus->driver_data;
+
+	return manifest_num_cports(data->manifest);
+}
+
+static void greybus_fini(struct device *bus) {
 
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
-	return data->manifest;
+	manifest_fini(data->manifest);
 }
 
 static const struct bus_api greybus_api = {
@@ -93,7 +114,9 @@ static const struct bus_api greybus_api = {
 	.add_string = greybus_add_string,
 	.add_bundle = greybus_add_bundle,
 	.add_cport = greybus_add_cport,
-	.get_manifest = greybus_get_manifest,
+	.num_cports = greybus_num_cports,
+	.gen_mnfb = greybus_gen_mnfb,
+	.fini = greybus_fini,
 };
 
 #define DEFINE_GREYBUS(_num)                            \

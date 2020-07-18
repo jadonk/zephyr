@@ -329,6 +329,27 @@ int manifest_add_cport_desc(manifest_t manifest, uint8_t id, BundleClass class_,
   return 0;
 }
 
+int manifest_num_cports(manifest_t manifest) {
+  int r;
+  struct manifest_ *const man = (struct manifest_ *)manifest;
+
+  if (NULL == man) {
+    return -EINVAL;
+  }
+
+  r = 0;
+  for (size_t i = 0; i < man->num_descriptors; ++i) {
+
+    if (DESC_TYPE_CPORT != man->descriptors[i]->type) {
+      continue;
+    }
+
+    ++r;
+  }
+
+  return r;
+}
+
 static char *manifest_get_option(manifest_t manifest, const char *section_name,
                                  const char *option_name) {
   struct manifest_section *section;

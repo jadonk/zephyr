@@ -4,9 +4,9 @@
 #define DT_DRV_COMPAT zephyr_greybus_string
 #include <device.h>
 
-#define LOG_LEVEL 11
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(greybus_test_string);
+LOG_MODULE_REGISTER(greybus_platform_string);
 
 #include <greybus/platform.h>
 
@@ -42,7 +42,7 @@ static int greybus_string_init(struct device *dev) {
 		return r;
 	}
 
-	LOG_INF("probed greybus string %u: %s", config->id, config->string_);
+	LOG_DBG("probed greybus string %u: %s", config->id, config->string_);
 
     return 0;
 }

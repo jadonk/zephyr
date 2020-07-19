@@ -35,7 +35,7 @@ static int greybus_service_init(struct device *bus)
 	size_t mnfb_size;
     unsigned int *cports = NULL;
 
-    LOG_INF("Greybus initializing..");
+    LOG_DBG("Greybus initializing..");
 
 	r = gb_service_deferred_init();
 	if (r < 0) {
@@ -101,7 +101,7 @@ static int greybus_service_init(struct device *bus)
 
     enable_cports();
 
-    LOG_INF("Greybus is active");
+    LOG_DBG("Greybus is active");
 
     r = 0;
     goto out;

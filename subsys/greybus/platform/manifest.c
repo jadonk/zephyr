@@ -361,7 +361,6 @@ int manifest_get_cports(manifest_t manifest, unsigned int **cports, size_t *num_
 
   int r;
   struct manifest_ *const man = (struct manifest_ *)manifest;
-  struct cport_descriptor *desc;
   unsigned int *cports_;
   size_t num_cports_;
 
@@ -395,7 +394,7 @@ int manifest_get_cports(manifest_t manifest, unsigned int **cports, size_t *num_
     if (DESC_TYPE_CPORT != man->descriptors[i]->type) {
       continue;
     }
-    struct cport_descriptor *desc = (struct cport_descriptor *)man->descriptors[i];
+    const struct cport_descriptor *const desc = (struct cport_descriptor *)man->descriptors[i];
     cports_[j] = desc->id;
     ++j;
   }

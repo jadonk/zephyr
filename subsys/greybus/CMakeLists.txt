@@ -8,12 +8,21 @@ zephyr_library_sources(
 	greybus-stubs.c
 	greybus-core.c
 	greybus-manifest.c
-	manifest.c
-	manifest-generator.c
-	platform.c
-	deferred-init.c
-	service.c
-	transport-tcpip.c
+
+	platform/manifest.c
+	platform/manifest-generator.c
+	platform/platform.c
+	platform/deferred-init.c
+
+	platform/service.c
+	platform/transport-tcpip.c
+
+	platform/bundle.c
+	platform/bus.c
+	platform/control.c
+	platform/gpio.c
+	platform/interface.c
+	platform/string.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_GREYBUS_CONTROL        control-gpb.c)

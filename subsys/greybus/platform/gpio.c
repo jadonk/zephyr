@@ -6,9 +6,9 @@
 #define DT_DRV_COMPAT zephyr_greybus_gpio_controller
 #include <device.h>
 
-#define LOG_LEVEL 11
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(greybus_test_gpio_control);
+LOG_MODULE_REGISTER(greybus_platform_gpio_control);
 
 struct greybus_gpio_control_config {
     const uint8_t id;
@@ -63,9 +63,7 @@ static int greybus_gpio_control_init(struct device *dev) {
 		return r;
     }
 
-		LOG_INF("added mapping between cport %u and device %s", config->id, dev->name);
-
-    LOG_INF("probed cport %u: bundle: %u protocol: %u", config->id,
+    LOG_DBG("probed cport %u: bundle: %u protocol: %u", config->id,
 		config->bundle, CPORT_PROTOCOL_GPIO);
 
     return 0;

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <device.h>
 #include <errno.h>
 #include <greybus/platform.h>
 #include <stddef.h>
@@ -11,9 +12,13 @@
 #include <string.h>
 #include <zephyr.h>
 
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
+#include <logging/log.h>
+LOG_MODULE_REGISTER(greybus_platform);
+
 struct map_entry {
-	unsigned int a;
-	void *b;
+	unsigned int cport;
+	struct device *dev;
 };
 
 static size_t map_size;
@@ -31,12 +36,20 @@ int gb_add_cport_device_mapping(unsigned int cport, struct device *dev)
 		return -EINVAL;
 	}
 
+	__ASSERT_NO_MSG(dev->name != NULL);
+
 	mutex_ret = k_mutex_lock(&map_mutex, K_FOREVER);
 	__ASSERT_NO_MSG(mutex_ret == 0);
 
 	for(idx = 0; idx < map_size; ++idx) {
 		entry = &map[idx];
-		if (entry->a == cport || entry->b == dev) {
+		if (entry->cport == cport) {
+			LOG_ERR("%u is already mapped to %s", cport, entry->dev->name);
+			ret = -EALREADY;
+			goto unlock;
+		}
+		if (entry->dev == dev) {
+			LOG_ERR("%s is already mapped to %u", entry->dev->name, entry->cport);
 			ret = -EALREADY;
 			goto unlock;
 		}
@@ -52,8 +65,10 @@ int gb_add_cport_device_mapping(unsigned int cport, struct device *dev)
 	entry = &map[map_size];
 	map_size++;
 
-	entry->a = cport;
-	entry->b = dev;
+	entry->cport = cport;
+	entry->dev = dev;
+
+	LOG_DBG("added mapping between cport %u and device %s", cport, dev->name);
 
 	ret = 0;
 
@@ -76,12 +91,13 @@ int gb_device_to_cport(struct device *dev)
 
 	for(idx = 0; idx < map_size; ++idx) {
 		entry = &map[idx];
-		if (entry->b == dev) {
-			ret = entry->a;
+		if (entry->dev == dev) {
+			ret = entry->cport;
 			goto unlock;
 		}
 	}
 
+	LOG_ERR("no mapping for device %s", (dev == NULL) ? "(null)" : ((dev->name == NULL) ? "(null)" : dev->name));
 	ret = -ENOENT;
 
 unlock:
@@ -103,12 +119,13 @@ struct device *gb_cport_to_device(unsigned int cport)
 
 	for(idx = 0; idx < map_size; ++idx) {
 		entry = &map[idx];
-		if (entry->a == cport) {
-			ret = entry->b;
+		if (entry->cport == cport) {
+			ret = entry->dev;
 			goto unlock;
 		}
 	}
 
+	LOG_ERR("no mapping for cport %u", cport);
 	ret = NULL;
 
 unlock:

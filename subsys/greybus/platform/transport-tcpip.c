@@ -42,7 +42,7 @@ int usleep(useconds_t usec) {
 
 #endif
 
-#define LOG_LEVEL 11
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_transport_tcpip);
 
@@ -99,7 +99,9 @@ static void *thread_fun(void *arg)
 
 		r = greybus_rx_handler(cport, msg, sys_le16_to_cpu(msg->size));
 		if (r < 0) {
-			LOG_DBG("failed to handle message %u: size: %u, id: %u, type: %u", i, sys_le16_to_cpu(msg->size), sys_le16_to_cpu(msg->id), msg->type);
+			LOG_DBG("failed to handle message %u: size: %u, id: %u, type: %u",
+				i, sys_le16_to_cpu(msg->size), sys_le16_to_cpu(msg->id),
+				msg->type);
 		}
 	}
 
@@ -120,8 +122,6 @@ static int netsetup(void)
         .sin6_port = htons(GB_TRANSPORT_TCPIP_BASE_PORT),
 	};
     struct gb_transport_tcpip_context *ctx; 
-
-    LOG_INF("Greybus TCP/IP Transport initializing..");
 
     for(i = 0; i < num_gb_transport_tcpip_contexts; ++i) {
         ctx = &gb_transport_tcpip_contexts[i];
@@ -396,10 +396,13 @@ static int gb_xport_send(unsigned int cport, const void *buf, size_t len)
 	msg = (struct gb_operation_hdr *)buf;
 
     if (NULL == msg) {
+		LOG_ERR("message is NULL");
 	    return -EINVAL;
 	}
 
     if (sys_le16_to_cpu(msg->size) != len || len < sizeof(*msg)) {
+		LOG_ERR("invalid message size %u (len: %u)",
+			(unsigned)sys_le16_to_cpu(msg->size), (unsigned)len);
         return -EINVAL;
     }
 
@@ -432,6 +435,8 @@ struct gb_transport_backend *gb_transport_get_backend(unsigned int *cports, size
     int r;
     struct gb_transport_tcpip_context *ctx;
     struct gb_transport_backend *ret;
+
+	LOG_INF("Greybus TCP/IP Transport initializing..");
 
     if (num_cports >= CPORT_ID_MAX) {
         LOG_ERR("invalid number of cports %u", (unsigned)num_cports);
@@ -466,10 +471,12 @@ struct gb_transport_backend *gb_transport_get_backend(unsigned int *cports, size
     r = netsetup();
     if (r < 0) {
         goto cleanup;
-        return NULL;
     }
 
     ret = (struct gb_transport_backend *)&gb_xport;
+
+	LOG_INF("Greybus TCP/IP Transport initialized");
+	goto out;
 
 cleanup:
     if (pollfds != NULL) {

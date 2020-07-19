@@ -5,9 +5,9 @@
 #define DT_DRV_COMPAT zephyr_greybus
 #include <device.h>
 
-#define LOG_LEVEL 11
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(greybus_test_bus);
+LOG_MODULE_REGISTER(greybus_platform_bus);
 
 #include <greybus/platform.h>
 
@@ -41,7 +41,7 @@ static int greybus_init(struct device *bus) {
 		return r;
 	}
 
-	LOG_INF("probed greybus: %u major: %u minor: %u",
+	LOG_DBG("probed greybus: %u major: %u minor: %u",
 		config->id, config->version_major, config->version_minor);
 
     return 0;

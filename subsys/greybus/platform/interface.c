@@ -6,9 +6,9 @@
 #include <device.h>
 #include <devicetree.h>
 
-#define LOG_LEVEL 11
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(greybus_test_interface);
+LOG_MODULE_REGISTER(greybus_platform_interface);
 
 #include <greybus/platform.h>
 
@@ -46,7 +46,7 @@ static int greybus_interface_init(struct device *dev) {
 		return r;
 	}
 
-	LOG_INF("probed greybus interface %u", config->num);
+	LOG_DBG("probed greybus interface %u", config->num);
 
     return 0;
 }

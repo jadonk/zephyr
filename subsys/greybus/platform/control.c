@@ -5,9 +5,9 @@
 #define DT_DRV_COMPAT zephyr_greybus_control
 #include <device.h>
 
-#define LOG_LEVEL 11
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(greybus_test_control);
+LOG_MODULE_REGISTER(greybus_platform_control);
 
 #include <greybus/platform.h>
 
@@ -43,7 +43,7 @@ static int greybus_control_init(struct device *dev) {
 		return r;
     }
 
-    LOG_INF("probed cport %u: bundle: %u protocol: %u", config->id,
+    LOG_DBG("probed cport %u: bundle: %u protocol: %u", config->id,
 		config->bundle, CPORT_PROTOCOL_CONTROL);
 
     return 0;

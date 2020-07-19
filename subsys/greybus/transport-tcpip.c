@@ -121,7 +121,7 @@ static int netsetup(void)
 	};
     struct gb_transport_tcpip_context *ctx; 
 
-    LOG_INF("Greytbus TCP/IP Transport initializing..");
+    LOG_INF("Greybus TCP/IP Transport initializing..");
 
     for(i = 0; i < num_gb_transport_tcpip_contexts; ++i) {
         ctx = &gb_transport_tcpip_contexts[i];

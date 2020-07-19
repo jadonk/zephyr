@@ -10,6 +10,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_test);
 
+extern void test_greybus_gpio_protocol_version(void);
 extern void test_greybus_gpio_cport_shutdown(void);
 extern void test_greybus_gpio_line_count(void);
 extern void test_greybus_gpio_activate(void);
@@ -28,8 +29,11 @@ extern void test_greybus_gpio_irq_event(void);
 void test_main(void) {
 
     ztest_test_suite(greybus_gpio,
+        /*
+        ztest_unit_test(test_greybus_gpio_protocol_version),
         ztest_unit_test(test_greybus_gpio_cport_shutdown),
-        ztest_unit_test(test_greybus_gpio_line_count),
+        */
+        ztest_unit_test(test_greybus_gpio_line_count)/*,
         ztest_unit_test(test_greybus_gpio_activate),
         ztest_unit_test(test_greybus_gpio_deactivate),
         ztest_unit_test(test_greybus_gpio_get_direction),
@@ -42,6 +46,7 @@ void test_main(void) {
         ztest_unit_test(test_greybus_gpio_irq_mask),
         ztest_unit_test(test_greybus_gpio_irq_unmask),
         ztest_unit_test(test_greybus_gpio_irq_event)
+        */
         );
 
     ztest_run_test_suite(greybus_gpio);

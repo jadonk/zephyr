@@ -69,6 +69,8 @@ struct pollfd *pollfds;
 static size_t num_gb_transport_tcpip_contexts;
 static struct gb_transport_tcpip_context *gb_transport_tcpip_contexts;
 
+static pthread_t accept_thread;
+
 static void *thread_fun(void *arg)
 {
 	int r;
@@ -188,7 +190,7 @@ void prepare_pollfds(void) {
     }
 }
 
-int accept_loop(void)
+void *accept_loop(void *arg)
 {
 	int r;
 	struct sockaddr_in6 addr = {
@@ -208,7 +210,7 @@ int accept_loop(void)
 		r = poll(pollfds, num_gb_transport_tcpip_contexts, -1);
 		if (-1 == r) {
 			perror("poll");
-			return -errno;
+			return NULL;
 		}
 
 		LOG_DBG("poll returned %d", r);
@@ -227,7 +229,7 @@ int accept_loop(void)
                         (struct sockaddr *)&addr, &addrlen);
                 if (ctx->client_fd == -1) {
                     LOG_ERR("accept: %s", strerror(errno));
-                    return -errno;
+                    return NULL;
                 }
 
                 memset(addrstr, '\0', sizeof(addrstr));
@@ -235,7 +237,7 @@ int accept_loop(void)
                     addrstr, sizeof(addrstr));
                 if (NULL == addrstrp) {
                     perror("inet_ntop");
-                    return -errno;
+                    return NULL;
                 }
                 LOG_DBG("accepted connection from [%s]:%d as fd %d",
                     addrstr, ntohs(addr.sin6_port), ctx->client_fd);
@@ -246,14 +248,13 @@ int accept_loop(void)
                         &ctx->client_fd);
                 if (r != 0) {
                     LOG_ERR("pthread_create: %s", strerror(r));
-                    return -r;
+                    return NULL;
                 }
             }
         }
 	}
 
-	LOG_DBG("out of loop");
-	return 0;
+	return NULL;
 }
 
 static int getMessage(int fd, struct gb_operation_hdr **msg)
@@ -391,13 +392,26 @@ static int gb_xport_send(unsigned int cport, const void *buf, size_t len)
 {
 	int r;
 	int fd = -1;
-
 	struct gb_operation_hdr *msg;
-	msg = (struct gb_operation_hdr *)buf;
+	struct gb_transport_tcpip_context *ctx;
 
+	msg = (struct gb_operation_hdr *)buf;
     if (NULL == msg) {
 		LOG_ERR("message is NULL");
 	    return -EINVAL;
+	}
+
+	for(size_t i = 0; i < num_gb_transport_tcpip_contexts; ++i) {
+		ctx = &gb_transport_tcpip_contexts[i];
+		if (ctx->cport == cport) {
+			fd = ctx->client_fd;
+			break;
+		}
+	}
+
+	if (fd == -1) {
+		LOG_ERR("unable to find fd corresponding to cport %u", cport);
+		return -EINVAL;
 	}
 
     if (sys_le16_to_cpu(msg->size) != len || len < sizeof(*msg)) {
@@ -436,7 +450,7 @@ struct gb_transport_backend *gb_transport_get_backend(unsigned int *cports, size
     struct gb_transport_tcpip_context *ctx;
     struct gb_transport_backend *ret;
 
-	LOG_INF("Greybus TCP/IP Transport initializing..");
+	LOG_DBG("Greybus TCP/IP Transport initializing..");
 
     if (num_cports >= CPORT_ID_MAX) {
         LOG_ERR("invalid number of cports %u", (unsigned)num_cports);
@@ -472,6 +486,12 @@ struct gb_transport_backend *gb_transport_get_backend(unsigned int *cports, size
     if (r < 0) {
         goto cleanup;
     }
+
+	r = pthread_create(&accept_thread, NULL, accept_loop, NULL);
+	if (r != 0) {
+		LOG_ERR("pthread_create: %s", strerror(r));
+		goto cleanup;
+	}
 
     ret = (struct gb_transport_backend *)&gb_xport;
 

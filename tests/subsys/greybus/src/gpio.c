@@ -46,7 +46,7 @@ LOG_MODULE_REGISTER(greybus_gpio_test, CONFIG_GB_LOG_LEVEL);
 #define TIMEOUT_MS 1000
 #define PORT 4243
 
-static void tx_rx(const struct gb_operation_hdr *req, uint8_t type, struct gb_operation_hdr *rsp, size_t rsp_size)
+static void tx_rx(const struct gb_operation_hdr *req, struct gb_operation_hdr *rsp, size_t rsp_size)
 {
 
     int r;
@@ -81,9 +81,10 @@ static void tx_rx(const struct gb_operation_hdr *req, uint8_t type, struct gb_op
 
     r = read(fd, rsp, rsp_size);
     zassert_not_equal(r, -1, "read: %s", strerror(errno));
-    zassert_not_equal(r, rsp_size, "expected: %u actual: %d", rsp_size, r);
+    zassert_equal(r, rsp_size, "expected: %u actual: %d", rsp_size, r);
 
-    zassert_equal(rsp->type, type, "expected: %u actual: %u", type, rsp->type);
+    zassert_equal(rsp->id, req->id, "expected: 0x%04x actual: 0x%04x", sys_le16_to_cpu(req->id), sys_le16_to_cpu(rsp->id));
+    zassert_equal(rsp->type, GB_TYPE_RESPONSE_FLAG | req->type, "expected: %u actual: %u", GB_TYPE_RESPONSE_FLAG | req->type, rsp->type);
 
     close(fd);
 }
@@ -110,9 +111,18 @@ void test_greybus_gpio_line_count(void)
         + sizeof(struct gb_gpio_line_count_response)
         ];
     const size_t rsp_size = sizeof(rsp_);
-    struct gb_operation_hdr *const rsp = (struct gb_operation_hdr *) rsp_;
+    struct gb_gpio_line_count_response *const rsp =
+        (struct gb_gpio_line_count_response *)
+        (rsp_ + sizeof(struct gb_operation_hdr));
 
-    tx_rx(&req, req.type, rsp, rsp_size);
+    zassert_equal(((struct gb_operation_hdr *)rsp_)->result, GB_OP_SUCCESS,
+        "expected: GB_OP_SUCCESS actual: %u",
+        ((struct gb_operation_hdr *)rsp_)->result);
+
+    tx_rx(&req, (struct gb_operation_hdr *)rsp_, rsp_size);
+
+    /* default number of pins on a controller is 32 */
+    zassert_equal(rsp->count + 1, 32, "expected: %u actual: %u", 32, rsp->count + 1);
 }
 
 void test_greybus_gpio_activate(void)

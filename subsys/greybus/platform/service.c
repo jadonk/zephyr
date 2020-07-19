@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <zephyr.h>
 
-#define LOG_LEVEL LOG_LEVEL_DBG
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_service);
 
@@ -101,7 +101,7 @@ static int greybus_service_init(struct device *bus)
 
     enable_cports();
 
-    LOG_DBG("Greybus is active");
+    LOG_INF("Greybus is active");
 
     r = 0;
     goto out;

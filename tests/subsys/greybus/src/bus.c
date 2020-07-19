@@ -21,7 +21,7 @@ struct greybus_data {
 	manifest_t manifest;
 };
 
-static int greybus_init(struct device *bus) {
+static int greygreybus_platform_api(struct device *bus) {
 
 	const struct greybus_config *const config =
 			(const struct greybus_config *)bus->config_info;
@@ -109,7 +109,7 @@ static void greybus_fini(struct device *bus) {
 	manifest_fini(data->manifest);
 }
 
-static const struct bus_api greybus_api = {
+static const struct greybus_platform_api greygreybus_platform_api = {
 	.add_interface = greybus_add_interface,
 	.add_string = greybus_add_string,
 	.add_bundle = greybus_add_bundle,
@@ -134,9 +134,9 @@ static const struct bus_api greybus_api = {
 														\
         DEVICE_AND_API_INIT(greybus_##_num,				\
 			"GREYBUS_" #_num,							\
-			greybus_init, &greybus_data_##_num,			\
+			greygreybus_platform_api, &greybus_data_##_num,			\
 			&greybus_config_##_num, POST_KERNEL,		\
 			CONFIG_KERNEL_INIT_PRIORITY_DEVICE,			\
-			&greybus_api);
+			&greygreybus_platform_api);
 
 DT_INST_FOREACH_STATUS_OKAY(DEFINE_GREYBUS);

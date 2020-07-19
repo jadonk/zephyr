@@ -24,7 +24,7 @@ static int greybus_bundle_init(struct device *dev) {
 			(const struct greybus_bundle_config *)dev->config_info;
 
 	int r;
-	struct bus_api *api;
+	struct greybus_platform_api *api;
 	struct device *bus;
 
 	bus = device_get_binding(config->bus_name);
@@ -33,7 +33,7 @@ static int greybus_bundle_init(struct device *dev) {
 		return -ENODEV;
 	}
 
-	api = (struct bus_api *)bus->driver_api;
+	api = (struct greybus_platform_api *)bus->driver_api;
 	if (NULL == api) {
 		LOG_ERR("greybus bundle: failed to get driver_api for device '%s'", config->bus_name);
 		return -EINVAL;
@@ -50,9 +50,9 @@ static int greybus_bundle_init(struct device *dev) {
     return 0;
 }
 
-extern int defer_init(struct device *, int (*init)(struct device *));
+extern int gb_service_defer_init(struct device *, int (*init)(struct device *));
 static int defer_greybus_bundle_init(struct device *dev) {
-	return defer_init(dev, &greybus_bundle_init);
+	return gb_service_defer_init(dev, &greybus_bundle_init);
 }
 
 #define DEFINE_GREYBUS_BUNDLE(_num)                                     \

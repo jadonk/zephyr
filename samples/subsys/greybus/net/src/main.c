@@ -577,11 +577,11 @@ static void register_gb_platform_drivers()
 	const unsigned int cport = 1;
 	const char *port = DT_GPIO_LABEL(DT_ALIAS(led0), gpios);
 	const unsigned pin = DT_GPIO_PIN(DT_ALIAS(led0), gpios);
-	D("led0 = %s pin %u", port, pin);
+	D("led0 = device %s pin %u", port, pin);
 
 	struct device *dev = device_get_binding(port);
-	__ASSERT(dev != NULL, "failed to get binding for led0");
-	D("device %s is bound to %p", port, dev);
+	__ASSERT(dev != NULL, "failed to get Device Tree binding for led0");
+	D("led0 device %s is bound to %p", port, dev);
 
 	int r = gb_add_cport_device_mapping(cport, dev);
 	(void)r;

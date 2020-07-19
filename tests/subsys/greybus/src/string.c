@@ -21,7 +21,7 @@ static int greybus_string_init(struct device *dev) {
 			(const struct greybus_string_config *)dev->config_info;
 
 	struct device *bus;
-	struct bus_api *api;
+	struct greybus_platform_api *api;
 	int r;
 
 	bus = device_get_binding(config->bus_name);
@@ -30,7 +30,7 @@ static int greybus_string_init(struct device *dev) {
 		return -EAGAIN;
 	}
 
-	api = (struct bus_api *)bus->driver_api;
+	api = (struct greybus_platform_api *)bus->driver_api;
 	if (NULL == api) {
 		LOG_ERR("greybus string: driver_api was NULL");
 		return -EINVAL;
@@ -47,9 +47,9 @@ static int greybus_string_init(struct device *dev) {
     return 0;
 }
 
-extern int defer_init(struct device *, int (*init)(struct device *));
+extern int gb_service_defer_init(struct device *, int (*init)(struct device *));
 static int defer_greybus_string_init(struct device *dev) {
-	return defer_init(dev, &greybus_string_init);
+	return gb_service_defer_init(dev, &greybus_string_init);
 }
 
 #define DEFINE_GREYBUS_STRING(_num)                                     \

@@ -53,6 +53,17 @@ int gb_device_to_cport(struct device *dev);
  */
 struct device *gb_cport_to_device(unsigned int cport);
 
+struct greybus_platform_api {
+	int (*add_interface)(struct device *bus, uint16_t vendor_string_id,
+            uint16_t product_string_id);
+	int (*add_string)(struct device *bus, uint8_t id, const char *string_);
+	int (*add_bundle)(struct device *bus, uint8_t id, BundleClass class_);
+	int (*add_cport)(struct device *bus, uint8_t id, BundleClass class_, CPortProtocol protocol);
+	int (*num_cports)(struct device *bus);
+	int (*gen_mnfb)(struct device *bus, uint8_t **mnfb, size_t *mnfb_size);
+	void (*fini)(struct device *bus);
+};
+
 #ifdef __cplusplus
 }
 #endif

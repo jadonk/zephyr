@@ -40,7 +40,7 @@ struct definit {
 static size_t definits_size;
 static struct definit *definits;
 
-int defer_init(struct device *dev, int (*init)(struct device *)) {
+int gb_service_defer_init(struct device *dev, int (*init)(struct device *)) {
 	size_t n = definits_size;
 	struct definit *tmp;
 
@@ -58,7 +58,7 @@ int defer_init(struct device *dev, int (*init)(struct device *)) {
 	return 0;
 }
 
-int deferred_init(void) {
+int gb_service_deferred_init(void) {
 	int r = 0;
 	int rr = 0;
 	struct device *dev;

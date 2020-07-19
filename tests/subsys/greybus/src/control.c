@@ -22,7 +22,7 @@ static int greybus_control_init(struct device *dev) {
         (struct greybus_control_config *)dev->config_info;
     int r;
     struct device *bus;
-    struct bus_api *api;
+    struct greybus_platform_api *api;
 
     bus = device_get_binding(config->bus_name);
     if (NULL == bus) {
@@ -30,7 +30,7 @@ static int greybus_control_init(struct device *dev) {
     	return -ENODEV;
     }
 
-    api = (struct bus_api *) bus->driver_api;
+    api = (struct greybus_platform_api *) bus->driver_api;
     if (NULL == api) {
 		LOG_ERR("control: failed to get driver_api for '%s'", config->bus_name);
     	return -EINVAL;
@@ -48,9 +48,9 @@ static int greybus_control_init(struct device *dev) {
     return 0;
 }
 
-extern int defer_init(struct device *, int (*init)(struct device *));
+extern int gb_service_defer_init(struct device *, int (*init)(struct device *));
 static int defer_greybus_control_init(struct device *dev) {
-	return defer_init(dev, &greybus_control_init);
+	return gb_service_defer_init(dev, &greybus_control_init);
 }
 
 #define DEFINE_GREYBUS_CONTROL(_num)										\

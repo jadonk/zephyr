@@ -12,6 +12,7 @@ LOG_MODULE_REGISTER(greybus_test_gpio_control);
 
 struct greybus_gpio_control_config {
     const uint8_t id;
+    const uint8_t bundle;
     const char *const greybus_gpio_controller_name;
     const char *const bus_name;
 };
@@ -50,7 +51,7 @@ static int greybus_gpio_control_init(struct device *dev) {
     	return -EINVAL;
     }
 
-    r = api->add_cport(bus, config->id, BUNDLE_CLASS_BRIDGED_PHY, CPORT_PROTOCOL_GPIO);
+    r = api->add_cport(bus, config->id, config->bundle, CPORT_PROTOCOL_GPIO);
     if (r < 0) {
 		LOG_ERR("gpio control: failed to get driver_api for '%s'", config->bus_name);
 		return r;
@@ -64,8 +65,8 @@ static int greybus_gpio_control_init(struct device *dev) {
 
 		LOG_INF("added mapping between cport %u and device %s", config->id, dev->name);
 
-    LOG_INF("probed cport %u: class: %u protocol: %u", config->id,
-		BUNDLE_CLASS_BRIDGED_PHY, CPORT_PROTOCOL_GPIO);
+    LOG_INF("probed cport %u: bundle: %u protocol: %u", config->id,
+		config->bundle, CPORT_PROTOCOL_GPIO);
 
     return 0;
 }
@@ -85,7 +86,8 @@ static int defer_greybus_gpio_control_init(struct device *dev) {
 																				\
 		static struct greybus_gpio_control_config								\
 			greybus_gpio_control_config_##_num = {								\
-                .id = (uint8_t)DT_INST_PROP(_num, id),							\
+                .id = (uint8_t)DT_INST_PROP(_num, id), \
+                .bundle = (uint8_t)DT_PROP(DT_PARENT(DT_DRV_INST(_num)), id), \
 				.greybus_gpio_controller_name = 								\
                     DT_LABEL(DT_PHANDLE(DT_DRV_INST(_num), 						\
                     		greybus_gpio_controller)), 							\

@@ -13,6 +13,7 @@ LOG_MODULE_REGISTER(greybus_test_control);
 
 struct greybus_control_config {
     const uint8_t id;
+    const uint8_t bundle;
     const char *bus_name;
 };
 
@@ -36,14 +37,14 @@ static int greybus_control_init(struct device *dev) {
     	return -EINVAL;
     }
 
-    r = api->add_cport(bus, config->id, BUNDLE_CLASS_CONTROL, CPORT_PROTOCOL_CONTROL);
+    r = api->add_cport(bus, config->id, config->bundle, CPORT_PROTOCOL_CONTROL);
     if (r < 0) {
 		LOG_ERR("control: failed to get driver_api for '%s'", config->bus_name);
 		return r;
     }
 
-    LOG_INF("probed cport %u: class: %u protocol: %u", config->id,
-		BUNDLE_CLASS_CONTROL, CPORT_PROTOCOL_CONTROL);
+    LOG_INF("probed cport %u: bundle: %u protocol: %u", config->id,
+		config->bundle, CPORT_PROTOCOL_CONTROL);
 
     return 0;
 }
@@ -64,6 +65,7 @@ static int defer_greybus_control_init(struct device *dev) {
 		static const struct greybus_control_config							\
 			greybus_control_config_##_num = {								\
                 .id = (uint8_t) _num,										\
+                .bundle = (uint8_t)DT_PROP(DT_PARENT(DT_DRV_INST(_num)), id), \
 				.bus_name = 												\
 					DT_LABEL(DT_PARENT(DT_PARENT(DT_DRV_INST(_num)))),		\
         };																	\

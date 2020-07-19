@@ -10,7 +10,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_test_bundle);
 
-#include "bus.h"
+#include <greybus/platform.h>
 
 struct greybus_bundle_config {
     const uint8_t id;

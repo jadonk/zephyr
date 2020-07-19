@@ -10,7 +10,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_test_interface);
 
-#include "bus.h"
+#include <greybus/platform.h>
 
 struct greybus_interface_config {
 	const uint8_t num;

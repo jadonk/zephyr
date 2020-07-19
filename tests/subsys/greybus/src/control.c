@@ -9,7 +9,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_test_control);
 
-#include "bus.h"
+#include <greybus/platform.h>
 
 struct greybus_control_config {
     const uint8_t id;

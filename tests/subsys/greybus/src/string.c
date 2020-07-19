@@ -8,7 +8,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_test_string);
 
-#include "bus.h"
+#include <greybus/platform.h>
 
 struct greybus_string_config {
     const uint16_t id;

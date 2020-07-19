@@ -7,6 +7,8 @@
 #ifndef ZEPHYR_INCLUDE_GREYBUS_PLATFORM_H_
 #define ZEPHYR_INCLUDE_GREYBUS_PLATFORM_H_
 
+#include <greybus/manifecto/manifest.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

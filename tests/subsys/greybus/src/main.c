@@ -13,7 +13,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_test);
 
-#include "bus.h"
+#include <greybus/platform.h>
 
 void test_main(void) {
 

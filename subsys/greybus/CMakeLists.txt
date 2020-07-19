@@ -11,6 +11,9 @@ zephyr_library_sources(
 	manifest.c
 	manifest-generator.c
 	platform.c
+	deferred-init.c
+	service.c
+	transport-tcpip.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_GREYBUS_CONTROL        control-gpb.c)

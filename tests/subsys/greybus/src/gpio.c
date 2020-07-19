@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <greybus/platform.h>
 #include <zephyr.h>
 #include <dt-bindings/greybus/greybus.h>
 
@@ -8,10 +9,6 @@
 #define LOG_LEVEL 11
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_test_gpio_control);
-
-#include <greybus/platform.h>
-
-#include "bus.h"
 
 struct greybus_gpio_control_config {
     const uint8_t id;

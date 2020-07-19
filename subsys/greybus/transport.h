@@ -3,6 +3,6 @@
 
 #include <greybus/greybus.h>
 
-struct gb_transport_backend *gb_transport_get_backend(size_t num_cports);
+struct gb_transport_backend *gb_transport_get_backend(unsigned int *cports, size_t num_cports);
 
 #endif /* GREYBUS_TRANSPORT_H_ */

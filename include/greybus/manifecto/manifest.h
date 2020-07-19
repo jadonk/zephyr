@@ -47,7 +47,7 @@ int manifest_add_bundle_desc(manifest_t manifest, uint8_t id,
                              BundleClass class_);
 int manifest_add_cport_desc(manifest_t manifest, uint8_t id, BundleClass class_,
                             CPortProtocol protocol);
-int manifest_num_cports(manifest_t manifest);
+int manifest_get_cports(manifest_t manifest, unsigned int **cports, size_t *num_cports);
 
 
 #ifdef __cplusplus

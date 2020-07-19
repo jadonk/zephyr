@@ -61,7 +61,7 @@ struct greybus_platform_api {
 	int (*add_string)(struct device *bus, uint8_t id, const char *string_);
 	int (*add_bundle)(struct device *bus, uint8_t id, BundleClass class_);
 	int (*add_cport)(struct device *bus, uint8_t id, BundleClass class_, CPortProtocol protocol);
-	int (*num_cports)(struct device *bus);
+	int (*get_cports)(struct device *bus, unsigned int **cports, size_t *num_cports);
 	int (*gen_mnfb)(struct device *bus, uint8_t **mnfb, size_t *mnfb_size);
 	void (*fini)(struct device *bus);
 };

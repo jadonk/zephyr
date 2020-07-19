@@ -329,24 +329,92 @@ int manifest_add_cport_desc(manifest_t manifest, uint8_t id, BundleClass class_,
   return 0;
 }
 
-int manifest_num_cports(manifest_t manifest) {
+static int cport_comparator(const int *a, const int *b) {
+  
+  if (*a < *b) {
+    return -1;
+  }
+
+  if (*a > *b) {
+    return +1;
+  }
+
+  return 0;
+}
+
+static int manifest_cports_valid(unsigned int *cports, size_t num_cports) {
+
+  typedef int (*qsort_comparator)(const void *, const void *);
+
+  qsort(cports, num_cports, sizeof(*cports), (qsort_comparator)&cport_comparator);
+
+  for(size_t i = 1; i < num_cports; ++i) {
+    if (cports[i] != cports[i-1] + 1) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+int manifest_get_cports(manifest_t manifest, unsigned int **cports, size_t *num_cports) {
+
   int r;
   struct manifest_ *const man = (struct manifest_ *)manifest;
+  struct cport_descriptor *desc;
+  unsigned int *cports_;
+  size_t num_cports_;
 
-  if (NULL == man) {
+  if (NULL == man || NULL == num_cports || NULL == cports) {
     return -EINVAL;
   }
 
   r = 0;
   for (size_t i = 0; i < man->num_descriptors; ++i) {
-
     if (DESC_TYPE_CPORT != man->descriptors[i]->type) {
       continue;
     }
-
     ++r;
   }
 
+  *num_cports = 0;
+  *cports = NULL;
+
+  if (r == 0) {
+    goto out;
+  }
+
+  num_cports_ = r;
+  cports_ = malloc(num_cports_ * sizeof(*cports_));
+  if (NULL == cports_) {
+    r = -ENOMEM;
+    goto out;
+  }
+
+  for (size_t i = 0, j = 0; i < man->num_descriptors && j < num_cports_; ++i) {
+    if (DESC_TYPE_CPORT != man->descriptors[i]->type) {
+      continue;
+    }
+    struct cport_descriptor *desc = (struct cport_descriptor *)man->descriptors[i];
+    cports_[j] = desc->id;
+    ++j;
+  }
+
+  r = manifest_cports_valid(cports_, num_cports_);
+  if (r < 0) {
+    goto free_cports;
+  }
+
+  *num_cports = num_cports_;
+  *cports = cports_;
+
+  r = 0;
+  goto out;
+
+free_cports:
+  free(cports_);
+
+out:
   return r;
 }
 

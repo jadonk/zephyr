@@ -33,6 +33,7 @@ static int greybus_service_init(struct device *bus)
     struct gb_transport_backend *xport;
 	uint8_t *mnfb;
 	size_t mnfb_size;
+    unsigned int *cports = NULL;
 
     LOG_INF("Greybus initializing..");
 
@@ -54,21 +55,19 @@ static int greybus_service_init(struct device *bus)
 		goto out;
 	}
 
-	r = api->num_cports(bus);
+	r = api->get_cports(bus, &cports, &num_cports);
 	if (r < 0) {
-		LOG_ERR("failed to get the number of cports");
+		LOG_ERR("failed to get cports");
 		goto out;
 	}
 
-    if (r == 0) {
+    if (num_cports == 0) {
 		LOG_ERR("no cports are defined");
         r = -EINVAL;
 		goto out;
     }
-	
-    num_cports = r;
 
-    xport = gb_transport_get_backend(num_cports);
+    xport = gb_transport_get_backend(cports, num_cports);
     if (xport == NULL) {
         LOG_ERR("failed to get transport");
         r = -EIO;
@@ -116,6 +115,9 @@ free_mnfb:
     mnfb_size = 0;
 
 out:
+    if (cports != NULL) {
+        free(cports);
+    }
     return r;
 }
 

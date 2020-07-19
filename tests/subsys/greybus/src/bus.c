@@ -94,11 +94,11 @@ static int greybus_gen_mnfb(struct device *bus, uint8_t **mnfb, size_t *mnfb_siz
 	return manifest_mnfb_give(data->manifest, mnfb, mnfb_size);
 }
 
-static int greybus_num_cports(struct device *bus) {
+static int greybus_get_cports(struct device *bus, unsigned int **cports, size_t *num_cports) {
 	struct greybus_data *const data =
 		(struct greybus_data *)bus->driver_data;
 
-	return manifest_num_cports(data->manifest);
+	return manifest_get_cports(data->manifest, cports, num_cports);
 }
 
 static void greybus_fini(struct device *bus) {
@@ -114,7 +114,7 @@ static const struct greybus_platform_api platform_api = {
 	.add_string = greybus_add_string,
 	.add_bundle = greybus_add_bundle,
 	.add_cport = greybus_add_cport,
-	.num_cports = greybus_num_cports,
+	.get_cports = greybus_get_cports,
 	.gen_mnfb = greybus_gen_mnfb,
 	.fini = greybus_fini,
 };

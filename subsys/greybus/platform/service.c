@@ -74,7 +74,7 @@ static int greybus_service_init(struct device *bus)
         goto out;
     }
 
-    /* assume ownership of the dynamically allocated mnfb */
+    /* take ownership of the dynamically allocated mnfb */
     r = api->gen_mnfb(bus, &mnfb, &mnfb_size);
     if (r < 0) {
         LOG_ERR("failed to generate mnfb: %d", r);

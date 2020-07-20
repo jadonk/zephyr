@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <device.h>
 #include <errno.h>
 #include <greybus/greybus.h>
 #include <string.h>
@@ -43,8 +44,12 @@ LOG_MODULE_REGISTER(greybus_gpio_test, CONFIG_GB_LOG_LEVEL);
 
 #include "../../../../subsys/greybus/gpio-gb.h"
 
+#include "test-greybus.h"
+
 #define TIMEOUT_MS 1000
 #define PORT 4243
+
+static struct device *gpio_dev;
 
 static void tx_rx(const struct gb_operation_hdr *req, struct gb_operation_hdr *rsp, size_t rsp_size)
 {
@@ -59,6 +64,11 @@ static void tx_rx(const struct gb_operation_hdr *req, struct gb_operation_hdr *r
     int size;
     int fd;
     struct pollfd pollfd;
+
+    if (gpio_dev == NULL) {
+        gpio_dev = device_get_binding(DEV_NAME);
+        zassert_not_equal(gpio_dev, NULL, "failed to get device binding for " DEV_NAME);
+    }
 
     fd = socket(AF_INET6, SOCK_STREAM, 0);
     zassert_not_equal(fd, -1, "socket: %s", strerror(errno));
@@ -90,11 +100,13 @@ static void tx_rx(const struct gb_operation_hdr *req, struct gb_operation_hdr *r
 }
 
 void test_greybus_gpio_protocol_version(void) {
+    zassert_equal(0, setup(), "setup failed");
     zassert_true(false, "untested");
 }
 
 void test_greybus_gpio_cport_shutdown(void)
 {
+    zassert_equal(0, setup(), "setup failed");
     zassert_true(false, "untested");
 }
 
@@ -114,15 +126,24 @@ void test_greybus_gpio_line_count(void)
     struct gb_gpio_line_count_response *const rsp =
         (struct gb_gpio_line_count_response *)
         (rsp_ + sizeof(struct gb_operation_hdr));
+    size_t expected_count;
+    size_t actual_count;
+
+    zassert_equal(0, setup(), "setup failed");
+    tx_rx(&req, (struct gb_operation_hdr *)rsp_, rsp_size);
 
     zassert_equal(((struct gb_operation_hdr *)rsp_)->result, GB_OP_SUCCESS,
         "expected: GB_OP_SUCCESS actual: %u",
         ((struct gb_operation_hdr *)rsp_)->result);
 
-    tx_rx(&req, (struct gb_operation_hdr *)rsp_, rsp_size);
+    zassert_not_equal(gpio_dev->config, NULL, "gpio_dev->config invalid");
 
-    /* default number of pins on a controller is 32 */
-    zassert_equal(rsp->count + 1, 32, "expected: %u actual: %u", 32, rsp->count + 1);
+    expected_count =
+        popcount((const struct gpio_driver_config *)->port_pin_mask);
+    actual_count = rsp->count + 1;
+
+    zassert_equal(expected_count, actual_count, "expected: %u actual: %u",
+        expected_count, actual_count);
 }
 
 void test_greybus_gpio_activate(void)

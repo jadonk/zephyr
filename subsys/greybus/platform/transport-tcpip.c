@@ -450,6 +450,11 @@ struct gb_transport_backend *gb_transport_get_backend(unsigned int *cports, size
     struct gb_transport_tcpip_context *ctx;
     struct gb_transport_backend *ret;
 
+	if (num_gb_transport_tcpip_contexts != 0) {
+		LOG_ERR("Greybus TCP/IP Transport has already been initialized");
+		return NULL;
+	}
+
 	LOG_DBG("Greybus TCP/IP Transport initializing..");
 
     if (num_cports >= CPORT_ID_MAX) {

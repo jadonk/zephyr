@@ -12,9 +12,6 @@
 #include <ztest.h>
 #include <zephyr.h>
 
-#include <logging/log.h>
-LOG_MODULE_REGISTER(greybus_gpio_test, CONFIG_GB_LOG_LEVEL);
-
 #if defined(CONFIG_BOARD_NATIVE_POSIX_64BIT) \
     || defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
     || defined(CONFIG_BOARD_NRF52_BSIM)

@@ -6,10 +6,6 @@
 
 #include <ztest.h>
 
-#define LOG_LEVEL 11
-#include <logging/log.h>
-LOG_MODULE_REGISTER(greybus_test);
-
 extern void test_greybus_gpio_protocol_version(void);
 extern void test_greybus_gpio_cport_shutdown(void);
 extern void test_greybus_gpio_line_count(void);

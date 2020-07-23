@@ -23,6 +23,7 @@
 
 	aliases {
 		eeprom-0 = &eeprom0;
+		gpio-0 = &gpio0;
 	};
 
 	flashcontroller0: flash-controller@0 {

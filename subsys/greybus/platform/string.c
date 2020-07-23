@@ -4,11 +4,11 @@
 #define DT_DRV_COMPAT zephyr_greybus_string
 #include <device.h>
 
-#define LOG_LEVEL 11
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(greybus_test_string);
+LOG_MODULE_REGISTER(greybus_platform_string);
 
-#include "bus.h"
+#include <greybus/platform.h>
 
 struct greybus_string_config {
     const uint16_t id;
@@ -21,7 +21,7 @@ static int greybus_string_init(struct device *dev) {
 			(const struct greybus_string_config *)dev->config_info;
 
 	struct device *bus;
-	struct bus_api *api;
+	struct greybus_platform_api *api;
 	int r;
 
 	bus = device_get_binding(config->bus_name);
@@ -30,7 +30,7 @@ static int greybus_string_init(struct device *dev) {
 		return -EAGAIN;
 	}
 
-	api = (struct bus_api *)bus->driver_api;
+	api = (struct greybus_platform_api *)bus->driver_api;
 	if (NULL == api) {
 		LOG_ERR("greybus string: driver_api was NULL");
 		return -EINVAL;
@@ -42,14 +42,14 @@ static int greybus_string_init(struct device *dev) {
 		return r;
 	}
 
-	LOG_INF("probed greybus string %u: %s", config->id, config->string_);
+	LOG_DBG("probed greybus string %u: %s", config->id, config->string_);
 
     return 0;
 }
 
-extern int defer_init(struct device *, int (*init)(struct device *));
+extern int gb_service_defer_init(struct device *, int (*init)(struct device *));
 static int defer_greybus_string_init(struct device *dev) {
-	return defer_init(dev, &greybus_string_init);
+	return gb_service_defer_init(dev, &greybus_string_init);
 }
 
 #define DEFINE_GREYBUS_STRING(_num)                                     \

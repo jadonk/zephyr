@@ -5,11 +5,11 @@
 #define DT_DRV_COMPAT zephyr_greybus
 #include <device.h>
 
-#define LOG_LEVEL 11
+#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(greybus_test_bus);
+LOG_MODULE_REGISTER(greybus_platform_bus);
 
-#include "bus.h"
+#include <greybus/platform.h>
 
 struct greybus_config {
     const uint8_t id;
@@ -21,12 +21,12 @@ struct greybus_data {
 	manifest_t manifest;
 };
 
-static int greybus_init(struct device *dev) {
+static int greybus_init(struct device *bus) {
 
 	const struct greybus_config *const config =
-			(const struct greybus_config *)dev->config_info;
+			(const struct greybus_config *)bus->config_info;
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 	int r;
 
 	data->manifest = manifest_new();
@@ -41,59 +41,82 @@ static int greybus_init(struct device *dev) {
 		return r;
 	}
 
-	LOG_INF("probed greybus: %u major: %u minor: %u",
+	LOG_DBG("probed greybus: %u major: %u minor: %u",
 		config->id, config->version_major, config->version_minor);
 
     return 0;
 }
 
-static int greybus_add_interface(struct device *dev, uint16_t vendor_string_id,
+static int greybus_add_interface(struct device *bus, uint16_t vendor_string_id,
 		uint16_t product_string_id) {
 
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
 	return manifest_add_interface_desc(data->manifest, vendor_string_id, product_string_id);
 }
 
-static int greybus_add_string(struct device *dev, uint8_t id, const char *string_) {
+static int greybus_add_string(struct device *bus, uint8_t id, const char *string_) {
 
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
 	return manifest_add_string_desc(data->manifest, id, string_);
 }
 
-static int greybus_add_bundle(struct device *dev, uint8_t id, BundleClass class_) {
+static int greybus_add_bundle(struct device *bus, uint8_t id, BundleClass class_) {
 
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
 	return manifest_add_bundle_desc(data->manifest, id, class_);
 }
 
-static int greybus_add_cport(struct device *dev, uint8_t id, BundleClass class_, CPortProtocol protocol) {
+static int greybus_add_cport(struct device *bus, uint8_t id, BundleClass class_, CPortProtocol protocol) {
 
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
 	return manifest_add_cport_desc(data->manifest, id, class_, protocol);
 }
 
-static manifest_t greybus_get_manifest(struct device *dev) {
+static int greybus_gen_mnfb(struct device *bus, uint8_t **mnfb, size_t *mnfb_size) {
 
+	int r;
 	struct greybus_data *const data =
-			(struct greybus_data *)dev->driver_data;
+			(struct greybus_data *)bus->driver_data;
 
-	return data->manifest;
+	r = manifest_mnfb_gen(data->manifest);
+	if (r < 0) {
+		return r;
+	}
+
+	return manifest_mnfb_give(data->manifest, mnfb, mnfb_size);
 }
 
-static const struct bus_api greybus_api = {
+static int greybus_get_cports(struct device *bus, unsigned int **cports, size_t *num_cports) {
+	struct greybus_data *const data =
+		(struct greybus_data *)bus->driver_data;
+
+	return manifest_get_cports(data->manifest, cports, num_cports);
+}
+
+static void greybus_fini(struct device *bus) {
+
+	struct greybus_data *const data =
+			(struct greybus_data *)bus->driver_data;
+
+	manifest_fini(data->manifest);
+}
+
+static const struct greybus_platform_api platform_api = {
 	.add_interface = greybus_add_interface,
 	.add_string = greybus_add_string,
 	.add_bundle = greybus_add_bundle,
 	.add_cport = greybus_add_cport,
-	.get_manifest = greybus_get_manifest,
+	.get_cports = greybus_get_cports,
+	.gen_mnfb = greybus_gen_mnfb,
+	.fini = greybus_fini,
 };
 
 #define DEFINE_GREYBUS(_num)                            \
@@ -114,6 +137,6 @@ static const struct bus_api greybus_api = {
 			greybus_init, &greybus_data_##_num,			\
 			&greybus_config_##_num, POST_KERNEL,		\
 			CONFIG_KERNEL_INIT_PRIORITY_DEVICE,			\
-			&greybus_api);
+			&platform_api);
 
 DT_INST_FOREACH_STATUS_OKAY(DEFINE_GREYBUS);

@@ -92,6 +92,7 @@ static inline __attribute__ ((format(printf, 2, 3)))
 #define gb_debug(fmt, ...)                                          \
     gb_log(GB_LOG_DEBUG, gb_log_format(D, fmt), ##__VA_ARGS__);
 #else
+#if 0
 #define gb_info(fmt, ...)                                           \
     printk("GB: I: %s():%d: " fmt, __func__, __LINE__, ##__VA_ARGS__);
 #define gb_error(fmt, ...)                                          \
@@ -100,6 +101,13 @@ static inline __attribute__ ((format(printf, 2, 3)))
 	printk("GB: W: %s():%d: " fmt, __func__, __LINE__, ##__VA_ARGS__);
 #define gb_debug(fmt, ...)                                          \
 	printk("GB: D: %s():%d: " fmt, __func__, __LINE__, ##__VA_ARGS__);
+#else
+/* TODO: switch to using Zephyr's logging functions */
+#define gb_info(fmt, ...)
+#define gb_error(fmt, ...)
+#define gb_warning(fmt, ...)
+#define gb_debug(fmt, ...)
+#endif
 #endif
 #endif
 

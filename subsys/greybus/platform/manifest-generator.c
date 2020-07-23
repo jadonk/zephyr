@@ -72,6 +72,18 @@ uint8_t *manifest_mnfb_data(manifest_t manifest) {
   return (NULL == man) ? NULL : man->mnfb;
 }
 
+int manifest_mnfb_give(manifest_t manifest, uint8_t **mnfb, size_t *mnfb_size) {
+  struct manifest_ *const man = (struct manifest_ *)manifest;
+  if (NULL == man || NULL == mnfb || NULL == mnfb_size) {
+    return -EINVAL;
+  }
+  *mnfb = man->mnfb;
+  *mnfb_size = man->mnfb_size;
+  man->mnfb = NULL;
+  man->mnfb_size = 0;
+  return 0;
+}
+
 static void manifest_pack_header(manifest_t manifest) {
   struct manifest_ *const man = (struct manifest_ *)manifest;
   // MNFS_HEADER_FMT = '<HBB' (le u16, u8, u8)

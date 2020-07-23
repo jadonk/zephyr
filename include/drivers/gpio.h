@@ -443,19 +443,6 @@ static inline int z_impl_gpio_config(struct device *port,
 	return api->pin_configure(port, pin, flags);
 }
 
-__syscall int gpio_get_config(struct device *port, gpio_pin_t pin,
-			  gpio_flags_t *flags);
-
-static inline int z_impl_gpio_get_config(struct device *port,
-				     gpio_pin_t pin, gpio_flags_t *flags)
-{
-	const struct gpio_driver_api *api =
-		(const struct gpio_driver_api *)port->driver_api;
-
-	(void) api;
-	return -ENOSYS;
-}
-
 /**
  * @endcond
  */

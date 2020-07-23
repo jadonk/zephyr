@@ -405,6 +405,7 @@ static int gpio_sim_port_set_masked_raw(struct device *port,
 	/* silently correct mask (otherwise CI fails) */
 	mask &= output_mask;
 	/* silently correct values (otherwise CI fails) */
+	prev_values &= output_mask;
 	values &= output_mask;
 
 	config->vals &= ~mask;
@@ -432,6 +433,8 @@ static int gpio_sim_port_set_bits_raw(struct device *port,
 
 	output_mask = gpio_sim_output_mask(config);
 	if (pins & ~output_mask) {
+		LOG_ERR("attempt to set pins not configured for output: %08x",
+			pins & ~output_mask);
 		ret = -EINVAL;
 		goto unlock;
 	}
@@ -462,6 +465,8 @@ static int gpio_sim_port_clear_bits_raw(struct device *port,
 
 	output_mask = gpio_sim_output_mask(config);
 	if (pins & ~output_mask) {
+		LOG_ERR("attempt to clear pins not configured for output: %08x",
+			pins & ~output_mask);
 		ret = -EINVAL;
 		goto unlock;
 	}
@@ -491,6 +496,8 @@ static int gpio_sim_port_toggle_bits(struct device *port, gpio_port_pins_t pins)
 
 	output_mask = gpio_sim_output_mask(config);
 	if (pins & ~output_mask) {
+		LOG_ERR("attempt to toggle pins not configured for output: %08x",
+			pins & ~output_mask);
 		ret = -EINVAL;
 		goto unlock;
 	}

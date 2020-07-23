@@ -298,8 +298,6 @@ static uint8_t gb_gpio_set_value(struct gb_operation *operation)
 	if (request->which >= popcount(cfg->port_pin_mask))
 		return GB_OP_INVALID;
 
-	int r = gpio_pin_set(dev, request->which, request->value);
-
 	return gb_errno_to_op_result(gpio_pin_set(dev, request->which, request->value));
 }
 
@@ -441,6 +439,10 @@ static uint8_t gb_gpio_irq_type(struct gb_operation *operation)
 		return GB_OP_INVALID;
 
 	switch(request->type) {
+	case GB_GPIO_IRQ_TYPE_NONE:
+		mode = GPIO_INT_MODE_DISABLED;
+		trigger = 0;
+		break;
 	case GB_GPIO_IRQ_TYPE_EDGE_RISING:
 		mode = GPIO_INT_MODE_EDGE;
 		trigger = GPIO_INT_TRIG_HIGH;

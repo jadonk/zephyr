@@ -1,0 +1,11 @@
+# Beagle Connect board
+
+# Copyright (c) 2020 Erik Larson
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_BEAGLE_CONNECT
+
+config BOARD
+	default "beagle_connect"
+
+endif # BOARD_BEAGLE_CONNECT

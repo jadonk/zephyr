@@ -1,0 +1,112 @@
+/*
+ * Copyright (c) 2020 Erik Larson
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <ti/cc1352r.dtsi>
+/* TODO: Include click-board header here? */
+/*
+ * Define some constants from driverlib/ioc.h in TI HAL,
+ * since we don't have a way to include the file directly.
+ */
+#define IOC_PORT_MCU_UART0_TX 0x00000010
+#define IOC_PORT_MCU_UART0_RX 0x0000000F
+#define IOC_PORT_MCU_UART1_TX 0x00000014
+#define IOC_PORT_MCU_UART1_RX 0x00000013
+
+#define BTN_GPIO_FLAGS (GPIO_ACTIVE_LOW | GPIO_PULL_UP)
+
+/ {
+	model = "Beagle Connect";
+	compatible = "beagleboard,beagle-connect";
+
+	aliases {
+		led1 = &led1;
+		led2 = &led2;
+	};
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led1: led_1 {
+			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+			label = "Red LED 1";
+		};
+		led2: led_2 {
+			gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
+			label = "Red LED 2";
+		};
+	};
+};
+
+&cpu0 {
+	clock-frequency = <48000000>;
+};
+
+&trng {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+	current-speed = <115200>;
+	tx-pin = <22 IOC_PORT_MCU_UART0_TX>;
+	rx-pin = <21 IOC_PORT_MCU_UART0_RX>;
+};
+
+&uart1 {
+	status = "okay";
+	current-speed = <115200>;
+	tx-pin = <27 IOC_PORT_MCU_UART1_TX>;
+	rx-pin = <28 IOC_PORT_MCU_UART1_RX>;
+};
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+	scl-pin = <25>;
+	sda-pin = <26>;
+
+	lis2dh12-accel@18 {
+		compatible = "st,lis2dh12", "st,lis2dh", "st,lis2de12";
+		reg = <0x18>;
+		label = "LIS2DE12-ACCEL";
+	};
+
+	opt3001-light@44 {
+	    compatible = "ti,opt3001";
+	    reg = <0x44>;
+	    label = "OPT3001-LIGHT";
+	};
+
+	hdc2010@40 {
+	    compatible = "ti,hdc";
+	    reg = <0x40>;
+	    label = "HDC2010";
+	};
+};
+
+&spi0 {
+	status = "okay";
+	sck-pin = <10>;
+	mosi-pin = <9>;
+	miso-pin = <11>;
+	cs-pin = <8>;
+};
+
+&rtc {
+	status = "okay";
+};

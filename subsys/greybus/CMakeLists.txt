@@ -21,6 +21,7 @@ zephyr_library_sources(
 	platform/bus.c
 	platform/control.c
 	platform/gpio.c
+	platform/i2c.c
 	platform/interface.c
 	platform/string.c
 )

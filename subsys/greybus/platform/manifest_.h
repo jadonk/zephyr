@@ -27,7 +27,9 @@
 #define STRING_MAX_SIZE 0xff
 #define STRING_DESC_MAX_SIZE (STRING_DESC_BASE_SIZE + STRING_MAX_SIZE)
 
-__BEGIN_DECLS
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct manifest_option {
   char *name;
@@ -98,6 +100,8 @@ char *manifest_get_string_option(manifest_t manifest, const char *section_name,
 int manifest_check_int(int int_val, uint8_t num_bytes);
 int manifest_parse_int(const char *s);
 
-__END_DECLS
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* MANIFECTO_MANIFEST__H_ */

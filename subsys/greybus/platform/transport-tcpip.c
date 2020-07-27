@@ -131,7 +131,7 @@ static int netsetup(void)
         ctx->server_fd = socket(AF_INET6, SOCK_STREAM, 0);
         if (ctx->server_fd == -1) {
             r = -errno;
-            LOG_ERR("socket: %s", strerror(errno));
+            LOG_ERR("socket: %d", errno);
             goto cleanup;
         }
 	    LOG_DBG("created server socket %d for cport %u",
@@ -141,7 +141,7 @@ static int netsetup(void)
         r = setsockopt(ctx->server_fd, SOL_SOCKET, SO_REUSEADDR, &yes,
                 sizeof(yes));
         if (-1 == r) {
-            LOG_ERR("socket: %s", strerror(errno));
+            LOG_ERR("socket: %d", errno);
             r = -errno;
             goto cleanup;
         }
@@ -151,7 +151,7 @@ static int netsetup(void)
     	addr.sin6_port = htons(GB_TRANSPORT_TCPIP_BASE_PORT + i);
         r = bind(ctx->server_fd, (struct sockaddr *)&addr, sizeof(addr));
         if (-1 == r) {
-            LOG_ERR("bind: %s", strerror(errno));
+            LOG_ERR("bind: %d", errno);
             r = -errno;
             goto cleanup;
         }
@@ -159,7 +159,7 @@ static int netsetup(void)
         LOG_DBG("listening on socket %d (cport %u)", ctx->server_fd, ctx->cport);
         r = listen(ctx->server_fd, GB_TRANSPORT_TCPIP_BACKLOG);
         if (-1 == r) {
-            LOG_ERR("bind: %s", strerror(errno));
+            LOG_ERR("bind: %d", errno);
             r = -errno;
             goto cleanup;
         }
@@ -209,7 +209,7 @@ void *accept_loop(void *arg)
 		LOG_DBG("calling poll");
 		r = poll(pollfds, num_gb_transport_tcpip_contexts, -1);
 		if (-1 == r) {
-			perror("poll");
+			LOG_ERR("poll: %d", errno);
 			return NULL;
 		}
 
@@ -228,7 +228,7 @@ void *accept_loop(void *arg)
                     accept(ctx->server_fd,
                         (struct sockaddr *)&addr, &addrlen);
                 if (ctx->client_fd == -1) {
-                    LOG_ERR("accept: %s", strerror(errno));
+                    LOG_ERR("accept: %d", errno);
                     return NULL;
                 }
 
@@ -236,7 +236,7 @@ void *accept_loop(void *arg)
                 addrstrp = (char *)inet_ntop(AF_INET6, &addr.sin6_addr,
                     addrstr, sizeof(addrstr));
                 if (NULL == addrstrp) {
-                    perror("inet_ntop");
+                    LOG_ERR("inet_ntop: %d", errno);
                     return NULL;
                 }
                 LOG_DBG("accepted connection from [%s]:%d as fd %d",
@@ -247,7 +247,7 @@ void *accept_loop(void *arg)
                         NULL, thread_fun,
                         &ctx->client_fd);
                 if (r != 0) {
-                    LOG_ERR("pthread_create: %s", strerror(r));
+                    LOG_ERR("pthread_create: %d", r);
                     return NULL;
                 }
             }
@@ -287,7 +287,7 @@ read_header:
 
 		r = recv(fd, &((uint8_t *)*msg)[offset], remaining, 0);
 		if (r < 0) {
-			LOG_DBG("recv failed. errno: %d (%s)", errno, strerror(errno));
+			LOG_DBG("recv failed. errno: %d", errno);
 			usleep(100);
 			continue;
 		}
@@ -359,7 +359,7 @@ static int sendMessage(int fd, struct gb_operation_hdr *msg)
 	     remaining; remaining -= written, offset += written, written = 0) {
 		r = send(fd, &((uint8_t *)msg)[offset], remaining, 0);
 		if (r < 0) {
-			LOG_ERR("send: %s", strerror(errno));
+			LOG_ERR("send: %d", errno);
 			return r;
 		}
 		if (0 == r) {
@@ -494,7 +494,7 @@ struct gb_transport_backend *gb_transport_backend_init(unsigned int *cports, siz
 
 	r = pthread_create(&accept_thread, NULL, accept_loop, NULL);
 	if (r != 0) {
-		LOG_ERR("pthread_create: %s", strerror(r));
+		LOG_ERR("pthread_create: %d", r);
 		goto cleanup;
 	}
 

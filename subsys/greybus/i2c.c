@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2015 Google Inc.
+ * Copyright (c) 2020 Friedt Professional Engineering Services, Inc
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,15 +27,13 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <errno.h>
-//#include <debug.h>
-#include <stdlib.h>
-
-#include <sys/byteorder.h>
 #include <device.h>
-//#include <device_i2c.h>
+#include <drivers/i2c.h>
+#include <errno.h>
 #include <greybus/greybus.h>
-#include <greybus/debug.h>
+#include <stdlib.h>
+#include <sys/byteorder.h>
+#include <zephyr.h>
 
 #include "i2c-gb.h"
 
@@ -80,11 +79,12 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
     uint8_t *write_data;
     bool read_op;
     int read_count = 0;
+    uint16_t addr;
 
     struct gb_bundle *bundle = gb_operation_get_bundle(operation);
-    DEBUGASSERT(bundle);
+    __ASSERT_NO_MSG(bundle != NULL);
 
-    struct device_i2c_request *requests;
+    struct i2c_msg *requests;
 
     struct gb_i2c_transfer_desc *desc;
     struct gb_i2c_transfer_req *request;
@@ -92,7 +92,6 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
     const size_t req_size = gb_operation_get_request_payload_size(operation);
 
     if (req_size < sizeof(*request)) {
-        gb_error("dropping short message\n");
         return GB_OP_INVALID;
     }
 
@@ -101,7 +100,6 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
     write_data = (uint8_t *)&request->desc[op_count];
 
     if (req_size < sizeof(*request) + op_count * sizeof(request->desc[0])) {
-        gb_error("dropping short message\n");
         return GB_OP_INVALID;
     }
 
@@ -118,31 +116,41 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
         return GB_OP_NO_MEMORY;
     }
 
-    requests = malloc(sizeof(struct device_i2c_request) * op_count);
+    requests = malloc(sizeof(*requests) * op_count);
     if (!requests) {
         return GB_OP_NO_MEMORY;
+    }
+
+    if (op_count > 0) {
+    	addr = sys_le16_to_cpu(desc->addr);
     }
 
     for (i = 0; i < op_count; i++) {
         desc = &request->desc[i];
         read_op = (sys_le16_to_cpu(desc->flags) & GB_I2C_M_RD) ? true : false;
 
+        if (sys_le16_to_cpu(desc->addr) != addr) {
+        	/* Zephyr only allows a single address to be used */
+        	ret = GB_OP_INVALID;
+        	goto free_requests;
+        }
+
         requests[i].flags = 0;
-        requests[i].addr = sys_le16_to_cpu(desc->addr);
-        requests[i].length = sys_le16_to_cpu(desc->size);
+        requests[i].len  = sys_le16_to_cpu(desc->size);
 
         if (read_op) {
             requests[i].flags |= GB_I2C_M_RD;
-            requests[i].buffer = &response->data[read_count];
+            requests[i].buf = &response->data[read_count];
             read_count += sys_le16_to_cpu(desc->size);
         } else {
-            requests[i].buffer = write_data;
+            requests[i].buf = write_data;
             write_data += sys_le16_to_cpu(desc->size);
         }
     }
 
-    ret = device_i2c_transfer(bundle->dev, requests, op_count);
+    ret = i2c_transfer(bundle->dev, requests, op_count, addr);
 
+free_requests:
     free(requests);
 
     return gb_errno_to_op_result(ret);
@@ -150,11 +158,10 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
 
 static int gb_i2c_init(unsigned int cport, struct gb_bundle *bundle)
 {
-    DEBUGASSERT(bundle);
+	__ASSERT_NO_MSG(bundle != NULL);
 
-    bundle->dev = device_open(DEVICE_TYPE_I2C_HW, 0);
+    bundle->dev = gb_cport_to_device(cport);
     if (!bundle->dev) {
-        gb_info("%s(): failed to open device!\n", __func__);
         return -EIO;
     }
 
@@ -163,11 +170,8 @@ static int gb_i2c_init(unsigned int cport, struct gb_bundle *bundle)
 
 static void gb_i2c_exit(unsigned int cport, struct gb_bundle *bundle)
 {
-    DEBUGASSERT(bundle);
-
-    if (bundle->dev) {
-        device_close(bundle->dev);
-    }
+	ARG_UNUSED(cport);
+	ARG_UNUSED(bundle);
 }
 
 static struct gb_operation_handler gb_i2c_handlers[] = {

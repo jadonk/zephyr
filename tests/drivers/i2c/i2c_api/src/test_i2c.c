@@ -16,15 +16,7 @@
 #include <zephyr.h>
 #include <ztest.h>
 
-#if DT_NODE_HAS_STATUS(DT_ALIAS(i2c_0), okay)
-#define I2C_DEV_NAME	DT_LABEL(DT_ALIAS(i2c_0))
-#elif DT_NODE_HAS_STATUS(DT_ALIAS(i2c_1), okay)
-#define I2C_DEV_NAME	DT_LABEL(DT_ALIAS(i2c_1))
-#elif DT_NODE_HAS_STATUS(DT_ALIAS(i2c_2), okay)
-#define I2C_DEV_NAME	DT_LABEL(DT_ALIAS(i2c_2))
-#else
-#error "Please set the correct I2C device"
-#endif
+#include "test_i2c.h"
 
 uint32_t i2c_cfg = I2C_SPEED_SET(I2C_SPEED_STANDARD) | I2C_MODE_MASTER;
 

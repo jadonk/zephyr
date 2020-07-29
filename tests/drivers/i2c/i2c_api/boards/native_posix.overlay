@@ -1,0 +1,36 @@
+/*
+ * Copyright (c) 2020 Friedt Professional Engineering Services, Inc
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+&gpio0 {
+	status = "okay";
+	ngpios = <1>;
+};
+*/
+
+&i2c0 {
+	status = "okay";
+
+	/*
+	eeprom@57 {
+		status = "okay";
+		compatible = "atmel,at24";
+		reg = <0x57>;
+		label = "EEPROM_1";
+		size = <256>;
+		pagesize = <8>;
+		address-width = <8>;
+		timeout = <5>;
+	};
+	*/
+
+	hmc5883l@1e {
+		compatible = "honeywell,hmc5883l";
+		reg = <0x1E>;
+		/* int-gpios = <&gpio0 0 GPIO_ACTIVE_LOW>; */
+		label = "HMC5883L";
+	};
+};

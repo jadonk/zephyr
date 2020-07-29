@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2020 Friedt Professional Engineering Services, Inc
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+description: Simulated I2C Controller
+
+compatible: "zephyr,sim-i2c"
+
+include: i2c-controller.yaml
+
+properties:
+    reg:
+      required: true

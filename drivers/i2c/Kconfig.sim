@@ -1,0 +1,8 @@
+# Copyright (c) 2020 Friedt Professional Engineering Services, Inc
+# SPDX-License-Identifier: Apache-2.0
+
+config I2C_SIM
+	bool "I2C Simulator"
+	help
+	  Enable support for a simulated I2C bus as well as a limited
+	  number of simulated I2C peripherals.

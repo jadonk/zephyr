@@ -1,3 +1,3 @@
-Greybus GPIO Subsystem Test
-###########################
+Greybus I2C Subsystem Test
+##########################
 

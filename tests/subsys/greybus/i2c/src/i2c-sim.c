@@ -13,10 +13,9 @@
 #include <zephyr.h>
 
 #include <logging/log.h>
-//LOG_MODULE_REGISTER(test_i2c_sim, CONFIG_I2C_LOG_LEVEL);
-LOG_MODULE_REGISTER(test_i2c_sim, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(test_i2c_sim, CONFIG_I2C_LOG_LEVEL);
 
-#include "test_i2c.h"
+#include "test-greybus-i2c.h"
 #include "../../../drivers/sensor/hmc5883l/hmc5883l.h"
 
 enum {
@@ -117,11 +116,11 @@ static int i2c_sim_hmc_callback(struct device *dev,
     return 0;
 }
 
-void sim_setup(void)
+void i2c_sim_setup(void)
 {
     int r;
     struct device *dev;
-    
+
     dev = device_get_binding(I2C_DEV_NAME);
     __ASSERT(dev != NULL, "failed to get binding for " I2C_DEV_NAME);
 

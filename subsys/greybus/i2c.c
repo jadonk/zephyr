@@ -31,6 +31,7 @@
 #include <drivers/i2c.h>
 #include <errno.h>
 #include <greybus/greybus.h>
+#include <greybus/platform.h>
 #include <stdlib.h>
 #include <sys/byteorder.h>
 #include <zephyr.h>
@@ -122,7 +123,7 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
     }
 
     if (op_count > 0) {
-    	addr = sys_le16_to_cpu(desc->addr);
+    	addr = sys_le16_to_cpu(request->desc[0].addr);
     }
 
     for (i = 0; i < op_count; i++) {
@@ -131,7 +132,7 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
 
         if (sys_le16_to_cpu(desc->addr) != addr) {
         	/* Zephyr only allows a single address to be used */
-        	ret = GB_OP_INVALID;
+        	ret = -EINVAL;
         	goto free_requests;
         }
 
@@ -139,7 +140,7 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
         requests[i].len  = sys_le16_to_cpu(desc->size);
 
         if (read_op) {
-            requests[i].flags |= GB_I2C_M_RD;
+            requests[i].flags |= I2C_MSG_READ;
             requests[i].buf = &response->data[read_count];
             read_count += sys_le16_to_cpu(desc->size);
         } else {

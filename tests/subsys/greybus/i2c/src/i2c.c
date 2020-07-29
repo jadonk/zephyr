@@ -29,21 +29,36 @@
 #include <net/socket.h>
 #include <posix/unistd.h>
 
-#undef perror
-#define perror(s) LOG_ERR("%s", s)
-
 #endif
 
 #include "../../../../subsys/greybus/i2c-gb.h"
 
 #include "test-greybus-i2c.h"
 
-#define TIMEOUT_MS 1000
+#define TIMEOUT_MS (-1)
 #define PORT 4243
 
 static struct device *i2c_dev;
 
 static int fd = -1;
+
+static char *to_string(uint8_t *data, size_t len)
+{
+    static char buf[256];
+    char *p = buf;
+
+    memset(buf, '\0', sizeof(buf));
+    for(size_t i = 0; i < len && p < buf + sizeof(buf) - 4; ++i) {
+        sprintf(p, "%02x", data[i]);
+        p += 2;
+        if (i < len - 1) {
+            *p++ = ',';
+            *p++ = ' ';
+        }
+    }
+
+    return buf;
+}
 
 void test_greybus_setup(void)
 {
@@ -81,12 +96,11 @@ static void tx_rx(const struct gb_operation_hdr *req,
 	int r;
 	int size;
 	struct pollfd pollfd;
-	const size_t hdr_size = sizeof(struct gb_operation_hdr);
 
 	size = sys_le16_to_cpu(req->size);
 	r = send(fd, req, size, 0);
 	zassert_not_equal(r, -1, "send: %s", errno);
-	zassert_equal(r, size, "write: expected: %d actual: %d", size, r);
+	zassert_equal(r, size, "send: expected: %d actual: %d", size, r);
 
 	pollfd.fd = fd;
 	pollfd.events = POLLIN;
@@ -96,10 +110,13 @@ static void tx_rx(const struct gb_operation_hdr *req,
 	zassert_not_equal(r, 0, "timeout waiting for response");
 	zassert_equal(r, 1, "invalid number of pollfds with data: %d", r);
 
-	r = recv(fd, rsp, hdr_size, 0);
+	r = recv(fd, rsp, rsp_size, 0);
 	zassert_not_equal(r, -1, "recv: %s", errno);
-	zassert_equal(hdr_size, r, "recv: expected: %u actual: %u",
-		      (unsigned)hdr_size, r);
+	if (r != rsp_size) {
+		printk("rsp: [%s]", to_string((uint8_t *)rsp, r));
+	}
+	zassert_equal(rsp_size, r, "recv: expected: %u actual: %u",
+		      (unsigned)rsp_size, r);
 
 	zassert_equal(rsp->id, req->id,
 			  "expected: 0x%04x actual: 0x%04x",
@@ -120,21 +137,27 @@ void test_greybus_i2c_protocol_version(void)
 	uint8_t rsp_[0 + sizeof(struct gb_operation_hdr) +
 		     sizeof(struct gb_i2c_proto_version_response)];
 	const size_t rsp_size = sizeof(rsp_);
-	struct gb_i2c_proto_version_response *const rsp =
+	struct gb_operation_hdr *const rsp =
+		(struct gb_operation_hdr *)rsp_;
+	struct gb_i2c_proto_version_response *const pv_rsp =
 		(struct gb_i2c_proto_version_response
 			 *)(rsp_ + sizeof(struct gb_operation_hdr));
 
-	tx_rx(&req, (struct gb_operation_hdr *)rsp_, rsp_size);
+	/* add some "noise" values that should be overwritten */
+	pv_rsp->major = 0xf0;
+	pv_rsp->minor = 0x0d;
 
-	zassert_equal(((struct gb_operation_hdr *)rsp_)->result, GB_OP_SUCCESS,
+	tx_rx(&req, rsp, rsp_size);
+
+	zassert_equal(rsp->result, GB_OP_SUCCESS,
 		      "expected: GB_OP_SUCCESS actual: %u",
-		      ((struct gb_operation_hdr *)rsp_)->result);
+		      rsp->result);
 
 	/* GB_I2C_VERSION_MAJOR (0) is buried in subsys/greybus/i2c.c */
-	zassert_equal(rsp->major, 0, "expected: %u actual: %u", 0, rsp->major);
+	zassert_equal(pv_rsp->major, 0, "expected: %u actual: %u", 0, pv_rsp->major);
 
 	/* GB_I2C_VERSION_MINOR (1) is buried in subsys/greybus/i2c.c */
-	zassert_equal(rsp->minor, 1, "expected: %u actual: %u", 1, rsp->minor);
+	zassert_equal(pv_rsp->minor, 1, "expected: %u actual: %u", 1, pv_rsp->minor);
 }
 
 void test_greybus_i2c_cport_shutdown(void)
@@ -185,4 +208,90 @@ void test_greybus_i2c_functionality(void)
 
 void test_greybus_i2c_transfer(void)
 {
+	/* this test simulates some operations on an hmc5883l 3-axis accelerometer */
+
+	/*
+	 * D: i2c_sim_hmc_callback(): W: addr: 001e: flags: 02 len: 2 buf: [01, 20]
+	 * D: i2c_sim_hmc_callback(): W: addr: 001e: flags: 02 len: 2 buf: [02, 00]
+	 * D: i2c_sim_hmc_callback(): W: addr: 001e: flags: 02 len: 1 buf: [03]
+	 * D: i2c_sim_hmc_callback(): R: addr: 001e: flags: 03 len: 6 buf: [00, 00, 00, 00, 00, 00]
+	 */ 
+
+#define DESC(_addr, _flags, _size) \
+	{ \
+		.addr = sys_cpu_to_le16(_addr), \
+		.flags =  sys_cpu_to_le16(_flags), \
+		.size =  sys_cpu_to_le16(_size), \
+	}
+
+	const uint8_t write_data[] = {
+		0x01, 0x20,
+		0x02, 0x00,
+		0x03,
+	};
+
+	const struct gb_i2c_transfer_desc descs[] = {
+		DESC(0x1e, 0, 2),
+		DESC(0x1e, 0, 2),
+		DESC(0x1e, 0, 1),
+		DESC(0x1e, GB_I2C_M_RD, 6),	
+	};
+
+	uint8_t req_[
+		0
+		+ sizeof(struct gb_operation_hdr)
+		+ sizeof(struct gb_i2c_transfer_req)
+		+ ARRAY_SIZE(descs) * sizeof(struct gb_i2c_transfer_desc)
+		/* Would be nice if constexpr existed in C ... oh well */
+		+ (2 + 2 + 1 /* request size only counts write ops */)
+		] = {};
+	const size_t req_size = sizeof(req_);
+
+	struct gb_operation_hdr *const req =
+		(struct gb_operation_hdr *)req_;
+	
+	req->size = sys_cpu_to_le16(req_size);
+	req->id = sys_cpu_to_le16(0xabcd);
+	req->type = GB_I2C_PROTOCOL_TRANSFER;
+
+	struct gb_i2c_transfer_req *const xfer_req =
+		(struct gb_i2c_transfer_req *)
+		(req_ + sizeof(*req));
+	xfer_req->op_count = sys_cpu_to_le16(ARRAY_SIZE(descs));
+
+	uint8_t rsp_[
+		0
+		+ sizeof(struct gb_operation_hdr)
+		/* Would be nice if constexpr existed in C ... oh well */
+		+ (6 /* response size only counts read ops */)
+		];
+	const size_t rsp_size = sizeof(rsp_);
+	struct gb_operation_hdr *const rsp =
+		(struct gb_operation_hdr *)rsp_;
+
+	struct gb_i2c_transfer_rsp *const xfer_rsp =
+		(struct gb_i2c_transfer_rsp *)
+		(rsp_ + sizeof(struct gb_operation_hdr));
+
+	/* the assertion is that the rsp is *not* equal to this */
+	const uint8_t expected_data[] = {
+		0x01, 0x23, 0x45, 0x67, 0x89, 0xab,
+	};
+	uint8_t *const actual_data = xfer_rsp->data;
+
+	memcpy(xfer_rsp->data, expected_data, sizeof(expected_data));
+
+	uint8_t *payload = (uint8_t *)xfer_req->desc;
+	memcpy(payload, descs, sizeof(descs));
+	payload += sizeof(descs);
+	memcpy(payload, write_data, sizeof(write_data)); 
+
+	tx_rx(req, rsp, rsp_size);
+
+	zassert_equal(((struct gb_operation_hdr *)rsp_)->result, GB_OP_SUCCESS,
+		      "expected: GB_OP_SUCCESS actual: %u",
+		      ((struct gb_operation_hdr *)rsp_)->result);
+
+	zassert_not_equal(0, memcmp(expected_data, actual_data, sizeof(expected_data)),
+		"expected response to generate %u bytes ofdata", sizeof(expected_data));
 }

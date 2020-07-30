@@ -25,6 +25,7 @@
 		eeprom-0 = &eeprom0;
 		gpio-0 = &gpio0;
 		i2c-0 = &i2c0;
+		spi-0 = &spi0;
 	};
 
 	flashcontroller0: flash-controller@0 {
@@ -104,7 +105,6 @@
 	};
 
 	gpio0: gpio@800 {
-		status = "okay";
 		compatible = "zephyr,sim-gpio";
 		reg = <0x800 0x4>;
 		label = "GPIO_0";
@@ -116,6 +116,15 @@
 		compatible = "zephyr,sim-i2c";
 		reg = <0x900 0x4>;
 		label = "I2C_0";
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	spi0: spi@a00 {
+		compatible = "zephyr,sim-spi";
+		reg = <0xa00 0x4>;
+		label = "SPI_0";
+		/* cs-gpios = <..gpios..>*/
 		#address-cells = <1>;
 		#size-cells = <0>;
 	};

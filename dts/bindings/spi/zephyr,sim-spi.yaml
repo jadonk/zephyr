@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2020 Friedt Professional Engineering Services, Inc
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+description: Simulated SPI Controller
+
+compatible: "zephyr,sim-spi"
+
+include: spi-controller.yaml
+
+properties:
+    reg:
+      required: true

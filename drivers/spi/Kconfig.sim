@@ -1,0 +1,10 @@
+# Simulated SPI Controller
+
+# Copyright (c) 2020 Friedt Profressional Engineering Services, Inc
+# SPDX-License-Identifier: Apache-2.0
+
+config SPI_SIM
+	bool "Simulated SPI controller"
+	default y
+	help
+	  Enable support for simulated SPI controllers.

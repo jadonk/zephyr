@@ -1,0 +1,5 @@
+tests:
+  drivers.spi:
+    depends_on: spi eeprom
+    tags: drivers spi eeprom
+    harness: loopback

@@ -145,9 +145,9 @@ static int spi_complete_multiple(struct device *dev,
 		to_display_format(buffer_tx, BUF_SIZE, buffer_print_tx);
 		to_display_format(buffer_rx, BUF_SIZE, buffer_print_rx);
 		LOG_ERR("Buffer contents are different: %s",
-			    buffer_print_tx);
-		LOG_ERR("                           vs: %s",
-			    buffer_print_rx);
+				buffer_print_tx);
+		LOG_ERR("						   vs: %s",
+				buffer_print_rx);
 		zassert_false(1, "Buffer contents are different");
 		return -1;
 	}
@@ -156,9 +156,9 @@ static int spi_complete_multiple(struct device *dev,
 		to_display_format(buffer2_tx, BUF2_SIZE, buffer_print_tx2);
 		to_display_format(buffer2_rx, BUF2_SIZE, buffer_print_rx2);
 		LOG_ERR("Buffer 2 contents are different: %s",
-			    buffer_print_tx2);
-		LOG_ERR("                           vs: %s",
-			    buffer_print_rx2);
+				buffer_print_tx2);
+		LOG_ERR("						   vs: %s",
+				buffer_print_rx2);
 		zassert_false(1, "Buffer contents are different");
 		return -1;
 	}
@@ -206,9 +206,9 @@ static int spi_complete_loop(struct device *dev, struct spi_config *spi_conf)
 		to_display_format(buffer_tx, BUF_SIZE, buffer_print_tx);
 		to_display_format(buffer_rx, BUF_SIZE, buffer_print_rx);
 		LOG_ERR("Buffer contents are different: %s",
-			    buffer_print_tx);
-		LOG_ERR("                           vs: %s",
-			    buffer_print_rx);
+				buffer_print_tx);
+		LOG_ERR("						   vs: %s",
+				buffer_print_rx);
 		zassert_false(1, "Buffer contents are different");
 		return -1;
 	}
@@ -225,7 +225,7 @@ static int spi_null_tx_buf(struct device *dev, struct spi_config *spi_conf)
 
 	const struct spi_buf tx_bufs[] = {
 		{
-	       /*
+		   /*
 		* According to documentation, when sending NULL tx buf -
 		*  NOP frames should be sent on MOSI line
 		*/
@@ -312,9 +312,9 @@ static int spi_rx_half_start(struct device *dev, struct spi_config *spi_conf)
 		to_display_format(buffer_tx, 8, buffer_print_tx);
 		to_display_format(buffer_rx, 8, buffer_print_rx);
 		LOG_ERR("Buffer contents are different: %s",
-			    buffer_print_tx);
-		LOG_ERR("                           vs: %s",
-			    buffer_print_rx);
+				buffer_print_tx);
+		LOG_ERR("						   vs: %s",
+				buffer_print_rx);
 		zassert_false(1, "Buffer contents are different");
 		return -1;
 	}
@@ -372,9 +372,9 @@ static int spi_rx_half_end(struct device *dev, struct spi_config *spi_conf)
 		to_display_format(buffer_tx + 8, 8, buffer_print_tx);
 		to_display_format(buffer_rx, 8, buffer_print_rx);
 		LOG_ERR("Buffer contents are different: %s",
-			    buffer_print_tx);
-		LOG_ERR("                           vs: %s",
-			    buffer_print_rx);
+				buffer_print_tx);
+		LOG_ERR("						   vs: %s",
+				buffer_print_rx);
 		zassert_false(1, "Buffer contents are different");
 		return -1;
 	}
@@ -440,18 +440,18 @@ static int spi_rx_every_4(struct device *dev, struct spi_config *spi_conf)
 		to_display_format(buffer_tx + 4, 4, buffer_print_tx);
 		to_display_format(buffer_rx, 4, buffer_print_rx);
 		LOG_ERR("Buffer contents are different: %s",
-			    buffer_print_tx);
-		LOG_ERR("                           vs: %s",
-			    buffer_print_rx);
+				buffer_print_tx);
+		LOG_ERR("						   vs: %s",
+				buffer_print_rx);
 		zassert_false(1, "Buffer contents are different");
 		return -1;
 	} else if (memcmp(buffer_tx + 12, buffer_rx + 4, 4)) {
 		to_display_format(buffer_tx + 12, 4, buffer_print_tx);
 		to_display_format(buffer_rx + 4, 4, buffer_print_rx);
 		LOG_ERR("Buffer contents are different: %s",
-			    buffer_print_tx);
-		LOG_ERR("                           vs: %s",
-			    buffer_print_rx);
+				buffer_print_tx);
+		LOG_ERR("						   vs: %s",
+				buffer_print_rx);
 		zassert_false(1, "Buffer contents are different");
 		return -1;
 	}
@@ -472,8 +472,8 @@ K_THREAD_STACK_DEFINE(spi_async_stack, STACK_SIZE);
 static int result = 1;
 
 static void spi_async_call_cb(struct k_poll_event *async_evt,
-			      struct k_sem *caller_sem,
-			      void *unused)
+				  struct k_sem *caller_sem,
+				  void *unused)
 {
 	int ret;
 
@@ -605,30 +605,30 @@ void test_spi_loopback(void)
 	LOG_INF("SPI test slow config");
 
 	if (spi_complete_multiple(spi_slow, &spi_cfg_slow) ||
-	    spi_complete_loop(spi_slow, &spi_cfg_slow) ||
-	    spi_null_tx_buf(spi_slow, &spi_cfg_slow) ||
-	    spi_rx_half_start(spi_slow, &spi_cfg_slow) ||
-	    spi_rx_half_end(spi_slow, &spi_cfg_slow) ||
-	    spi_rx_every_4(spi_slow, &spi_cfg_slow)
+		spi_complete_loop(spi_slow, &spi_cfg_slow) ||
+		spi_null_tx_buf(spi_slow, &spi_cfg_slow) ||
+		spi_rx_half_start(spi_slow, &spi_cfg_slow) ||
+		spi_rx_half_end(spi_slow, &spi_cfg_slow) ||
+		spi_rx_every_4(spi_slow, &spi_cfg_slow)
 #if (CONFIG_SPI_ASYNC)
-	    || spi_async_call(spi_slow, &spi_cfg_slow)
+		|| spi_async_call(spi_slow, &spi_cfg_slow)
 #endif
-	    ) {
+		) {
 		goto end;
 	}
 
 	LOG_INF("SPI test fast config");
 
 	if (spi_complete_multiple(spi_fast, &spi_cfg_fast) ||
-	    spi_complete_loop(spi_fast, &spi_cfg_fast) ||
-	    spi_null_tx_buf(spi_fast, &spi_cfg_fast) ||
-	    spi_rx_half_start(spi_fast, &spi_cfg_fast) ||
-	    spi_rx_half_end(spi_fast, &spi_cfg_fast) ||
-	    spi_rx_every_4(spi_fast, &spi_cfg_fast)
+		spi_complete_loop(spi_fast, &spi_cfg_fast) ||
+		spi_null_tx_buf(spi_fast, &spi_cfg_fast) ||
+		spi_rx_half_start(spi_fast, &spi_cfg_fast) ||
+		spi_rx_half_end(spi_fast, &spi_cfg_fast) ||
+		spi_rx_every_4(spi_fast, &spi_cfg_fast)
 #if (CONFIG_SPI_ASYNC)
-	    || spi_async_call(spi_fast, &spi_cfg_fast)
+		|| spi_async_call(spi_fast, &spi_cfg_fast)
 #endif
-	    ) {
+		) {
 		goto end;
 	}
 
@@ -649,6 +649,10 @@ end:
 /*test case main entry*/
 void test_main(void)
 {
+	if (IS_ENABLED(CONFIG_SPI_SIM)) {
+		extern void sim_setup(void);
+		sim_setup();
+	}
 	ztest_test_suite(test_spi, ztest_unit_test(test_spi_loopback));
 	ztest_run_test_suite(test_spi);
 }

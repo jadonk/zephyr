@@ -26,18 +26,25 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <device.h>
+#include <drivers/spi.h>
 #include <errno.h>
-#include <debug.h>
+#include <greybus/greybus.h>
+#include <greybus/platform.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <device.h>
-#include <device_spi.h>
-#include <greybus/greybus.h>
-#include <greybus/debug.h>
-#include <apps/greybus-utils/utils.h>
-
+#include <greybus-utils/utils.h>
 #include <sys/byteorder.h>
+#include <zephyr.h>
+
+#if defined(CONFIG_BOARD_NATIVE_POSIX_64BIT) \
+    || defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
+    || defined(CONFIG_BOARD_NRF52_BSIM)
+#include <unistd.h>
+extern int usleep(useconds_t usec);
+#else
+#include <posix/unistd.h>
+#endif
 
 #include "spi-gb.h"
 
@@ -66,6 +73,24 @@ static uint8_t gb_spi_protocol_version(struct gb_operation *operation)
     return GB_OP_SUCCESS;
 }
 
+static int device_spi_get_master_config(struct device *dev, struct gb_spi_master_config_response *response)
+{
+    int ret;
+
+    struct device *const gb_spidev = gb_spidev_from_zephyr_spidev(dev);
+    if (gb_spidev == NULL) {
+    	return -ENODEV;
+    }
+
+    const struct gb_platform_spi_api *const api = gb_spidev->driver_api;
+    __ASSERT_NO_MSG(api != NULL);
+
+    ret = api->controller_config_response(gb_spidev, response);
+    __ASSERT_NO_MSG(ret == 0);
+
+    return 0;
+}
+
 /**
  * @brief Returns a set of configuration parameters related to SPI master.
  *
@@ -75,31 +100,45 @@ static uint8_t gb_spi_protocol_version(struct gb_operation *operation)
 static uint8_t gb_spi_protocol_master_config(struct gb_operation *operation)
 {
     struct gb_spi_master_config_response *response;
-    struct device_spi_master_config master_config;
     int ret = 0;
 
     struct gb_bundle *bundle = gb_operation_get_bundle(operation);
-    DEBUGASSERT(bundle);
-
-    /* get hardware capabilities */
-    ret = device_spi_get_master_config(bundle->dev, &master_config);
-    if (ret) {
-        return gb_errno_to_op_result(ret);
-    }
+    __ASSERT_NO_MSG(bundle != NULL);
 
     response = gb_operation_alloc_response(operation, sizeof(*response));
     if (!response) {
         return GB_OP_NO_MEMORY;
     }
 
-    response->bpw_mask = sys_cpu_to_le32(master_config.bpw_mask);
-    response->min_speed_hz = sys_cpu_to_le32(master_config.min_speed_hz);
-    response->max_speed_hz = sys_cpu_to_le32(master_config.max_speed_hz);
-    response->mode = sys_cpu_to_le16(master_config.mode);
-    response->flags = sys_cpu_to_le16(master_config.flags);
-    response->num_chipselect = sys_cpu_to_le16(master_config.dev_num);
+    ret = device_spi_get_master_config(gb_cport_to_device(operation->cport), response);
+    if (ret) {
+        return gb_errno_to_op_result(ret);
+    }
+
+    /* TODO: use compile-time byte swap operators in platform/spi.c
+     * so byteswapping is eliminated here */
+    response->bpw_mask = sys_cpu_to_le32(response->bpw_mask);
+    response->min_speed_hz = sys_cpu_to_le32(response->min_speed_hz);
+    response->max_speed_hz = sys_cpu_to_le32(response->max_speed_hz);
+    response->mode = sys_cpu_to_le16(response->mode);
+    response->flags = sys_cpu_to_le16(response->flags);
+    response->num_chipselect = sys_cpu_to_le16(response->num_chipselect);
 
     return GB_OP_SUCCESS;
+}
+
+static int device_spi_get_device_config(struct device *dev, uint8_t cs, struct gb_spi_device_config_response *response)
+{
+    int ret;
+
+    struct device *const gb_spidev = gb_spidev_from_zephyr_spidev(dev);
+    struct gb_platform_spi_api *const api = (struct gb_platform_spi_api *)gb_spidev->driver_api;
+    __ASSERT_NO_MSG(api != NULL);
+
+    ret = api->peripheral_config_response(gb_spidev, cs, response);
+    __ASSERT_NO_MSG(ret == 0);
+
+    return 0;
 }
 
 /**
@@ -116,12 +155,11 @@ static uint8_t gb_spi_protocol_device_config(struct gb_operation *operation)
     struct gb_spi_device_config_request *request;
     struct gb_spi_device_config_response *response;
     size_t request_size;
-    struct device_spi_device_config device_cfg;
     uint8_t cs;
     int ret = 0;
 
     struct gb_bundle *bundle = gb_operation_get_bundle(operation);
-    DEBUGASSERT(bundle);
+    __ASSERT_NO_MSG(bundle != 0);
 
     request_size = gb_operation_get_request_payload_size(operation);
     if (request_size < sizeof(*request)) {
@@ -131,25 +169,43 @@ static uint8_t gb_spi_protocol_device_config(struct gb_operation *operation)
 
     request = gb_operation_get_request_payload(operation);
     cs = request->chip_select;
-
-    /* get selected chip of configuration */
-    ret = device_spi_get_device_config(bundle->dev, cs, &device_cfg);
-    if (ret) {
-        return gb_errno_to_op_result(ret);
-    }
-
     response = gb_operation_alloc_response(operation, sizeof(*response));
     if (!response) {
         return GB_OP_NO_MEMORY;
     }
 
-    response->device_type = device_cfg.device_type;
-    response->mode = sys_cpu_to_le16(device_cfg.mode);
-    response->bpw = device_cfg.bpw;
-    response->max_speed_hz = sys_cpu_to_le32(device_cfg.max_speed_hz);
-    memcpy(response->name, &device_cfg.name, sizeof(device_cfg.name));
+    /* get selected chip of configuration */
+    ret = device_spi_get_device_config(gb_cport_to_device(operation->cport), cs, response);
+    if (ret) {
+        return gb_errno_to_op_result(ret);
+    }
+
+    /* TODO: use compile-time byte swap operators in platform/spi.c
+     * so byteswapping is eliminated here */
+    response->mode = sys_cpu_to_le16(response->mode);
+    response->max_speed_hz = sys_cpu_to_le32(response->max_speed_hz);
 
     return GB_OP_SUCCESS;
+}
+
+static int device_spi_lock(struct device *dev)
+{
+    return 0;
+}
+
+static int device_spi_unlock(struct device *dev)
+{
+    return 0;
+}
+
+static int device_spi_select(struct device *dev, uint8_t cs)
+{
+    return 0;
+}
+
+static int device_spi_deselect(struct device *dev, uint8_t chip_select)
+{
+    return 0;
 }
 
 /**
@@ -164,8 +220,15 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
     struct gb_spi_transfer_desc *desc;
     struct gb_spi_transfer_request *request;
     struct gb_spi_transfer_response *response;
-    struct device_spi_transfer transfer;
-    struct device_spi_device_config config;
+    struct spi_config spi_config;
+    struct spi_buf tx_buf;
+    struct spi_buf rx_buf;
+    const struct spi_buf_set tx_bufs = {
+		.buffers = &tx_buf,
+		.count = 1,
+    };
+    struct spi_buf_set rx_bufs;
+
     uint32_t size = 0, freq = 0;
     uint8_t *write_data, *read_buf;
     bool selected = false;
@@ -175,7 +238,7 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
     size_t expected_size;
 
     struct gb_bundle *bundle = gb_operation_get_bundle(operation);
-    DEBUGASSERT(bundle);
+    __ASSERT_NO_MSG(bundle != NULL);
 
     request_size = gb_operation_get_request_payload_size(operation);
     if (request_size < sizeof(*request)) {
@@ -195,7 +258,7 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
 
     write_data = (uint8_t *)&request->transfers[op_count];
 
-    for (i = 0; i < op_count; i++) {
+    for (i = 0, size = 0; i < op_count; i++) {
         desc = &request->transfers[i];
         if (desc->rdwr & GB_SPI_XFER_READ) {
             size += sys_le32_to_cpu(desc->len);
@@ -229,25 +292,28 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
         }
 
         /* setup SPI transfer */
-        memset(&transfer, 0, sizeof(struct device_spi_transfer));
-        transfer.txbuffer = write_data;
+        tx_buf.buf = write_data;
+        tx_buf.len = sys_le32_to_cpu(desc->len);
         /* If rdwr without GB_SPI_XFER_READ flag, not need to pass read buffer */
         if (desc->rdwr & GB_SPI_XFER_READ) {
-            transfer.rxbuffer = read_buf;
+        	rx_buf.buf = read_buf;
+        	rx_buf.len = tx_buf.len;
+        	rx_bufs.buffers = &rx_buf;
+            rx_bufs.count = 1;
         } else {
-            transfer.rxbuffer = NULL;
+            rx_bufs.buffers = NULL;
+            rx_bufs.count = 0;
         }
 
-        transfer.nwords = sys_le32_to_cpu(desc->len);
-
         /* set SPI configuration */
-        config.max_speed_hz = freq;
-        config.mode = request->mode;
-        config.bpw = desc->bits_per_word;
+        spi_config.frequency = freq;
+        /* TODO: add gpio cs bindings to device tree */
+        spi_config.cs = NULL;
+        spi_config.slave = request->chip_select;
+        spi_config.operation = 0;
 
         /* start SPI transfer */
-        ret = device_spi_exchange(bundle->dev, &transfer, request->chip_select,
-                                  &config);
+        ret = spi_transceive(bundle->dev, &spi_config, &tx_bufs, &rx_bufs);
         if (ret) {
             goto spi_err;
         }
@@ -309,7 +375,7 @@ spi_err:
  */
 static int gb_spi_init(unsigned int cport, struct gb_bundle *bundle)
 {
-    bundle->dev = device_open(DEVICE_TYPE_SPI_HW, 0);
+    bundle->dev = gb_cport_to_device(cport);
     if (!bundle->dev) {
         return -EIO;
     }
@@ -324,10 +390,6 @@ static int gb_spi_init(unsigned int cport, struct gb_bundle *bundle)
  */
 static void gb_spi_exit(unsigned int cport, struct gb_bundle *bundle)
 {
-    if (bundle->dev) {
-        device_close(bundle->dev);
-        bundle->dev = NULL;
-    }
 }
 
 /**

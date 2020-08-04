@@ -152,7 +152,7 @@ static int spi_sim_callback(struct device *dev, const struct spi_config *config,
 			len = rx->len - 4;
 		}
 
-		memcpy(data, &data[addr], len);
+		memcpy(x, &data[addr], len);
 
 		LOG_DBG("%s(): %s "
 			"len: %u data: [%s] addr: %06x",
@@ -167,13 +167,15 @@ static int spi_sim_callback(struct device *dev, const struct spi_config *config,
 
 	case AT25_RDSR:
 
+		rx = &rx_bufs->buffers[0];
+		memcpy(rx->buf, tx->buf, sizeof(rx->len));
+		((uint8_t *)rx->buf)[1] = status;
+
 		LOG_DBG("%s(): %s "
 			"len: %u data: [%s]",
 			__func__, at25_op_to_string(op),
-			(unsigned int)tx->len, log_strdup(to_string(tx->buf, tx->len)));
+			(unsigned int)rx->len, log_strdup(to_string(rx->buf, rx->len)));
 
-		rx = &rx_bufs->buffers[0];
-		((uint8_t *)rx->buf)[1] = status;
 		break;
 
 	case AT25_WREN:

@@ -408,8 +408,7 @@ void test_greybus_spi_transfer(void)
 	uint8_t rsp_[
 		0
 		+ sizeof(struct gb_operation_hdr)
-		/* Would be nice if constexpr existed in C ... oh well */
-		+ (6 /* response size only counts read ops */)
+		+ (12 /* response size only counts read ops */)
 		];
 	const size_t rsp_size = sizeof(rsp_);
 	struct gb_operation_hdr *const rsp =
@@ -420,10 +419,12 @@ void test_greybus_spi_transfer(void)
 		(rsp_ + sizeof(struct gb_operation_hdr));
 
 	const uint8_t expected_data[] = {
-		0x10, 0x20, 0x30, 0x40,
+		AT25_RDSR, 0x00,
+		AT25_RDSR, 0x02,
+		AT25_READ, 0x00, 0x00, 0x00, 0x10, 0x20, 0x30, 0x40,
 	};
 	uint8_t *const actual_data = xfer_rsp->data;
-	memset(actual_data, 0xff, 6);
+	memset(actual_data, 0xff, 12);
 
 	uint8_t *payload = (uint8_t *)xfer_req->transfers;
 	memcpy(payload, descs, sizeof(descs));
@@ -435,4 +436,13 @@ void test_greybus_spi_transfer(void)
 	zassert_equal(((struct gb_operation_hdr *)rsp_)->result, GB_OP_SUCCESS,
 		      "expected: GB_OP_SUCCESS actual: %u",
 		      ((struct gb_operation_hdr *)rsp_)->result);
+
+
+	zassert_equal(
+		0,
+		memcmp(expected_data, actual_data, sizeof(expected_data)),
+		"data: expected: [%s] actual: [%s]",
+		to_string((uint8_t *)expected_data, sizeof(expected_data)),
+		to_string(actual_data, sizeof(expected_data))
+	);
 }

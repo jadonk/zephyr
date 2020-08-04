@@ -208,6 +208,67 @@ static int device_spi_deselect(struct device *dev, uint8_t chip_select)
     return 0;
 }
 
+static int request_to_spi_config(const struct gb_spi_transfer_request *const request,
+	const size_t freq, const uint8_t bits_per_word, struct spi_config *const spi_config)
+{
+    spi_config->frequency = freq;
+    spi_config->slave = request->chip_select;
+    spi_config->operation = SPI_OP_MODE_MASTER | SPI_WORD_SET(bits_per_word);
+
+    if (request->mode & GB_SPI_MODE_CPHA) {
+		spi_config->operation |= SPI_MODE_CPHA;
+    }
+
+    if (request->mode & GB_SPI_MODE_CPOL) {
+		spi_config->operation |= SPI_MODE_CPOL;
+    }
+
+    if (request->mode & GB_SPI_MODE_CS_HIGH) {
+		spi_config->operation |= SPI_CS_ACTIVE_HIGH;
+    }
+
+    if (request->mode & GB_SPI_MODE_CS_HIGH) {
+		spi_config->operation |= SPI_CS_ACTIVE_HIGH;
+    }
+
+    if (request->mode & GB_SPI_MODE_LSB_FIRST) {
+		spi_config->operation |= SPI_TRANSFER_LSB;
+    }
+
+    if (request->mode & GB_SPI_MODE_3WIRE) {
+		/* Do nothing. I think this is the presumptive case */
+    }
+
+    if (request->mode & GB_SPI_MODE_LOOP) {
+		spi_config->operation |= SPI_MODE_LOOP;
+    }
+
+    if (request->mode & GB_SPI_MODE_NO_CS) {
+		if (spi_config->cs != NULL) {
+			/* LOG_DBG("GB_SPI_MODE_NO_CS flag given but spi_config->cs is "
+				"non-NULL (%p)", spi_config->cs); */
+		}
+	}
+
+    if (request->mode & GB_SPI_MODE_READY) {
+		/* LOG_DBG("GB_SPI_MODE_READY not handled"); */
+    }
+
+    if (
+		false
+		|| ((request->mode & GB_SPI_FLAG_HALF_DUPLEX) != 0)
+		|| ((request->mode & GB_SPI_FLAG_NO_RX) != 0)
+		|| ((request->mode & GB_SPI_FLAG_NO_TX) != 0)
+	) {
+		/* LOG_DBG("GB_SPI_FLAG_{HALF_DUPLEX,NO_{RX,TX}} not handled"); */
+    }
+
+    /* TODO: add gpio cs bindings to device tree */
+    spi_config->cs = NULL;
+
+    return 0;
+}
+
 /**
  * @brief Performs a SPI transaction as one or more SPI transfers, defined
  *        in the supplied array.
@@ -306,11 +367,10 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
         }
 
         /* set SPI configuration */
-        spi_config.frequency = freq;
-        /* TODO: add gpio cs bindings to device tree */
-        spi_config.cs = NULL;
-        spi_config.slave = request->chip_select;
-        spi_config.operation = 0;
+        ret = request_to_spi_config(request, freq, desc->bits_per_word, &spi_config);
+        if (ret) {
+			goto spi_err;
+        }
 
         /* start SPI transfer */
         ret = spi_transceive(bundle->dev, &spi_config, &tx_bufs, &rx_bufs);

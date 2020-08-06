@@ -70,11 +70,12 @@ struct greybus_platform_api {
 
 struct gb_spi_master_config_response;
 struct gb_spi_device_config_response;
-
+struct spi_cs_control;
 struct gb_platform_spi_api {
 	int (*controller_config_response)(struct device *dev, struct gb_spi_master_config_response *rsp);
 	int (*num_peripherals)(struct device *dev);
 	int (*peripheral_config_response)(struct device *dev, uint8_t chip_select, struct gb_spi_device_config_response *rsp);
+	int (*get_cs_control)(struct device *dev, uint8_t chip_select, struct spi_cs_control *ctrl);
 };
 
 /*
@@ -82,7 +83,7 @@ struct gb_platform_spi_api {
  *
  * usage:
  *
- * struct device *gb_spidev = gb_spidev_from_zephyr_spidev(dev_get_binding("SPI_0"));
+ * struct device *gb_spidev = gb_spidev_from_zephyr_spidev(device_get_binding("SPI_0"));
  * struct gb_platform_spi_api *api = (struct gb_platform_spi_api *)gb_spidev->driver_api;
  */
 struct device *gb_spidev_from_zephyr_spidev(struct device *dev);

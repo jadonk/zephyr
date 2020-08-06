@@ -188,29 +188,43 @@ static uint8_t gb_spi_protocol_device_config(struct gb_operation *operation)
     return GB_OP_SUCCESS;
 }
 
-static int device_spi_lock(struct device *dev)
+static inline int device_spi_lock(struct device *dev)
 {
+    ARG_UNUSED(dev);
     return 0;
 }
 
-static int device_spi_unlock(struct device *dev)
+static inline int device_spi_unlock(struct device *dev)
 {
+    ARG_UNUSED(dev);
     return 0;
 }
 
-static int device_spi_select(struct device *dev, uint8_t cs)
+static inline int device_spi_select(struct device *dev, uint8_t chip_select)
 {
+    ARG_UNUSED(dev);
+    ARG_UNUSED(chip_select);
     return 0;
 }
 
 static int device_spi_deselect(struct device *dev, uint8_t chip_select)
 {
+    ARG_UNUSED(dev);
+    ARG_UNUSED(chip_select);
     return 0;
 }
 
 static int request_to_spi_config(const struct gb_spi_transfer_request *const request,
-	const size_t freq, const uint8_t bits_per_word, struct spi_config *const spi_config)
+	const size_t freq, const uint8_t bits_per_word, struct device *const spi_dev, struct spi_config *const spi_config, struct spi_cs_control *ctrl)
 {
+    struct device *const gb_spidev = gb_spidev_from_zephyr_spidev(spi_dev);
+    if (gb_spidev == NULL) {
+    	return -ENODEV;
+    }
+
+    const struct gb_platform_spi_api *const api = gb_spidev->driver_api;
+    __ASSERT_NO_MSG(api != NULL);
+
     spi_config->frequency = freq;
     spi_config->slave = request->chip_select;
     spi_config->operation = SPI_OP_MODE_MASTER | SPI_WORD_SET(bits_per_word);
@@ -263,8 +277,11 @@ static int request_to_spi_config(const struct gb_spi_transfer_request *const req
 		/* LOG_DBG("GB_SPI_FLAG_{HALF_DUPLEX,NO_{RX,TX}} not handled"); */
     }
 
-    /* TODO: add gpio cs bindings to device tree */
-    spi_config->cs = NULL;
+    if (!api->get_cs_control(gb_spidev, request->chip_select, ctrl)) {
+        spi_config->cs = ctrl;
+    } else {
+        spi_config->cs = NULL;
+    }
 
     return 0;
 }
@@ -278,10 +295,27 @@ static int request_to_spi_config(const struct gb_spi_transfer_request *const req
  */
 static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
 {
+    /*
+     * FIXME: This function needs to be rewritten to properly use Zephyr's
+     * SPI API. Specifically, Zephyr's API already handles batch transfers
+     * and chip selects properly, while this code does not (e.g. 'selected'
+     * only accounts for the possibility of 1 chip_select).
+     *
+     * Actually, on review, it does not seem that Zephyr's SPI API works
+     * for batched transfers when transfers might use different GPIO lines.
+     * We are forced to perform one transfer at a time until that is fixed.
+     *
+     * Will need to malloc
+     * 1) struct spi_buf[] for tx
+     * 2) struct spi_buf[] for rx
+     * 3) struct spi_cs_control[]
+     */
+
     struct gb_spi_transfer_desc *desc;
     struct gb_spi_transfer_request *request;
     struct gb_spi_transfer_response *response;
     struct spi_config spi_config;
+    struct spi_cs_control spi_cs_control;
     struct spi_buf tx_buf;
     struct spi_buf rx_buf;
     const struct spi_buf_set tx_bufs = {
@@ -367,10 +401,12 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
         }
 
         /* set SPI configuration */
-        ret = request_to_spi_config(request, freq, desc->bits_per_word, &spi_config);
+        ret = request_to_spi_config(request, freq, desc->bits_per_word, bundle->dev, &spi_config, &spi_cs_control);
         if (ret) {
 			goto spi_err;
         }
+        /* In Zephyr, spi lock is on a per-call basis */
+        spi_config.operation |= SPI_LOCK_ON;
 
         /* start SPI transfer */
         ret = spi_transceive(bundle->dev, &spi_config, &tx_bufs, &rx_bufs);
@@ -385,6 +421,7 @@ static uint8_t gb_spi_protocol_transfer(struct gb_operation *operation)
          */
         if (desc->rdwr & GB_SPI_XFER_READ) {
             read_buf += sys_le32_to_cpu(desc->len);
+            rx_buf.buf = (uint8_t *)rx_buf.buf + sys_le32_to_cpu(desc->len);
         }
 
         if (sys_le16_to_cpu(desc->delay_usecs) > 0) {

@@ -18,6 +18,10 @@ static void board_setup(void)
 		extern void spi_sim_setup(void);
 		spi_sim_setup();
 	}
+	if (IS_ENABLED(CONFIG_GPIO_SIM)) {
+		extern void gpio_sim_setup(void);
+		gpio_sim_setup();
+	}
 }
 
 extern void test_greybus_setup(void);

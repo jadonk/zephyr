@@ -7,7 +7,6 @@
 /dts-v1/;
 
 #include <ti/cc1352r.dtsi>
-/* TODO: Include click-board header here? */
 /*
  * Define some constants from driverlib/ioc.h in TI HAL,
  * since we don't have a way to include the file directly.
@@ -20,93 +19,157 @@
 #define BTN_GPIO_FLAGS (GPIO_ACTIVE_LOW | GPIO_PULL_UP)
 
 / {
-	model = "Beagle Connect";
-	compatible = "beagleboard,beagle-connect";
+    model = "Beagle Connect";
+    compatible = "beagleboard,beagle-connect";
 
-	aliases {
-		led1 = &led1;
-		led2 = &led2;
-	};
+    aliases {
+        led1 = &led1;
+        led2 = &led2;
+        ledSubGHz = &ledSubGHz;
+        led24GHz = &led24GHz;
+        sw0 = &btn_user;
+    };
 
-	chosen {
-		zephyr,sram = &sram0;
-		zephyr,flash = &flash0;
-		zephyr,console = &uart0;
-		zephyr,shell-uart = &uart0;
-	};
+    chosen {
+        zephyr,sram = &sram0;
+        zephyr,flash = &flash0;
+        zephyr,console = &uart0;
+        zephyr,shell-uart = &uart0;
+    };
 
-	leds {
-		compatible = "gpio-leds";
-		led1: led_1 {
-			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
-			label = "Red LED 1";
-		};
-		led2: led_2 {
-			gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
-			label = "Red LED 2";
-		};
-	};
+    leds {
+        compatible = "gpio-leds";
+        led1: led_1 {
+            gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+            label = "Red LED 1";
+        };
+        led2: led_2 {
+            gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
+            label = "Red LED 2";
+        };
+        ledSubGHz: led_sub_ghz {
+            gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
+            label = "SubGHz LED";
+        };
+        led24GHz: led_24ghz {
+            gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+            label = "2.4GHz LED";
+        };
+    };
+
+    gpio_keys {
+        compatible = "gpio-keys";
+        btn_user: button_user {
+            label = "User button";
+            gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
+        };
+    };
+
+    mikrobus_headers {
+        compatible = "mikro-bus";
+        mikrobus_header1: mikrobus-connector1 {
+            #gpio-cells = <2>;
+            gpio-map-mask = <0xffffffff 0xffffffc0>;
+            gpio-map-pass-thru = <0 0x3f>;
+            gpio-map =  <0 0 &gpio0 23 0>,  /* AN  */
+                    <1 0 &gpio0 6 0>,   /* RST */
+                    <2 0 &gpio0 28 0>,  /* CS   */
+                    <3 0 &gpio0 10 0>,  /* SCK  */
+                    <4 0 &gpio0 11 0>,  /* MISO */
+                    <5 0 &gpio0 9 0>,   /* MOSI */
+                                /* +3.3V */
+                                /* GND */
+                    <6 0 &gpio0 30 0>,  /* PWM  */
+                    <7 0 &gpio0 29 0>,  /* INT  */
+                    <8 0 &gpio0 12 0>,  /* RX   */
+                    <9 0 &gpio0 13 0>,  /* TX   */
+                    <10 0 &gpio0 25 0>, /* SCL  */
+                    <11 0 &gpio0 26 0>; /* SDA  */
+                                /* +5V */
+                                /* GND */
+        };
+        mikrobus_header2: mikrobus-connector2 {
+            #gpio-cells = <2>;
+            gpio-map-mask = <0xffffffff 0xffffffc0>;
+            gpio-map-pass-thru = <0 0x3f>;
+            gpio-map =  <0 0 &gpio0 24 0>,  /* AN  */
+                    <1 0 &gpio0 5 0>,   /* RST */
+                    <2 0 &gpio0 27 0>,  /* CS   */
+                    <3 0 &gpio0 10 0>,  /* SCK  */
+                    <4 0 &gpio0 11 0>,  /* MISO */
+                    <5 0 &gpio0 9 0>,   /* MOSI */
+                                /* +3.3V */
+                                /* GND */
+                    <6 0 &gpio0 19 0>,  /* PWM  */
+                    <7 0 &gpio0 20 0>,  /* INT  */
+                    <8 0 &gpio0 22 0>,  /* RX   */
+                    <9 0 &gpio0 21 0>,  /* TX   */
+                    <10 0 &gpio0 25 0>, /* SCL  */
+                    <11 0 &gpio0 26 0>; /* SDA  */
+                                /* +5V */
+                                /* GND */
+        };
 };
 
 &cpu0 {
-	clock-frequency = <48000000>;
+    clock-frequency = <48000000>;
 };
 
 &trng {
-	status = "okay";
+    status = "okay";
 };
 
 &gpio0 {
-	status = "okay";
+    status = "okay";
 };
 
 &uart0 {
-	status = "okay";
-	current-speed = <115200>;
-	tx-pin = <22 IOC_PORT_MCU_UART0_TX>;
-	rx-pin = <21 IOC_PORT_MCU_UART0_RX>;
+    status = "okay";
+    current-speed = <115200>;
+    tx-pin = <13 IOC_PORT_MCU_UART0_TX>;
+    rx-pin = <12 IOC_PORT_MCU_UART0_RX>;
 };
 
 &uart1 {
-	status = "okay";
-	current-speed = <115200>;
-	tx-pin = <27 IOC_PORT_MCU_UART1_TX>;
-	rx-pin = <28 IOC_PORT_MCU_UART1_RX>;
+    status = "okay";
+    current-speed = <115200>;
+    tx-pin = <22 IOC_PORT_MCU_UART1_TX>;
+    rx-pin = <21 IOC_PORT_MCU_UART1_RX>;
 };
 
 &i2c0 {
-	status = "okay";
-	clock-frequency = <I2C_BITRATE_FAST>;
-	scl-pin = <25>;
-	sda-pin = <26>;
+    status = "okay";
+    clock-frequency = <I2C_BITRATE_FAST>;
+    scl-pin = <25>;
+    sda-pin = <26>;
 
-	lis2dh12-accel@18 {
-		compatible = "st,lis2dh12", "st,lis2dh", "st,lis2de12";
-		reg = <0x18>;
-		label = "LIS2DE12-ACCEL";
-	};
+    lis2dh12-accel@18 {
+        compatible = "st,lis2dh12", "st,lis2dh", "st,lis2de12";
+        reg = <0x18>;
+        label = "LIS2DE12-ACCEL";
+    };
 
-	opt3001-light@44 {
-	    compatible = "ti,opt3001";
-	    reg = <0x44>;
-	    label = "OPT3001-LIGHT";
-	};
+    opt3001-light@44 {
+        compatible = "ti,opt3001";
+        reg = <0x44>;
+        label = "OPT3001-LIGHT";
+    };
 
-	hdc2010@40 {
-	    compatible = "ti,hdc";
-	    reg = <0x40>;
-	    label = "HDC2010";
-	};
+    hdc2010@40 {
+        compatible = "ti,hdc";
+        reg = <0x40>;
+        label = "HDC2010";
+    };
 };
 
 &spi0 {
-	status = "okay";
-	sck-pin = <10>;
-	mosi-pin = <9>;
-	miso-pin = <11>;
-	cs-pin = <8>;
+    status = "okay";
+    sck-pin = <10>;
+    mosi-pin = <9>;
+    miso-pin = <11>;
+    cs-pin = <8>;
 };
 
 &rtc {
-	status = "okay";
+    status = "okay";
 };

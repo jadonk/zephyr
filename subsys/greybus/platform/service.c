@@ -8,7 +8,8 @@
 #include <stdlib.h>
 #include <zephyr.h>
 
-#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
+//#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
+#define LOG_LEVEL LOG_LEVEL_DBG
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_service);
 
@@ -34,7 +35,7 @@ gb_transport_get_backend(void)
 	return xport;
 }
 
-static int greybus_service_init(struct device *bus)
+int greybus_service_init(struct device *bus)
 {
     int r;
 	struct greybus_platform_api *api;
@@ -128,4 +129,4 @@ out:
     return r;
 }
 
-SYS_INIT(greybus_service_init, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);
+//SYS_INIT(greybus_service_init, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);

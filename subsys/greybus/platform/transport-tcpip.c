@@ -42,7 +42,8 @@ int usleep(useconds_t usec) {
 
 #endif
 
-#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
+//#define LOG_LEVEL CONFIG_GB_LOG_LEVEL
+#define LOG_LEVEL LOG_LEVEL_DBG
 #include <logging/log.h>
 LOG_MODULE_REGISTER(greybus_transport_tcpip);
 
@@ -78,7 +79,7 @@ static void *thread_fun(void *arg)
 	struct gb_operation_hdr *msg = NULL;
     struct gb_transport_tcpip_context *ctx;
 	int *fd = (int *)arg;
-    unsigned int cport;
+    unsigned int cport = -1;
 
     for(size_t i = 0; i < num_gb_transport_tcpip_contexts; ++i) {
         ctx = &gb_transport_tcpip_contexts[i];
@@ -87,6 +88,8 @@ static void *thread_fun(void *arg)
             break;
         }
     }
+
+    __ASSERT(cport != -1, "cport not found for fd %d!", ctx->client_fd);
 
 	for (;;) {
 		r = getMessage(*fd, &msg);
@@ -193,6 +196,7 @@ void prepare_pollfds(void) {
 void *accept_loop(void *arg)
 {
 	int r;
+	unsigned int num_pollfds;
 	struct sockaddr_in6 addr = {
 		.sin6_family = AF_INET6,
 		.sin6_addr = in6addr_any,
@@ -213,9 +217,10 @@ void *accept_loop(void *arg)
 			return NULL;
 		}
 
-		LOG_DBG("poll returned %d", r);
+		num_pollfds = r;
+		LOG_DBG("poll returned %d", num_pollfds);
 
-        for(size_t i = 0; i < num_gb_transport_tcpip_contexts; ++i) {
+        for(size_t i = 0; num_pollfds > 0 && i < num_gb_transport_tcpip_contexts; ++i) {
             if (pollfds[i].revents & POLLIN) {
 
                 ctx = &gb_transport_tcpip_contexts[i];
@@ -240,7 +245,7 @@ void *accept_loop(void *arg)
                     return NULL;
                 }
                 LOG_DBG("accepted connection from [%s]:%d as fd %d",
-                    addrstr, ntohs(addr.sin6_port), ctx->client_fd);
+                    log_strdup(addrstr), ntohs(addr.sin6_port), ctx->client_fd);
 
                 LOG_DBG("spawning client thread..");
                 r = pthread_create(&ctx->client_thread,
@@ -250,6 +255,8 @@ void *accept_loop(void *arg)
                     LOG_ERR("pthread_create: %d", r);
                     return NULL;
                 }
+
+                num_pollfds--;
             }
         }
 	}

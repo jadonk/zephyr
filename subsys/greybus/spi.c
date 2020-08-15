@@ -102,9 +102,6 @@ static uint8_t gb_spi_protocol_master_config(struct gb_operation *operation)
     struct gb_spi_master_config_response *response;
     int ret = 0;
 
-    struct gb_bundle *bundle = gb_operation_get_bundle(operation);
-    __ASSERT_NO_MSG(bundle != NULL);
-
     response = gb_operation_alloc_response(operation, sizeof(*response));
     if (!response) {
         return GB_OP_NO_MEMORY;
@@ -157,9 +154,6 @@ static uint8_t gb_spi_protocol_device_config(struct gb_operation *operation)
     size_t request_size;
     uint8_t cs;
     int ret = 0;
-
-    struct gb_bundle *bundle = gb_operation_get_bundle(operation);
-    __ASSERT_NO_MSG(bundle != 0);
 
     request_size = gb_operation_get_request_payload_size(operation);
     if (request_size < sizeof(*request)) {

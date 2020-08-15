@@ -47,7 +47,7 @@
 
 #define CC13XX_CC26XX_RAT_CYCLES_PER_SECOND 4000000
 
-#define CC13XX_CC26XX_NUM_RX_BUF 2
+#define CC13XX_CC26XX_NUM_RX_BUF 8
 
 /* Two additional bytes for RSSI and correlation values from CPE. */
 #define CC13XX_CC26XX_RX_BUF_SIZE (IEEE802154_MAX_PHY_PACKET_SIZE + 2)

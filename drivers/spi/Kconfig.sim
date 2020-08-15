@@ -5,6 +5,5 @@
 
 config SPI_SIM
 	bool "Simulated SPI controller"
-	default y
 	help
 	  Enable support for simulated SPI controllers.

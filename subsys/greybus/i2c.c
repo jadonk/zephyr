@@ -80,8 +80,6 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
     uint8_t *write_data;
     bool read_op;
     int read_count = 0;
-    uint16_t addr;
-
     struct gb_bundle *bundle = gb_operation_get_bundle(operation);
     __ASSERT_NO_MSG(bundle != NULL);
 
@@ -91,6 +89,7 @@ static uint8_t gb_i2c_protocol_transfer(struct gb_operation *operation)
     struct gb_i2c_transfer_req *request;
     struct gb_i2c_transfer_rsp *response;
     const size_t req_size = gb_operation_get_request_payload_size(operation);
+    uint16_t addr = -1;
 
     if (req_size < sizeof(*request)) {
         return GB_OP_INVALID;

@@ -77,9 +77,14 @@ static void *thread_fun(void *arg)
 	int r;
 	int i = 0;
 	struct gb_operation_hdr *msg = NULL;
-    struct gb_transport_tcpip_context *ctx;
+    struct gb_transport_tcpip_context *ctx = NULL;
 	int *fd = (int *)arg;
     unsigned int cport = -1;
+
+    if (fd == NULL) {
+    	LOG_ERR("invalid argument");
+    	goto out;
+    }
 
     for(size_t i = 0; i < num_gb_transport_tcpip_contexts; ++i) {
         ctx = &gb_transport_tcpip_contexts[i];
@@ -89,7 +94,16 @@ static void *thread_fun(void *arg)
         }
     }
 
-    __ASSERT(cport != -1, "cport not found for fd %d!", ctx->client_fd);
+    if (ctx == NULL) {
+    	LOG_ERR("no context for fd %d!", *fd);
+    	goto out;
+    }
+
+    if (cport == -1) {
+    	LOG_ERR("cport not found for fd %d!", *fd);
+    	goto out;
+    }
+
 
 	for (;;) {
 		r = getMessage(*fd, &msg);
@@ -110,9 +124,13 @@ static void *thread_fun(void *arg)
 		}
 	}
 
-	LOG_DBG("closing fd %d", *fd);
-	close(*fd);
-	*fd = -1;
+out:
+	if (*fd != -1) {
+		LOG_DBG("closing fd %d", *fd);
+		close(*fd);
+		*fd = -1;
+	}
+
 	return NULL;
 }
 
@@ -175,8 +193,10 @@ static int netsetup(void)
 cleanup:
     for(--i; i >= 0; --i) {
         ctx = &gb_transport_tcpip_contexts[i];
-        close(ctx->server_fd);
-        ctx->server_fd = -1;
+        if (ctx != NULL && ctx->server_fd != -1) {
+			close(ctx->server_fd);
+			ctx->server_fd = -1;
+        }
     }
 
 out:

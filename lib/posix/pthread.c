@@ -207,6 +207,7 @@ static bool zephry_pthread_attr_delete_static(pthread_attr_t *attr)
 		if (&dstack_attrs[pos] == attr) {
 			dstack_in_use &= ~(1 << pos);
 			ret = true;
+			printk("deallocated thread stack %u", pos);
 			break;
 		}
 	}
@@ -321,6 +322,8 @@ int pthread_create(pthread_t *newthread, const pthread_attr_t *attr,
 
 	pthread_cond_init(&thread->state_cond, &cond_attr);
 	sys_slist_init(&thread->key_list);
+
+	thread->attr = attr;
 
 	*newthread = (pthread_t) k_thread_create(&thread->thread, attr->stack,
 						 attr->stacksize,
@@ -523,6 +526,8 @@ void pthread_exit(void *retval)
 			(key_obj->destructor)(thread_spec_data->spec_data);
 		}
 	}
+
+	zephyr_pthread_attr_delete(self->attr);
 
 	pthread_mutex_unlock(&self->state_lock);
 	k_thread_abort((k_tid_t)self);

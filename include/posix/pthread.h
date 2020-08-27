@@ -50,6 +50,9 @@ struct posix_thread {
 	enum pthread_state state;
 	pthread_mutex_t state_lock;
 	pthread_cond_t state_cond;
+
+	/* Attribute for dynamic stack */
+	pthread_attr_t *attr;
 };
 
 /* Pthread detach/joinable */

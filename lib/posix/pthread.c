@@ -150,7 +150,6 @@ static pthread_attr_t *zephry_pthread_attr_new_static(void)
 	/* count how many bits are set in dstack_in_use */
 	in_use = dstack_in_use;
 	if (__builtin_popcount(in_use) == CONFIG_PTHREAD_DYNAMIC_STACK_RESERVED_COUNT) {
-		printk("%s(): in_use %x popcount: %u\n", __func__, in_use, __builtin_popcount(in_use));
 		goto out;
 	}
 
@@ -169,7 +168,6 @@ static pthread_attr_t *zephry_pthread_attr_new_static(void)
 	dstack_in_use |= (1 << pos);
 
 	attr = &dstack_attrs[pos];
-	printk("%s(): allocated thread stack %u\n", __func__, pos);
 
 out:
 	pthread_mutex_unlock(&pthread_pool_lock);
@@ -207,7 +205,6 @@ static bool zephry_pthread_attr_delete_static(pthread_attr_t *attr)
 		if (&dstack_attrs[pos] == attr) {
 			dstack_in_use &= ~(1 << pos);
 			ret = true;
-			printk("deallocated thread stack %u", pos);
 			break;
 		}
 	}
@@ -275,7 +272,6 @@ int pthread_create(pthread_t *newthread, const pthread_attr_t *attr,
 		if (IS_ENABLED(CONFIG_PTHREAD_DYNAMIC_STACK)) {
 			attr = zephyr_pthread_attr_new();
 			if (attr == NULL) {
-				printk("%s(): zephyr_pthread_attr_new() returned NULL\n", __func__);
 				return EAGAIN;
 			}
 		} else {
@@ -296,7 +292,6 @@ int pthread_create(pthread_t *newthread, const pthread_attr_t *attr,
 	pthread_mutex_unlock(&pthread_pool_lock);
 
 	if (pthread_num >= CONFIG_MAX_PTHREAD_COUNT) {
-		printk("%s(): pthread_num >= %u\n", __func__, CONFIG_MAX_PTHREAD_COUNT);
 		zephyr_pthread_attr_delete((pthread_attr_t *)attr);
 		return EAGAIN;
 	}

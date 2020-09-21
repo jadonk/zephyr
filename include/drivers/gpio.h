@@ -334,6 +334,13 @@ struct gpio_driver_data {
 	 * wrapper functions in this header.
 	 */
 	gpio_port_pins_t invert;
+	/*
+	 * Mask identifying pins that are configured as output
+	 *
+	 * Management of this mask is the responsibility of the
+	 * wrapper functions in this header.
+	 */
+	gpio_port_pins_t output;
 };
 
 struct gpio_callback;
@@ -585,6 +592,12 @@ static inline int gpio_pin_configure(const struct device *port,
 		return ret;
 	}
 
+	if (flags & GPIO_OUTPUT) {
+		data->output |= BIT(pin);
+	} else if (flags & GPIO_INPUT) {
+		data->output &= ~BIT(pin);
+	}
+
 	if ((flags & GPIO_ACTIVE_LOW) != 0) {
 		data->invert |= (gpio_port_pins_t)BIT(pin);
 	} else {
@@ -597,6 +610,30 @@ static inline int gpio_pin_configure(const struct device *port,
 	}
 
 	return ret;
+}
+
+/**
+ * @brief Get physical direction of a single @p pin in a @p port
+ *
+ * This function returns true if the given pin is configured as
+ * @ref GPIO_OUTPUT. Otherwise, this function returns false.
+ *
+ * @param port Pointer to device structure for the driver instance.
+ * @param pin Pin number to query the direction of
+ * @return the direction of the pin
+ */
+static inline bool gpio_pin_get_direction(struct device *port, gpio_pin_t pin)
+{
+	const struct gpio_driver_config *const cfg =
+		(const struct gpio_driver_config *)port->config;
+	struct gpio_driver_data *const data =
+		(struct gpio_driver_data *)port->data;
+
+	(void)cfg;
+	__ASSERT((cfg->port_pin_mask & (gpio_port_pins_t)BIT(pin)) != 0U,
+		 "Unsupported pin");
+
+	return (bool)!!(BIT(pin) & data->output);
 }
 
 /**

@@ -316,8 +316,7 @@ read_header:
 		r = recv(fd, &((uint8_t *)*msg)[offset], remaining, 0);
 		if (r < 0) {
 			LOG_DBG("recv failed. errno: %d", errno);
-			usleep(100);
-			continue;
+			goto freemsg;
 		}
 		if (0 == r) {
 			LOG_DBG("recv returned 0 - EOF??");

@@ -22,12 +22,13 @@ extern int usleep(useconds_t usec);
 
 #else
 
-#include <posix/unistd.h>
-#include <posix/pthread.h>
 #include <greybus/debug.h>
 #include <greybus/greybus.h>
 #include <greybus/platform.h>
 #include <greybus-utils/manifest.h>
+#include <posix/unistd.h>
+#include <posix/pthread.h>
+
 
 unsigned int sleep(unsigned int seconds)
 {
@@ -162,7 +163,7 @@ static int netsetup(void)
         r = setsockopt(ctx->server_fd, SOL_SOCKET, SO_REUSEADDR, &yes,
                 sizeof(yes));
         if (-1 == r) {
-            LOG_ERR("socket: %d", errno);
+            LOG_ERR("setsockopt: %d", errno);
             r = -errno;
             goto cleanup;
         }
@@ -180,7 +181,7 @@ static int netsetup(void)
         LOG_DBG("listening on socket %d (cport %u)", ctx->server_fd, ctx->cport);
         r = listen(ctx->server_fd, GB_TRANSPORT_TCPIP_BACKLOG);
         if (-1 == r) {
-            LOG_ERR("bind: %d", errno);
+            LOG_ERR("listen: %d", errno);
             r = -errno;
             goto cleanup;
         }

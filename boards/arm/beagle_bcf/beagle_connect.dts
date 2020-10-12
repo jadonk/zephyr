@@ -23,35 +23,35 @@
     compatible = "beagleboard,beagle-connect";
 
     aliases {
-        led1 = &led1;
-        led2 = &led2;
-        ledSubGHz = &ledSubGHz;
-        led24GHz = &led24GHz;
-        sw0 = &btn_user;
+        led1 = &red_led;
+        led2 = &green_led;
+        led-subghz = &led_sub_ghz;
+        led-2-4ghz = &led_2_4_ghz;
+        sw0 = &user_button_0;
     };
 
     chosen {
         zephyr,sram = &sram0;
         zephyr,flash = &flash0;
-        zephyr,console = &uart0;
-        zephyr,shell-uart = &uart0;
+        zephyr,console = &uart1;
+        zephyr,shell-uart = &uart1;
     };
 
     leds {
         compatible = "gpio-leds";
-        led1: led_1 {
+        red_led: led_0 {
             gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
             label = "Red LED 1";
         };
-        led2: led_2 {
+        green_led: led_1 {
             gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
             label = "Red LED 2";
         };
-        ledSubGHz: led_sub_ghz {
+        led_sub_ghz: led_2 {
             gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
             label = "SubGHz LED";
         };
-        led24GHz: led_24ghz {
+        led_2_4_ghz: led_3 {
             gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
             label = "2.4GHz LED";
         };
@@ -59,56 +59,11 @@
 
     gpio_keys {
         compatible = "gpio-keys";
-        btn_user: button_user {
+        user_button_0: button_0 {
             label = "User button";
             gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
         };
     };
-
-    mikrobus_headers {
-        compatible = "mikro-bus";
-        mikrobus_header1: mikrobus-connector1 {
-            #gpio-cells = <2>;
-            gpio-map-mask = <0xffffffff 0xffffffc0>;
-            gpio-map-pass-thru = <0 0x3f>;
-            gpio-map =  <0 0 &gpio0 23 0>,  /* AN  */
-                    <1 0 &gpio0 6 0>,   /* RST */
-                    <2 0 &gpio0 28 0>,  /* CS   */
-                    <3 0 &gpio0 10 0>,  /* SCK  */
-                    <4 0 &gpio0 11 0>,  /* MISO */
-                    <5 0 &gpio0 9 0>,   /* MOSI */
-                                /* +3.3V */
-                                /* GND */
-                    <6 0 &gpio0 30 0>,  /* PWM  */
-                    <7 0 &gpio0 29 0>,  /* INT  */
-                    <8 0 &gpio0 12 0>,  /* RX   */
-                    <9 0 &gpio0 13 0>,  /* TX   */
-                    <10 0 &gpio0 25 0>, /* SCL  */
-                    <11 0 &gpio0 26 0>; /* SDA  */
-                                /* +5V */
-                                /* GND */
-        };
-        mikrobus_header2: mikrobus-connector2 {
-            #gpio-cells = <2>;
-            gpio-map-mask = <0xffffffff 0xffffffc0>;
-            gpio-map-pass-thru = <0 0x3f>;
-            gpio-map =  <0 0 &gpio0 24 0>,  /* AN  */
-                    <1 0 &gpio0 5 0>,   /* RST */
-                    <2 0 &gpio0 27 0>,  /* CS   */
-                    <3 0 &gpio0 10 0>,  /* SCK  */
-                    <4 0 &gpio0 11 0>,  /* MISO */
-                    <5 0 &gpio0 9 0>,   /* MOSI */
-                                /* +3.3V */
-                                /* GND */
-                    <6 0 &gpio0 19 0>,  /* PWM  */
-                    <7 0 &gpio0 20 0>,  /* INT  */
-                    <8 0 &gpio0 22 0>,  /* RX   */
-                    <9 0 &gpio0 21 0>,  /* TX   */
-                    <10 0 &gpio0 25 0>, /* SCL  */
-                    <11 0 &gpio0 26 0>; /* SDA  */
-                                /* +5V */
-                                /* GND */
-        };
 };
 
 &cpu0 {
@@ -133,8 +88,8 @@
 &uart1 {
     status = "okay";
     current-speed = <115200>;
-    tx-pin = <22 IOC_PORT_MCU_UART1_TX>;
-    rx-pin = <21 IOC_PORT_MCU_UART1_RX>;
+    tx-pin = <21 IOC_PORT_MCU_UART1_TX>;
+    rx-pin = <22 IOC_PORT_MCU_UART1_RX>;
 };
 
 &i2c0 {

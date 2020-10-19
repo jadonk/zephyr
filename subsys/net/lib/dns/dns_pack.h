@@ -21,7 +21,10 @@
 
 /* This is the label's length octet, see 4.1.2. Question section format */
 #define DNS_LABEL_LEN_SIZE	1
+#define DNS_POINTER_SIZE	2
+#define DNS_LABEL_MIN_SIZE	1
 #define DNS_LABEL_MAX_SIZE	63
+#define DNS_NAME_MAX_SIZE       255
 #define DNS_ANSWER_MIN_SIZE	12
 #define DNS_COMMON_UINT_SIZE	2
 
@@ -86,7 +89,10 @@ enum dns_rr_type {
 	DNS_RR_TYPE_INVALID = 0,
 	DNS_RR_TYPE_A	= 1,		/* IPv4  */
 	DNS_RR_TYPE_CNAME = 5,		/* CNAME */
-	DNS_RR_TYPE_AAAA = 28		/* IPv6  */
+	DNS_RR_TYPE_PTR = 12,		/* PTR   */
+	DNS_RR_TYPE_TXT = 16,		/* TXT   */
+	DNS_RR_TYPE_AAAA = 28,		/* IPv6  */
+	DNS_RR_TYPE_SRV = 33,		/* SRV   */
 };
 
 enum dns_response_type {
@@ -99,6 +105,7 @@ enum dns_response_type {
 enum dns_class {
 	DNS_CLASS_INVALID = 0,
 	DNS_CLASS_IN,
+	DNS_CLASS_FLUSH = BIT(15)
 };
 
 enum dns_msg_type {

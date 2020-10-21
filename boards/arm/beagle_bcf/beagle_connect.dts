@@ -23,10 +23,10 @@
     compatible = "beagleboard,beagle-connect";
 
     aliases {
-        led1 = &red_led;
-        led2 = &green_led;
-        led-subghz = &led_sub_ghz;
-        led-2-4ghz = &led_2_4_ghz;
+        led0 = &red_led1;
+        led1 = &red_led2;
+        led2 = &led_sub_ghz;
+        led3 = &led_2_4_ghz;
         sw0 = &user_button_0;
     };
 
@@ -39,11 +39,11 @@
 
     leds {
         compatible = "gpio-leds";
-        red_led: led_0 {
+        red_led1: led_0 {
             gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
             label = "Red LED 1";
         };
-        green_led: led_1 {
+        red_led2: led_1 {
             gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
             label = "Red LED 2";
         };
@@ -110,11 +110,14 @@
         label = "OPT3001-LIGHT";
     };
 
+/* TODO Add driver to zephyr
     hdc2010@40 {
-        compatible = "ti,hdc";
+        compatible = "ti,hdc2000";
         reg = <0x40>;
+        drdy-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>;
         label = "HDC2010";
     };
+*/
 };
 
 &spi0 {
@@ -122,7 +125,20 @@
     sck-pin = <10>;
     mosi-pin = <9>;
     miso-pin = <11>;
-    cs-pin = <8>;
+    /* cs-pin = <8>; */
+    cs-gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
+    gd25q16: gd25q16c@0 {
+        compatible = "jedec,spi-nor";
+        label = "GD25Q16C";
+        reg = <0>;
+        spi-max-frequency = <2000000>;
+        size = <0x200000>;
+        has-be32k;
+        has-dpd;
+        t-enter-dpd = <20000>;
+        t-exit-dpd = <100000>;
+        jedec-id = [c8 40 15];
+    };
 };
 
 &rtc {

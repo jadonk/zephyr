@@ -209,10 +209,8 @@ struct ieee802154_radio_api {
 			 enum ieee802154_config_type type,
 			 const struct ieee802154_config *config);
 
-#ifdef CONFIG_NET_L2_IEEE802154_SUB_GHZ
 	/** Get the available amount of Sub-GHz channels */
 	uint16_t (*get_subg_channel_count)(const struct device *dev);
-#endif /* CONFIG_NET_L2_IEEE802154_SUB_GHZ */
 
 	/** Run an energy detection scan.
 	 *  Note: channel must be set prior to request this function.

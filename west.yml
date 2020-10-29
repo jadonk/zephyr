@@ -21,6 +21,8 @@ manifest:
   remotes:
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
+    - name: cfriedt
+      url-base: https://github.com/cfriedt
 
   #
   # Please add items below based on alphabetical order
@@ -77,7 +79,8 @@ manifest:
       revision: a0267470e786019e378be18f5786e53ef307497f
       path: modules/hal/stm32
     - name: hal_ti
-      revision: 405dfc8faba13e01c1cb9e29e70b31b50f71d117
+      remote: cfriedt
+      revision: b1006747bbc92336e9c5e801777a5db53a4e24a9
       path: modules/hal/ti
     - name: libmetal
       revision: 9d4ee2c3cfd5f49861939447990f3b7d7bf9bf94

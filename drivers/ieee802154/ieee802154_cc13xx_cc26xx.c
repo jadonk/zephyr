@@ -287,7 +287,7 @@ static int ieee802154_cc13xx_cc26xx_tx(const struct device *dev,
 	};
 	struct ieee802154_cc13xx_cc26xx_data *drv_data = get_dev_data(dev);
 	bool ack = ieee802154_is_ar_flag_set(frag);
-	int retry = CONFIG_NET_L2_IEEE802154_RADIO_TX_RETRIES;
+	int retry = CC13XX_CC26XX_TX_RETRIES;
 
 	if (mode != IEEE802154_TX_MODE_CSMA_CA) {
 		NET_ERR("TX mode %d not supported", mode);
@@ -394,8 +394,12 @@ static void ieee802154_cc13xx_cc26xx_rx_done(
 			len = drv_data->rx_data[i][0];
 			sdu = drv_data->rx_data[i] + 1;
 			seq = drv_data->rx_data[i][3];
-			corr = drv_data->rx_data[i][len--] & 0x3F;
-			rssi = drv_data->rx_data[i][len--];
+			corr = drv_data->rx_data[i][len] & 0x3F;
+			rssi = drv_data->rx_data[i][len-1];
+
+			if (IS_ENABLED(CONFIG_NET_L2_IEEE802154)) {
+				len -= 2;
+			}
 
 			LOG_DBG("Received: len = %u, seq = %u, rssi = %d, lqi = %u",
 				len, seq, rssi, corr);
@@ -675,9 +679,9 @@ static struct ieee802154_cc13xx_cc26xx_data ieee802154_cc13xx_cc26xx_data = {
 		.startTrigger.triggerType = TRIG_NOW,
 		.condition.rule = COND_STOP_ON_FALSE,
 		.randomState = 0,
-		.macMaxBE = CONFIG_NET_L2_IEEE802154_RADIO_CSMA_CA_MAX_BE,
+		.macMaxBE = CC13XX_CC26XX_CSMA_CA_MAX_BE,
 		.macMaxCSMABackoffs =
-			CONFIG_NET_L2_IEEE802154_RADIO_CSMA_CA_MAX_BO,
+			CC13XX_CC26XX_CSMA_CA_MAX_BO,
 		.csmaConfig = {
 			/* Initial value of CW for unslotted CSMA */
 			.initCW = 1,
@@ -687,7 +691,7 @@ static struct ieee802154_cc13xx_cc26xx_data ieee802154_cc13xx_cc26xx_data = {
 			.rxOffMode = 0,
 		},
 		.NB = 0,
-		.BE = CONFIG_NET_L2_IEEE802154_RADIO_CSMA_CA_MIN_BE,
+		.BE = CC13XX_CC26XX_CSMA_CA_MIN_BE,
 		.remainingPeriods = 0,
 		.endTrigger.triggerType = TRIG_NEVER,
 	},
@@ -745,6 +749,7 @@ static struct ieee802154_cc13xx_cc26xx_data ieee802154_cc13xx_cc26xx_data = {
 	},
 };
 
+#if defined(CONFIG_NET_L2_IEEE802154)
 NET_DEVICE_INIT(ieee802154_cc13xx_cc26xx,
 		CONFIG_IEEE802154_CC13XX_CC26XX_DRV_NAME,
 		ieee802154_cc13xx_cc26xx_init, device_pm_control_nop,
@@ -752,3 +757,10 @@ NET_DEVICE_INIT(ieee802154_cc13xx_cc26xx,
 		CONFIG_IEEE802154_CC13XX_CC26XX_INIT_PRIO,
 		&ieee802154_cc13xx_cc26xx_radio_api, IEEE802154_L2,
 		NET_L2_GET_CTX_TYPE(IEEE802154_L2), IEEE802154_MTU);
+#else
+DEVICE_AND_API_INIT(ieee802154_cc13xx_cc26xx,
+		CONFIG_IEEE802154_CC13XX_CC26XX_DRV_NAME,
+		ieee802154_cc13xx_cc26xx_init, &ieee802154_cc13xx_cc26xx_data,
+		NULL, POST_KERNEL, CONFIG_IEEE802154_CC13XX_CC26XX_INIT_PRIO,
+		&ieee802154_cc13xx_cc26xx_radio_api);
+#endif

@@ -25,8 +25,6 @@
     aliases {
         led0 = &red_led1;
         led1 = &red_led2;
-        led2 = &led_sub_ghz;
-        led3 = &led_2_4_ghz;
         sw0 = &user_button_0;
     };
 
@@ -46,14 +44,6 @@
         red_led2: led_1 {
             gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
             label = "Red LED 2";
-        };
-        led_sub_ghz: led_2 {
-            gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
-            label = "SubGHz LED";
-        };
-        led_2_4_ghz: led_3 {
-            gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
-            label = "2.4GHz LED";
         };
     };
 

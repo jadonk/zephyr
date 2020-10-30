@@ -326,9 +326,8 @@ static int ieee802154_cc13xx_cc26xx_subg_tx(const struct device *dev,
 					    struct net_pkt *pkt,
 					    struct net_buf *frag)
 {
-	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data =
-		get_dev_data(dev);
-	int retry = CONFIG_NET_L2_IEEE802154_RADIO_TX_RETRIES;
+	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data = get_dev_data(dev);
+	int retry = CC13XX_CC26XX_SUBG_TX_RETRIES;
 	RF_EventMask reason;
 	int r;
 
@@ -442,7 +441,10 @@ static void ieee802154_cc13xx_cc26xx_subg_rx_done(
 			len = drv_data->rx_data[i][1];
 			sdu = &drv_data->rx_data[i][3];
 			rssi = sdu[len - 2];
-			len -= 2;
+
+			if (IS_ENABLED(CONFIG_NET_L2_IEEE802154_SUB_GHZ)) {
+				len -= 2;
+			}
 
 			LOG_DBG("Received: len = %u, rssi = %d", len, rssi);
 
@@ -745,6 +747,7 @@ static struct ieee802154_cc13xx_cc26xx_subg_data
 	},
 };
 
+#if defined(CONFIG_NET_L2_IEEE802154_SUB_GHZ)
 NET_DEVICE_INIT(ieee802154_cc13xx_cc26xx_subg,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_DRV_NAME,
 		ieee802154_cc13xx_cc26xx_subg_init, device_pm_control_nop,
@@ -752,3 +755,11 @@ NET_DEVICE_INIT(ieee802154_cc13xx_cc26xx_subg,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_INIT_PRIO,
 		&ieee802154_cc13xx_cc26xx_subg_radio_api, IEEE802154_L2,
 		NET_L2_GET_CTX_TYPE(IEEE802154_L2), IEEE802154_MTU);
+#else
+DEVICE_AND_API_INIT(ieee802154_cc13xx_cc26xx_subg,
+		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_DRV_NAME,
+		ieee802154_cc13xx_cc26xx_subg_init,
+		&ieee802154_cc13xx_cc26xx_subg_data, NULL, POST_KERNEL,
+		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_INIT_PRIO,
+		&ieee802154_cc13xx_cc26xx_subg_radio_api);
+#endif

@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifdef CONFIG_GPIO_EMUL
-
 #include <device.h>
 #include <drivers/gpio.h>
 #include <drivers/gpio/gpio_emul.h>
@@ -69,5 +67,3 @@ static void gpio_emul_callback_handler(const struct device *port,
 		return;
 	}
 }
-
-#endif /* CONFIG_GPIO_EMUL */

@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <net/dns_sd.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -55,6 +56,9 @@ LOG_MODULE_REGISTER(greybus_transport_tcpip);
 
 #define GB_TRANSPORT_TCPIP_BASE_PORT 4242
 #define GB_TRANSPORT_TCPIP_BACKLOG 1
+
+DNS_SD_REGISTER_TCP_SERVICE(gb_service_advertisement, CONFIG_NET_HOSTNAME,
+	"_greybus", "local", DNS_SD_EMPTY_TXT, GB_TRANSPORT_TCPIP_BASE_PORT);
 
 struct gb_transport_tcpip_context {
     int server_fd;

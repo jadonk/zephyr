@@ -638,74 +638,6 @@ int add_srv_record(const struct dns_sd_rec *inst, uint32_t ttl,
 	return offset - buf_offset;
 }
 
-#ifndef CONFIG_NET_TEST
-static bool port_in_use_sockaddr(uint16_t port,
-	const struct sockaddr *addr)
-{
-	const struct sockaddr_in any = {
-		.sin_family = AF_INET,
-		.sin_addr.s_addr = INADDR_ANY,
-	};
-	const struct sockaddr_in6 any6 = {
-		.sin6_family = AF_INET6,
-		.sin6_addr = in6addr_any,
-	};
-
-	switch (addr->sa_family) {
-	case AF_INET:
-		return
-			net_context_port_in_use(port, IPPROTO_IP, addr)
-			|| net_context_port_in_use(port, IPPROTO_IP,
-				(struct sockaddr *) &any);
-	case AF_INET6:
-		return
-			net_context_port_in_use(port, IPPROTO_IPV6, addr)
-			|| net_context_port_in_use(port, IPPROTO_IPV6,
-			(struct sockaddr *) &any6);
-	default:
-		return false;
-	}
-}
-
-static bool port_in_use(uint16_t port, const struct in_addr *addr4,
-	const struct in6_addr *addr6)
-{
-	bool r;
-	struct sockaddr sa;
-
-	if (addr4 != NULL) {
-		net_sin(&sa)->sin_family = AF_INET;
-		net_sin(&sa)->sin_addr = *addr4;
-
-		r = port_in_use_sockaddr(port, &sa);
-		if (r) {
-			return true;
-		}
-	}
-
-	if (addr6 != NULL) {
-		net_sin6(&sa)->sin6_family = AF_INET6;
-		net_sin6(&sa)->sin6_addr = *addr6;
-
-		r = port_in_use_sockaddr(port, &sa);
-		if (r) {
-			return true;
-		}
-	}
-
-	return false;
-}
-#else /* CONFIG_NET_TEST */
-static inline bool port_in_use(uint16_t port, const struct in_addr *addr4,
-	const struct in6_addr *addr6)
-{
-	ARG_UNUSED(port);
-	ARG_UNUSED(addr4);
-	ARG_UNUSED(addr6);
-	return true;
-}
-#endif /* CONFIG_NET_TEST */
-
 int dns_sd_handle_ptr_query(const struct dns_sd_rec *inst,
 	const struct in_addr *addr4, const struct in6_addr *addr6,
 	uint8_t *buf, uint16_t buf_size)
@@ -744,11 +676,6 @@ int dns_sd_handle_ptr_query(const struct dns_sd_rec *inst,
 			"not initialized", ntohs(*(inst->port)),
 			inst->instance, inst->service, inst->proto,
 			inst->domain);
-		return -EHOSTDOWN;
-	}
-
-	if (!port_in_use(ntohs(*(inst->port)), addr4, addr6)) {
-		/* Service is not yet bound, so do not advertise */
 		return -EHOSTDOWN;
 	}
 

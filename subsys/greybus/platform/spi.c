@@ -258,6 +258,9 @@ static const struct gb_platform_spi_api gb_platform_spi_api = {
 	.get_cs_control = gb_plat_api_get_cs_control,
 };
 
+#define COUNT_GBSPIDEV_OKAY(node_id) \
+	+ DT_NODE_HAS_COMPAT_STATUS(node_id, zephyr_greybus_spi_peripheral, okay)
+
 #define DEFINE_GREYBUS_CTRL_RESP(_num) \
 	{ \
 		.bpw_mask = DT_INST_PROP(_num, bpw_mask), \
@@ -266,6 +269,7 @@ static const struct gb_platform_spi_api gb_platform_spi_api = {
 		.max_speed_hz = DT_INST_PROP(_num, max_speed_hz), \
 		.mode = DT_INST_PROP(_num, mode), \
 		.flags = DT_INST_PROP(_num, flags), \
+		.num_chipselect = DT_FOREACH_CHILD(DT_DRV_INST(_num), COUNT_GBSPIDEV_OKAY), \
 	}
 
 #define DEFINE_GREYBUS_PERIPH_RSP(node_id) \

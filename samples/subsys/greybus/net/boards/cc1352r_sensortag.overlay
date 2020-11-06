@@ -43,10 +43,6 @@
 	status = "okay";
 };
 
-&sensor2 {
-	status = "okay";
-};
-
 &greybus0 {
 	status = "okay";
 	/* defaults in effect, so this isn't necessary */

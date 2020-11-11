@@ -287,7 +287,7 @@ static int ieee802154_cc13xx_cc26xx_tx(const struct device *dev,
 	};
 	struct ieee802154_cc13xx_cc26xx_data *drv_data = get_dev_data(dev);
 	bool ack = ieee802154_is_ar_flag_set(frag);
-	int retry = CC13XX_CC26XX_TX_RETRIES;
+	int retry = CONFIG_IEEE802154_CC13XX_CC26XX_RADIO_TX_RETRIES;
 
 	if (mode != IEEE802154_TX_MODE_CSMA_CA) {
 		NET_ERR("TX mode %d not supported", mode);
@@ -385,7 +385,7 @@ static void ieee802154_cc13xx_cc26xx_rx_done(
 	struct ieee802154_cc13xx_cc26xx_data *drv_data)
 {
 	struct net_pkt *pkt;
-	uint8_t len, seq, corr;
+	uint8_t len, seq, corr, lqi;
 	int8_t rssi;
 	uint8_t *sdu;
 
@@ -401,8 +401,16 @@ static void ieee802154_cc13xx_cc26xx_rx_done(
 				len -= 2;
 			}
 
+			/* remove fcs */
+			if (IS_ENABLED(CONFIG_NET_L2_IEEE802154)) {
+				len -= 2;
+			}
+
+			/* scale 6-bit corr to 8-bit lqi */
+			lqi = corr << 2;
+
 			LOG_DBG("Received: len = %u, seq = %u, rssi = %d, lqi = %u",
-				len, seq, rssi, corr);
+				len, seq, rssi, lqi);
 
 			pkt = net_pkt_rx_alloc_with_buffer(
 				drv_data->iface, len, AF_UNSPEC, 0, K_NO_WAIT);
@@ -419,8 +427,7 @@ static void ieee802154_cc13xx_cc26xx_rx_done(
 
 			drv_data->rx_entry[i].status = DATA_ENTRY_PENDING;
 
-			/* TODO Convert to LQI in 0 to 255 range */
-			net_pkt_set_ieee802154_lqi(pkt, corr);
+			net_pkt_set_ieee802154_lqi(pkt, lqi);
 			net_pkt_set_ieee802154_rssi(
 				pkt,
 				ieee802154_cc13xx_cc26xx_convert_rssi(rssi));
@@ -608,7 +615,7 @@ static struct ieee802154_cc13xx_cc26xx_data ieee802154_cc13xx_cc26xx_data = {
 			.bAutoFlushCrc = 1,
 			.bAutoFlushIgn = 1,
 			.bIncludePhyHdr = 0,
-			.bIncludeCrc = 0,
+			.bIncludeCrc = 1,
 			.bAppendRssi = 1,
 			.bAppendCorrCrc = 1,
 			.bAppendSrcInd = 0,
@@ -681,9 +688,10 @@ static struct ieee802154_cc13xx_cc26xx_data ieee802154_cc13xx_cc26xx_data = {
 		.startTrigger.triggerType = TRIG_NOW,
 		.condition.rule = COND_STOP_ON_FALSE,
 		.randomState = 0,
-		.macMaxBE = CC13XX_CC26XX_CSMA_CA_MAX_BE,
+		.macMaxBE =
+			CONFIG_IEEE802154_CC13XX_CC26XX_RADIO_CSMA_CA_MAX_BE,
 		.macMaxCSMABackoffs =
-			CC13XX_CC26XX_CSMA_CA_MAX_BO,
+			CONFIG_IEEE802154_CC13XX_CC26XX_RADIO_CSMA_CA_MAX_BO,
 		.csmaConfig = {
 			/* Initial value of CW for unslotted CSMA */
 			.initCW = 1,
@@ -693,7 +701,7 @@ static struct ieee802154_cc13xx_cc26xx_data ieee802154_cc13xx_cc26xx_data = {
 			.rxOffMode = 0,
 		},
 		.NB = 0,
-		.BE = CC13XX_CC26XX_CSMA_CA_MIN_BE,
+		.BE = CONFIG_IEEE802154_CC13XX_CC26XX_RADIO_CSMA_CA_MIN_BE,
 		.remainingPeriods = 0,
 		.endTrigger.triggerType = TRIG_NEVER,
 	},

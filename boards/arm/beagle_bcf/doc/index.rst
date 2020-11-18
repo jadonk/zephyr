@@ -1,6 +1,6 @@
-.. _beagle_connect:
+.. _beagleconnect_freedom:
 
-Beagle Connect
-##############
+BeagleConnect Freedom
+#####################
 
 TODO

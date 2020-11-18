@@ -38,7 +38,7 @@
 # More info at https://github.com/JelmerT/cc2538-bsl
 
 # Modified by Erik Larson, 2020
-# Support for Beagle Connect board utilizing CC1352R1
+# Support for BeagleConnect Freedom board utilizing CC1352R1
 # Changed main to handle launching from Zephyr west flash command
 # Changed invoke bootloader to use break signal
 

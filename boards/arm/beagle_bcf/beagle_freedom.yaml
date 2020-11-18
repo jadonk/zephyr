@@ -1,5 +1,5 @@
-identifier: beagle_connect
-name: Beagle Connect
+identifier: beagleconnect_freedom
+name: BeagleConnect Freedom
 type: mcu
 arch: arm
 ram: 80

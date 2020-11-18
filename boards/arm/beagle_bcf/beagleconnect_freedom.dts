@@ -27,6 +27,8 @@
         led0 = &led_subg;
         led1 = &led_24g;
         sw0 = &user_button_0;
+        sensor0 = &light;
+        sensor1 = &accel;
     };
 
     chosen {
@@ -89,13 +91,13 @@
     scl-pin = <25>;
     sda-pin = <26>;
 
-    lis2dh12-accel@18 {
+    accel: lis2dh12-accel@18 {
         compatible = "st,lis2dh12", "st,lis2dh", "st,lis2de12";
         reg = <0x18>;
         label = "LIS2DE12-ACCEL";
     };
 
-    opt3001-light@44 {
+    light: opt3001-light@44 {
         compatible = "ti,opt3001";
         reg = <0x44>;
         label = "OPT3001-LIGHT";
@@ -118,7 +120,7 @@
     miso-pin = <11>;
     /* cs-pin = <8>; */
     cs-gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
-    gd25q16: gd25q16c@0 {
+    nor_flash: gd25q16c@0 {
         compatible = "jedec,spi-nor";
         label = "GD25Q16C";
         reg = <0>;

@@ -12,6 +12,30 @@ menuconfig GREYBUS
 
 if GREYBUS
 
+choice
+	prompt "Which transport shall be used for Greybus?"
+	default GREYBUS_XPORT_TCPIP
+
+config GREYBUS_XPORT_TCPIP
+	bool "Use the TCP/IP Transport for Greybus"
+	help
+	  This creates a TCP/IP service for Greybus.
+
+config GREYBUS_XPORT_UART
+	bool "Use the UART Transport for Greybus"
+	help
+	  This creates a thread for Greybus on a specific UART.
+
+if GREYBUS_XPORT_UART
+config GREYBUS_XPORT_UART_DEV
+	string "Run Greybus on which UART?"
+	default "UART_1"
+	help
+	  This setting specifies which UART the Greybus service will use.
+endif # GREYBUS_XPORT_UART
+
+endchoice
+
 module = GREYBUS
 module-str = gb
 #source "subsys/logging/Kconfig.template.log_config"

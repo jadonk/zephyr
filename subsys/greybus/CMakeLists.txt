@@ -15,7 +15,6 @@ zephyr_library_sources(
 	platform/deferred-init.c
 
 	platform/service.c
-	platform/transport-tcpip.c
 
 	platform/bundle.c
 	platform/bus.c
@@ -24,6 +23,8 @@ zephyr_library_sources(
 	platform/string.c
 )
 
+zephyr_library_sources_ifdef(CONFIG_GREYBUS_XPORT_TCPIP    platform/transport-tcpip.c)
+zephyr_library_sources_ifdef(CONFIG_GREYBUS_XPORT_UART     platform/transport-uart.c)
 zephyr_library_sources_ifdef(CONFIG_GREYBUS_CONTROL        control-gpb.c)
 zephyr_library_sources_ifdef(CONFIG_GREYBUS_AUDIO          audio.c)
 zephyr_library_sources_ifdef(CONFIG_GREYBUS_CAMERA         camera.c)

@@ -108,7 +108,7 @@
         compatible = "ti,hdc20x0";
         reg = <0x40>;
         /* drdy-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>; */
-        label = "HDC2010-HUMIDITy";
+        label = "HDC2010-HUMIDITY";
     };
 };
 

@@ -29,6 +29,7 @@
         sw0 = &user_button_0;
         sensor0 = &light;
         sensor1 = &accel;
+        sensor2 = &humidity;
     };
 
     chosen {
@@ -103,14 +104,12 @@
         label = "OPT3001-LIGHT";
     };
 
-/* TODO Add driver to zephyr
-    hdc2010@40 {
-        compatible = "ti,hdc2000";
+    humidity: hdc2010-humidity@40 {
+        compatible = "ti,hdc20x0";
         reg = <0x40>;
-        drdy-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>;
-        label = "HDC2010";
+        /* drdy-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>; */
+        label = "HDC2010-HUMIDITy";
     };
-*/
 };
 
 &spi0 {

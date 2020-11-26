@@ -68,6 +68,9 @@ void *k_aligned_alloc(size_t align, size_t size)
 		&& (align % sizeof(void *)) == 0,
 		"align must be a multiple of sizeof(void *)");
 
+	__ASSERT((align & (align - 1)) == 0,
+		"align must be a power of 2");
+
 	return z_heap_aligned_alloc(_SYSTEM_HEAP, align, size);
 }
 

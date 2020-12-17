@@ -25,6 +25,9 @@ manifest:
   #
   # Please add items below based on alphabetical order
   projects:
+    - name: cmsis
+      revision: 542b2296e6d515b265e25c6b7208e8fea3014f90
+      path: modules/hal/cmsis
     - name: hal_ti
       revision: 277d70a65ab14d46bf1ec0935cf9bb28bbaa8ab9
       path: modules/hal/ti

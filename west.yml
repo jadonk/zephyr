@@ -80,6 +80,19 @@ manifest:
     - name: hal_ti
       revision: 277d70a65ab14d46bf1ec0935cf9bb28bbaa8ab9
       path: modules/hal/ti
+    - name: libmetal
+      revision: 9d4ee2c3cfd5f49861939447990f3b7d7bf9bf94
+      path: modules/hal/libmetal
+    - name: hal_quicklogic
+      repo-path: hal_quicklogic
+      revision: b3a66fe6d04d87fd1533a5c8de51d0599fcd08d0
+      path: modules/hal/quicklogic
+    - name: lvgl
+      revision: 31acbaa36e9e74ab88ac81e3d21e7f1d00a71136
+      path: modules/lib/gui/lvgl
+    - name: mbedtls
+      revision: 24d84ecff195fb15c889d9046e44e4804d626c67
+      path: modules/crypto/mbedtls
     - name: mcuboot
       revision: 30e0c5a0af21433efc8ea35cabc44bee3f096a62
       path: bootloader/mcuboot

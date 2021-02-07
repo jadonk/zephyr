@@ -99,4 +99,10 @@ config IEEE802154_CC13XX_CC26XX_SUB_GHZ_RADIO_TX_RETRIES
 	  Number of transmission attempts radio driver should do, before
 	  replying it could not send the packet.
 
+config IEEE802154_CC13XX_CC26XX_SUB_GHZ_DIV_SETUP_PA
+        int "TI CC13xx / CC26xx IEEE 802.15.4g div setup pa"
+        default 0
+        help
+          This option set rf redio with High-power PA, 
+
 endif # IEEE802154_CC13XX_CC26XX_SUB_GHZ

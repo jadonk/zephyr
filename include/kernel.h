@@ -234,12 +234,15 @@ extern void k_thread_foreach_unlocked(
 #define K_INHERIT_PERMS (BIT(3))
 
 /**
- * @brief dynamically allocated stack
+ * @brief Callback item state
  *
- * This flag indicates that a thread stack has been heap-allocated with
- * @ref k_malloc.
+ * @details
+ * This is a single bit of state reserved for "callback manager"
+ * utilities (p4wq initially) who need to track operations invoked
+ * from within a user-provided callback they have been invoked.
+ * Effectively it serves as a tiny bit of zero-overhead TLS data.
  */
-#define K_STACK_ON_HEAP (BIT(4))
+#define K_CALLBACK_STATE (BIT(4))
 
 #ifdef CONFIG_X86
 /* x86 Bitmask definitions for threads user options */

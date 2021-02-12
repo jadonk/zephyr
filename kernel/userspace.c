@@ -348,7 +348,6 @@ void *z_impl_k_object_alloc(enum k_objects otype)
 	/* The following are currently not allowed at all */
 	case K_OBJ_FUTEX:			/* Lives in user memory */
 	case K_OBJ_SYS_MUTEX:			/* Lives in user memory */
-	case K_OBJ_THREAD_STACK_ELEMENT:	/* No aligned allocator */
 	case K_OBJ_NET_SOCKET:			/* Indeterminate size */
 		LOG_ERR("forbidden object type '%s' requested",
 			otype_to_str(otype));
@@ -493,6 +492,9 @@ static void unref_check(struct z_object *ko, uintptr_t index)
 		break;
 	case K_OBJ_STACK:
 		k_stack_cleanup((struct k_stack *)ko->name);
+		break;
+	case K_OBJ_THREAD_STACK_ELEMENT:
+		k_free(dyn->kobj.name);
 		break;
 	default:
 		/* Nothing to do */

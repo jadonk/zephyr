@@ -283,6 +283,22 @@ __syscall k_tid_t k_thread_create(struct k_thread *new_thread,
 				  int prio, uint32_t options, k_timeout_t delay);
 
 /**
+ * @brief Dynamically allocate a thread stack from the heap.
+ *
+ * The pointer stored in @p stack will suitable to pass to
+ * @ref k_thread_create.
+ *
+ * @param size the desired size of the thread stack in bytes.
+ * @param flags set this to K_USER for userspace stacks or 0
+ * @param[out] stack storage for the returned stack object pointer.
+ *
+ * @return 0 on success.
+ * @return -EINVAL when @p flags contains an invalid value.
+ * @return -ENOMEM when there are insufficient memory resources.
+ */
+__syscall int k_alloc_thread_stack(size_t size, int flags, k_thread_stack_t **stack);
+
+/**
  * @brief Drop a thread's privileges permanently to user mode
  *
  * This allows a supervisor thread to be re-used as a user thread.

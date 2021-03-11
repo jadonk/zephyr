@@ -34,9 +34,6 @@
 		reg = <0x11000000 0x2000>;
 	};
 
-	flash0: serial-flash@0 {
-		compatible = "serial-flash";
-	};
 
 	sysclk: system-clock {
 		compatible = "fixed-clock";

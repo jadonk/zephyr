@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/*
- * @addtogroup test_pwm_basic_operations
- * @{
- * @defgroup t_pwm_basic_operations test_pwm_sample
- * @brief TestPurpose: verify PWM can work well when configure
- *			through usec, nsec, or cycle.
+/**
+ * @file
+ * @brief Verify PWM can work well when configure through usec,
+ * nsec, or cycle.
+ *
  * @details
  * - Test Steps
  *   -# Bind PWM_0 port 0.
@@ -23,7 +22,6 @@
  *	Always on  ->  Period : Pulse (1 : 1)  ->  3.3V
  *	Half on  ->  Period : Pulse (2 : 1)  ->  1.65V
  *	Always off  ->  Period : Pulse (1 : 0)  ->  0V
- * @}
  */
 
 #include <device.h>
@@ -40,11 +38,19 @@
 #define PWM_DEV_NAME DT_LABEL(DT_ALIAS(pwm_2))
 #elif DT_NODE_HAS_STATUS(DT_ALIAS(pwm_3), okay)
 #define PWM_DEV_NAME DT_LABEL(DT_ALIAS(pwm_3))
+
+#elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_pwm)
+#define PWM_DEV_NAME DT_LABEL(DT_INST(0, st_stm32_pwm))
+
+#elif DT_HAS_COMPAT_STATUS_OKAY(xlnx_xps_timer_1_00_a_pwm)
+#define PWM_DEV_NAME DT_LABEL(DT_INST(0, xlnx_xps_timer_1_00_a_pwm))
+
 #else
 #error "Define a PWM device"
 #endif
 
-#if defined(CONFIG_BOARD_COLIBRI_IMX7D_M4) || defined(CONFIG_SOC_MK64F12)
+#if defined(CONFIG_BOARD_COLIBRI_IMX7D_M4) || defined(CONFIG_SOC_MK64F12) || \
+	defined(CONFIG_SOC_MKW41Z4)
 #define DEFAULT_PERIOD_CYCLE 1024
 #define DEFAULT_PULSE_CYCLE 512
 #define DEFAULT_PERIOD_USEC 2000
@@ -64,6 +70,10 @@
 #define DEFAULT_PWM_PORT 2 /* PWM on EXT2 connector, pin 8 */
 #elif defined CONFIG_PWM_NRFX
 #define DEFAULT_PWM_PORT DT_PROP(DT_ALIAS(pwm_0), ch0_pin)
+#elif defined CONFIG_BOARD_ADAFRUIT_ITSYBITSY_M4_EXPRESS
+#define DEFAULT_PWM_PORT 2 /* TCC1/WO[2] on PA18 (D7) */
+#elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_pwm)
+#define DEFAULT_PWM_PORT 1
 #else
 #define DEFAULT_PWM_PORT 0
 #endif
@@ -72,12 +82,12 @@
 #define UNIT_USECS	1
 #define UNIT_NSECS	2
 
-static int test_task(u32_t port, u32_t period, u32_t pulse, u8_t unit)
+static int test_task(uint32_t port, uint32_t period, uint32_t pulse, uint8_t unit)
 {
 	TC_PRINT("[PWM]: %" PRIu8 ", [period]: %" PRIu32 ", [pulse]: %" PRIu32 "\n",
 		port, period, pulse);
 
-	struct device *pwm_dev = device_get_binding(PWM_DEV_NAME);
+	const struct device *pwm_dev = device_get_binding(PWM_DEV_NAME);
 
 	if (!pwm_dev) {
 		TC_PRINT("Cannot get PWM device\n");

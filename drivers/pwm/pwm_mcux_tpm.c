@@ -29,23 +29,23 @@ struct mcux_tpm_config {
 	clock_control_subsys_t clock_subsys;
 	tpm_clock_source_t tpm_clock_source;
 	tpm_clock_prescale_t prescale;
-	u8_t channel_count;
+	uint8_t channel_count;
 	tpm_pwm_mode_t mode;
 };
 
 struct mcux_tpm_data {
-	u32_t clock_freq;
-	u32_t period_cycles;
+	uint32_t clock_freq;
+	uint32_t period_cycles;
 	tpm_chnl_pwm_signal_param_t channel[MAX_CHANNELS];
 };
 
-static int mcux_tpm_pin_set(struct device *dev, u32_t pwm,
-			      u32_t period_cycles, u32_t pulse_cycles,
+static int mcux_tpm_pin_set(const struct device *dev, uint32_t pwm,
+			      uint32_t period_cycles, uint32_t pulse_cycles,
 			      pwm_flags_t flags)
 {
-	const struct mcux_tpm_config *config = dev->config_info;
-	struct mcux_tpm_data *data = dev->driver_data;
-	u8_t duty_cycle;
+	const struct mcux_tpm_config *config = dev->config;
+	struct mcux_tpm_data *data = dev->data;
+	uint8_t duty_cycle;
 
 	if ((period_cycles == 0U) || (pulse_cycles > period_cycles)) {
 		LOG_ERR("Invalid combination: period_cycles=%d, "
@@ -71,7 +71,7 @@ static int mcux_tpm_pin_set(struct device *dev, u32_t pwm,
 		pulse_cycles, period_cycles, duty_cycle, flags);
 
 	if (period_cycles != data->period_cycles) {
-		u32_t pwm_freq;
+		uint32_t pwm_freq;
 		status_t status;
 
 		if (data->period_cycles != 0) {
@@ -116,23 +116,23 @@ static int mcux_tpm_pin_set(struct device *dev, u32_t pwm,
 	return 0;
 }
 
-static int mcux_tpm_get_cycles_per_sec(struct device *dev, u32_t pwm,
-					 u64_t *cycles)
+static int mcux_tpm_get_cycles_per_sec(const struct device *dev, uint32_t pwm,
+					 uint64_t *cycles)
 {
-	const struct mcux_tpm_config *config = dev->config_info;
-	struct mcux_tpm_data *data = dev->driver_data;
+	const struct mcux_tpm_config *config = dev->config;
+	struct mcux_tpm_data *data = dev->data;
 
 	*cycles = data->clock_freq >> config->prescale;
 
 	return 0;
 }
 
-static int mcux_tpm_init(struct device *dev)
+static int mcux_tpm_init(const struct device *dev)
 {
-	const struct mcux_tpm_config *config = dev->config_info;
-	struct mcux_tpm_data *data = dev->driver_data;
+	const struct mcux_tpm_config *config = dev->config;
+	struct mcux_tpm_data *data = dev->data;
 	tpm_chnl_pwm_signal_param_t *channel = data->channel;
-	struct device *clock_dev;
+	const struct device *clock_dev;
 	tpm_config_t tpm_config;
 	int i;
 
@@ -194,9 +194,8 @@ static const struct pwm_driver_api mcux_tpm_driver_api = {
 		.mode = kTPM_EdgeAlignedPwm, \
 	}; \
 	static struct mcux_tpm_data mcux_tpm_data_##n; \
-	DEVICE_AND_API_INIT(mcux_tpm_##n, \
-			    DT_INST_LABEL(n), \
-			    &mcux_tpm_init, &mcux_tpm_data_##n, \
+	DEVICE_DT_INST_DEFINE(n, &mcux_tpm_init, device_pm_control_nop, \
+			    &mcux_tpm_data_##n, \
 			    &mcux_tpm_config_##n, \
 			    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE, \
 			    &mcux_tpm_driver_api);

@@ -15,26 +15,6 @@
 
 #include "board.h"
 
-static struct bt_mesh_cfg_srv cfg_srv = {
-	.relay = BT_MESH_RELAY_DISABLED,
-	.beacon = BT_MESH_BEACON_ENABLED,
-#if defined(CONFIG_BT_MESH_FRIEND)
-	.frnd = BT_MESH_FRIEND_ENABLED,
-#else
-	.frnd = BT_MESH_FRIEND_NOT_SUPPORTED,
-#endif
-#if defined(CONFIG_BT_MESH_GATT_PROXY)
-	.gatt_proxy = BT_MESH_GATT_PROXY_ENABLED,
-#else
-	.gatt_proxy = BT_MESH_GATT_PROXY_NOT_SUPPORTED,
-#endif
-	.default_ttl = 7,
-
-	/* 3 transmissions with 20ms interval */
-	.net_transmit = BT_MESH_TRANSMIT(2, 20),
-	.relay_retransmit = BT_MESH_TRANSMIT(2, 20),
-};
-
 static struct bt_mesh_health_srv health_srv = {
 };
 
@@ -122,7 +102,7 @@ static const struct bt_mesh_model_op gen_level_op[] = {
 };
 
 static struct bt_mesh_model root_models[] = {
-	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
+	BT_MESH_MODEL_CFG_SRV,
 	BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 	BT_MESH_MODEL(BT_MESH_MODEL_ID_GEN_ONOFF_SRV, gen_onoff_op,
 		      &gen_onoff_pub, NULL),
@@ -140,7 +120,7 @@ static const struct bt_mesh_comp comp = {
 	.elem_count = ARRAY_SIZE(elements),
 };
 
-static int output_number(bt_mesh_output_action_t action, u32_t number)
+static int output_number(bt_mesh_output_action_t action, uint32_t number)
 {
 	printk("OOB Number: %u\n", number);
 
@@ -149,7 +129,7 @@ static int output_number(bt_mesh_output_action_t action, u32_t number)
 	return 0;
 }
 
-static void prov_complete(u16_t net_idx, u16_t addr)
+static void prov_complete(uint16_t net_idx, uint16_t addr)
 {
 	board_prov_complete();
 }

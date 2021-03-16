@@ -29,11 +29,11 @@ static struct spi_config iis2dlpc_spi_conf = {
 	.cs        = NULL,
 };
 
-static int iis2dlpc_spi_read(struct iis2dlpc_data *ctx, u8_t reg,
-			    u8_t *data, u16_t len)
+static int iis2dlpc_spi_read(struct iis2dlpc_data *ctx, uint8_t reg,
+			    uint8_t *data, uint16_t len)
 {
 	struct spi_config *spi_cfg = &iis2dlpc_spi_conf;
-	u8_t buffer_tx[2] = { reg | IIS2DLPC_SPI_READ, 0 };
+	uint8_t buffer_tx[2] = { reg | IIS2DLPC_SPI_READ, 0 };
 	const struct spi_buf tx_buf = {
 			.buf = buffer_tx,
 			.len = 2,
@@ -64,11 +64,11 @@ static int iis2dlpc_spi_read(struct iis2dlpc_data *ctx, u8_t reg,
 	return 0;
 }
 
-static int iis2dlpc_spi_write(struct iis2dlpc_data *ctx, u8_t reg,
-			     u8_t *data, u16_t len)
+static int iis2dlpc_spi_write(struct iis2dlpc_data *ctx, uint8_t reg,
+			     uint8_t *data, uint16_t len)
 {
 	struct spi_config *spi_cfg = &iis2dlpc_spi_conf;
-	u8_t buffer_tx[1] = { reg & ~IIS2DLPC_SPI_READ };
+	uint8_t buffer_tx[1] = { reg & ~IIS2DLPC_SPI_READ };
 	const struct spi_buf tx_buf[2] = {
 		{
 			.buf = buffer_tx,
@@ -97,9 +97,9 @@ stmdev_ctx_t iis2dlpc_spi_ctx = {
 	.write_reg = (stmdev_write_ptr) iis2dlpc_spi_write,
 };
 
-int iis2dlpc_spi_init(struct device *dev)
+int iis2dlpc_spi_init(const struct device *dev)
 {
-	struct iis2dlpc_data *data = dev->driver_data;
+	struct iis2dlpc_data *data = dev->data;
 
 	data->ctx = &iis2dlpc_spi_ctx;
 	data->ctx->handle = data;
@@ -114,6 +114,7 @@ int iis2dlpc_spi_init(struct device *dev)
 	}
 
 	data->cs_ctrl.gpio_pin = DT_INST_SPI_DEV_CS_GPIOS_PIN(0);
+	data->cs_ctrl.gpio_dt_flags = DT_INST_SPI_DEV_CS_GPIOS_FLAGS(0);
 	data->cs_ctrl.delay = 0U;
 
 	iis2dlpc_spi_conf.cs = &data->cs_ctrl;

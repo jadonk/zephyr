@@ -5,6 +5,7 @@
  */
 #include <shell/shell.h>
 #include "shell_utils.h"
+#include "shell_help.h"
 #include "shell_ops.h"
 #include "shell_vt100.h"
 
@@ -44,6 +45,7 @@
 	"command to be selected, it must meet the criteria:\n"		      \
 	" - it is a static command\n"					      \
 	" - it is not preceded by a dynamic command\n"			      \
+	" - it accepts arguments\n"					      \
 	"Return to the main command tree is done by pressing alt+r."
 
 #define SHELL_HELP_SHELL		"Useful, not Unix-like shell commands."
@@ -60,9 +62,9 @@
 #define SHELL_DEFAULT_TERMINAL_HEIGHT 24
 
 /* Function reads cursor position from terminal. */
-static int cursor_position_get(const struct shell *shell, u16_t *x, u16_t *y)
+static int cursor_position_get(const struct shell *shell, uint16_t *x, uint16_t *y)
 {
-	u16_t buff_idx = 0U;
+	uint16_t buff_idx = 0U;
 	size_t cnt;
 	char c = 0;
 
@@ -82,7 +84,7 @@ static int cursor_position_get(const struct shell *shell, u16_t *x, u16_t *y)
 	transport_buffer_flush(shell);
 
 	/* timeout for terminal response = ~1s */
-	for (u16_t i = 0; i < 1000; i++) {
+	for (uint16_t i = 0; i < 1000; i++) {
 		do {
 			(void)shell->iface->api->read(shell->iface, &c,
 						      sizeof(c), &cnt);
@@ -167,8 +169,8 @@ static int cursor_position_get(const struct shell *shell, u16_t *x, u16_t *y)
 /* Function gets terminal width and height. */
 static int terminal_size_get(const struct shell *shell)
 {
-	u16_t x; /* horizontal position */
-	u16_t y; /* vertical position */
+	uint16_t x; /* horizontal position */
+	uint16_t y; /* vertical position */
 	int ret_val = 0;
 
 	cursor_save(shell);
@@ -276,35 +278,13 @@ static int cmd_echo(const struct shell *shell, size_t argc, char **argv)
 	return 0;
 }
 
-static int cmd_help(const struct shell *shell, size_t argc, char **argv)
-{
-	ARG_UNUSED(argc);
-	ARG_UNUSED(argv);
-
-	shell_print(shell,
-		"Please press the <Tab> button to see all available commands.\n"
-		"You can also use the <Tab> button to prompt or auto-complete"
-		" all commands or its subcommands.\n"
-		"You can try to call commands with <-h> or <--help> parameter"
-		" for more information.");
-#if defined(CONFIG_SHELL_METAKEYS)
-	shell_print(shell,
-		"Shell supports following meta-keys:\n"
-		"Ctrl+a, Ctrl+b, Ctrl+c, Ctrl+d, Ctrl+e, Ctrl+f, Ctrl+k,"
-		" Ctrl+l, Ctrl+n, Ctrl+p, Ctrl+u, Ctrl+w\nAlt+b, Alt+f.\n"
-		"Please refer to shell documentation for more details.");
-#endif
-
-	return 0;
-}
-
 static int cmd_history(const struct shell *shell, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
 	size_t i = 0;
-	u16_t len;
+	uint16_t len;
 
 	while (1) {
 		shell_history_get(shell->history, true,
@@ -457,8 +437,6 @@ SHELL_STATIC_SUBCMD_SET_CREATE(m_sub_resize,
 
 SHELL_CMD_ARG_REGISTER(clear, NULL, SHELL_HELP_CLEAR, cmd_clear, 1, 0);
 SHELL_CMD_REGISTER(shell, &m_sub_shell, SHELL_HELP_SHELL, NULL);
-SHELL_CMD_ARG_REGISTER(help, NULL, SHELL_HELP_HELP, cmd_help,
-			1, SHELL_OPT_ARG_CHECK_SKIP);
 SHELL_COND_CMD_ARG_REGISTER(CONFIG_SHELL_HISTORY, history, NULL,
 			SHELL_HELP_HISTORY, cmd_history, 1, 0);
 SHELL_COND_CMD_ARG_REGISTER(CONFIG_SHELL_CMDS_RESIZE, resize, &m_sub_resize,

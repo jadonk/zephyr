@@ -48,9 +48,9 @@ enum {
  * - write operations may block if the remote @a recv_q is full
  * - each endpoint may be blocking or non-blocking
  */
-struct spair {
+__net_socket struct spair {
 	int remote; /**< the remote endpoint file descriptor */
-	u32_t flags; /**< status and option bits */
+	uint32_t flags; /**< status and option bits */
 	struct k_sem sem; /**< semaphore for exclusive structure access */
 	struct k_pipe recv_q; /**< receive queue of local endpoint */
 	/** indicates write of local @a recv_q occurred */
@@ -58,7 +58,7 @@ struct spair {
 	/** indicates read of local @a recv_q occurred */
 	struct k_poll_signal read_signal;
 	/** buffer for @a recv_q recv_q */
-	u8_t buf[CONFIG_NET_SOCKETPAIR_BUFFER_SIZE];
+	uint8_t buf[CONFIG_NET_SOCKETPAIR_BUFFER_SIZE];
 };
 
 /* forward declaration */
@@ -121,9 +121,9 @@ static inline size_t spair_read_avail(struct spair *spair)
 }
 
 /** Swap two 32-bit integers */
-static inline void swap32(u32_t *a, u32_t *b)
+static inline void swap32(uint32_t *a, uint32_t *b)
 {
-	u32_t c;
+	uint32_t c;
 
 	c = *b;
 	*b = *a;
@@ -193,8 +193,11 @@ static void spair_delete(struct spair *spair)
 
 	/* ensure no private information is released to the memory pool */
 	memset(spair, 0, sizeof(*spair));
-
+#ifdef CONFIG_USERSPACE
+	k_object_free(spair);
+#else
 	k_free(spair);
+#endif
 
 	if (remote != NULL && have_remote_sem) {
 		k_sem_give(&remote->sem);
@@ -214,7 +217,18 @@ static struct spair *spair_new(void)
 {
 	struct spair *spair;
 
+#ifdef CONFIG_USERSPACE
+	struct z_object *zo = z_dynamic_object_create(sizeof(*spair));
+
+	if (zo == NULL) {
+		spair = NULL;
+	} else {
+		spair = zo->name;
+		zo->type = K_OBJ_NET_SOCKET;
+	}
+#else
 	spair = k_malloc(sizeof(*spair));
+#endif
 	if (spair == NULL) {
 		errno = ENOMEM;
 		goto out;
@@ -308,13 +322,12 @@ errout:
 }
 
 #ifdef CONFIG_USERSPACE
-int z_vrfy_zsock_socketpair(int family, int type, int proto,
-					  int *sv)
+int z_vrfy_zsock_socketpair(int family, int type, int proto, int *sv)
 {
 	int ret;
 	int tmp[2];
 
-	if (Z_SYSCALL_MEMORY_WRITE(sv, sizeof(tmp)) != 0) {
+	if (!sv || Z_SYSCALL_MEMORY_WRITE(sv, sizeof(tmp)) != 0) {
 		/* not listed in normative spec, but mimics linux behaviour */
 		errno = EFAULT;
 		ret = -1;
@@ -476,19 +489,11 @@ static ssize_t spair_write(void *obj, const void *buffer, size_t count)
 				goto out;
 			}
 
-			res = k_sem_take(&remote->sem, K_NO_WAIT);
+			res = k_sem_take(&remote->sem, K_FOREVER);
 			if (res < 0) {
-				if (is_nonblock) {
-					errno = -res;
-					res = -1;
-					goto out;
-				}
-				res = k_sem_take(&remote->sem, K_FOREVER);
-				if (res < 0) {
-					errno = -res;
-					res = -1;
-					goto out;
-				}
+				errno = -res;
+				res = -1;
+				goto out;
 			}
 
 			have_remote_sem = true;
@@ -921,14 +926,6 @@ static int spair_ioctl(void *obj, unsigned int request, va_list args)
 			goto out;
 		}
 
-		case ZFD_IOCTL_CLOSE: {
-			/* disconnect the remote endpoint */
-			spair_delete(spair);
-			have_local_sem = false;
-			res = 0;
-			goto out;
-		}
-
 		case ZFD_IOCTL_POLL_PREPARE: {
 			pfd = va_arg(args, struct zsock_pollfd *);
 			pev = va_arg(args, struct k_poll_event **);
@@ -1021,16 +1018,20 @@ static ssize_t spair_sendmsg(void *obj, const struct msghdr *msg,
 
 	int res;
 	size_t len = 0;
+	bool is_connected;
+	size_t avail;
+	bool is_nonblock;
 	struct spair *const spair = (struct spair *)obj;
-	const bool is_connected = sock_is_connected(spair);
-	const size_t avail = is_connected ? spair_write_avail(spair) : 0;
-	const bool is_nonblock = sock_is_nonblock(spair);
 
 	if (spair == NULL || msg == NULL) {
 		errno = EINVAL;
 		res = -1;
 		goto out;
 	}
+
+	is_connected = sock_is_connected(spair);
+	avail = is_connected ? spair_write_avail(spair) : 0;
+	is_nonblock = sock_is_nonblock(spair);
 
 	for (size_t i = 0; i < msg->msg_iovlen; ++i) {
 		/* check & msg->msg_iov[i]? */
@@ -1119,10 +1120,27 @@ static int spair_setsockopt(void *obj, int level, int optname,
 	return -1;
 }
 
+static int spair_close(void *obj)
+{
+	struct spair *const spair = (struct spair *)obj;
+	int res;
+
+	res = k_sem_take(&spair->sem, K_FOREVER);
+	__ASSERT(res == 0, "failed to take local sem: %d", res);
+
+	/* disconnect the remote endpoint */
+	spair_delete(spair);
+
+	/* Note that the semaphore released already so need to do it here */
+
+	return 0;
+}
+
 static const struct socket_op_vtable spair_fd_op_vtable = {
 	.fd_vtable = {
 		.read = spair_read,
 		.write = spair_write,
+		.close = spair_close,
 		.ioctl = spair_ioctl,
 	},
 	.bind = spair_bind,

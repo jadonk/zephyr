@@ -35,7 +35,7 @@ struct _callee_saved {
 	 * callee-saved, but their values are pushed onto the stack rather than
 	 * stored in the k_thread structure:
 	 */
-	u32_t retval; /* a2 */
+	uint32_t retval; /* a2 */
 	XtExcFrame *topOfStack; /* a1 = sp */
 };
 
@@ -83,10 +83,8 @@ struct _thread_arch {
 	 * before any #ifdef'ed fields since the host tools currently use a
 	 * fixed offset to read the 'flags' field.
 	 */
-	u32_t flags;
-#ifdef CONFIG_ERRNO
-	int errno_var;
-#endif
+	uint32_t flags;
+
 	/*
 	 * The location of all floating point related structures/fields MUST be
 	 * located at the end of struct k_thread.  This way only the threads

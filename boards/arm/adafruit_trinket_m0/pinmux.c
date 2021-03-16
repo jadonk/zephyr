@@ -8,9 +8,9 @@
 #include <drivers/pinmux.h>
 #include <soc.h>
 
-static int board_pinmux_init(struct device *dev)
+static int board_pinmux_init(const struct device *dev)
 {
-	struct device *muxa = device_get_binding(DT_LABEL(DT_NODELABEL(pinmux_a)));
+	const struct device *muxa = device_get_binding(DT_LABEL(DT_NODELABEL(pinmux_a)));
 
 	ARG_UNUSED(dev);
 
@@ -63,6 +63,12 @@ static int board_pinmux_init(struct device *dev)
 #endif
 #if (ATMEL_SAM0_DT_SERCOM_CHECK(5, atmel_sam0_spi) && CONFIG_SPI_SAM0)
 #warning Pin mapping may not be configured
+#endif
+
+#if ATMEL_SAM0_DT_TCC_CHECK(0, atmel_sam0_tcc_pwm) && \
+	defined(CONFIG_PWM_SAM0_TCC)
+	/* LED0 on PA10/TCC0/WO[2] */
+	pinmux_pin_set(muxa, 10, PINMUX_FUNC_F);
 #endif
 
 #ifdef CONFIG_USB_DC_SAM0

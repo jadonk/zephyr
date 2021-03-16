@@ -59,28 +59,28 @@ static inline void dcache_is_enabled(void)
 {
 	dcache_enabled = (SCB->CCR & SCB_CCR_DC_Msk);
 }
-static inline void dcache_invalidate(u32_t addr, u32_t size)
+static inline void dcache_invalidate(uint32_t addr, uint32_t size)
 {
 	if (!dcache_enabled) {
 		return;
 	}
 
 	/* Make sure it is aligned to 32B */
-	u32_t start_addr = addr & (u32_t)~(GMAC_DCACHE_ALIGNMENT - 1);
-	u32_t size_full = size + addr - start_addr;
+	uint32_t start_addr = addr & (uint32_t)~(GMAC_DCACHE_ALIGNMENT - 1);
+	uint32_t size_full = size + addr - start_addr;
 
 	SCB_InvalidateDCache_by_Addr((uint32_t *)start_addr, size_full);
 }
 
-static inline void dcache_clean(u32_t addr, u32_t size)
+static inline void dcache_clean(uint32_t addr, uint32_t size)
 {
 	if (!dcache_enabled) {
 		return;
 	}
 
 	/* Make sure it is aligned to 32B */
-	u32_t start_addr = addr & (u32_t)~(GMAC_DCACHE_ALIGNMENT - 1);
-	u32_t size_full = size + addr - start_addr;
+	uint32_t start_addr = addr & (uint32_t)~(GMAC_DCACHE_ALIGNMENT - 1);
+	uint32_t size_full = size + addr - start_addr;
 
 	SCB_CleanDCache_by_Addr((uint32_t *)start_addr, size_full);
 }
@@ -245,16 +245,16 @@ static inline void set_receive_buf_queue_pointer(
 {
 	/* Set Receive Buffer Queue Pointer Register */
 	if (queue->que_idx == GMAC_QUE_0) {
-		gmac->GMAC_RBQB = (u32_t)queue->rx_desc_list.buf;
+		gmac->GMAC_RBQB = (uint32_t)queue->rx_desc_list.buf;
 	} else {
 		gmac->GMAC_RBQBAPQ[queue->que_idx - 1] =
-			(u32_t)queue->rx_desc_list.buf;
+			(uint32_t)queue->rx_desc_list.buf;
 	}
 }
 
 static inline void disable_all_priority_queue_interrupt(Gmac *gmac)
 {
-	u32_t idx;
+	uint32_t idx;
 
 	for (idx = 0; idx < GMAC_PRIORITY_QUEUE_NUM; idx++) {
 		gmac->GMAC_IDRPQ[idx] = UINT32_MAX;
@@ -269,9 +269,9 @@ static int priority_queue_init(Gmac *gmac, struct gmac_queue *queue)
 
 	__ASSERT_NO_MSG(queue->rx_desc_list.len > 0);
 	__ASSERT_NO_MSG(queue->tx_desc_list.len > 0);
-	__ASSERT(!((u32_t)queue->rx_desc_list.buf & ~GMAC_RBQB_ADDR_Msk),
+	__ASSERT(!((uint32_t)queue->rx_desc_list.buf & ~GMAC_RBQB_ADDR_Msk),
 		 "RX descriptors have to be word aligned");
-	__ASSERT(!((u32_t)queue->tx_desc_list.buf & ~GMAC_TBQB_ADDR_Msk),
+	__ASSERT(!((uint32_t)queue->tx_desc_list.buf & ~GMAC_TBQB_ADDR_Msk),
 		 "TX descriptors have to be word aligned");
 
 	/* Extract queue index for easier referencing */
@@ -297,9 +297,9 @@ static int priority_queue_init(Gmac *gmac, struct gmac_queue *queue)
 		GMAC_RBSRPQ_RBS(CONFIG_NET_BUF_DATA_SIZE >> 6);
 
 	/* Set Receive Buffer Queue Pointer Register */
-	gmac->GMAC_RBQBAPQ[queue_index] = (u32_t)queue->rx_desc_list.buf;
+	gmac->GMAC_RBQBAPQ[queue_index] = (uint32_t)queue->rx_desc_list.buf;
 	/* Set Transmit Buffer Queue Pointer Register */
-	gmac->GMAC_TBQBAPQ[queue_index] = (u32_t)queue->tx_desc_list.buf;
+	gmac->GMAC_TBQBAPQ[queue_index] = (uint32_t)queue->tx_desc_list.buf;
 
 	/* Enable RX/TX completion and error interrupts */
 	gmac->GMAC_IERPQ[queue_index] = GMAC_INTPQ_EN_FLAGS;
@@ -318,9 +318,9 @@ static int priority_queue_init_as_idle(Gmac *gmac, struct gmac_queue *queue)
 	struct gmac_desc_list *rx_desc_list = &queue->rx_desc_list;
 	struct gmac_desc_list *tx_desc_list = &queue->tx_desc_list;
 
-	__ASSERT(!((u32_t)rx_desc_list->buf & ~GMAC_RBQB_ADDR_Msk),
+	__ASSERT(!((uint32_t)rx_desc_list->buf & ~GMAC_RBQB_ADDR_Msk),
 		 "RX descriptors have to be word aligned");
-	__ASSERT(!((u32_t)tx_desc_list->buf & ~GMAC_TBQB_ADDR_Msk),
+	__ASSERT(!((uint32_t)tx_desc_list->buf & ~GMAC_TBQB_ADDR_Msk),
 		 "TX descriptors have to be word aligned");
 	__ASSERT((rx_desc_list->len == 1U) && (tx_desc_list->len == 1U),
 		 "Priority queues are currently not supported, descriptor "
@@ -336,9 +336,9 @@ static int priority_queue_init_as_idle(Gmac *gmac, struct gmac_queue *queue)
 	tx_desc_list->buf[0].w1 = GMAC_TXW1_USED | GMAC_TXW1_WRAP;
 
 	/* Set Receive Buffer Queue Pointer Register */
-	gmac->GMAC_RBQBAPQ[queue->que_idx - 1] = (u32_t)rx_desc_list->buf;
+	gmac->GMAC_RBQBAPQ[queue->que_idx - 1] = (uint32_t)rx_desc_list->buf;
 	/* Set Transmit Buffer Queue Pointer Register */
-	gmac->GMAC_TBQBAPQ[queue->que_idx - 1] = (u32_t)tx_desc_list->buf;
+	gmac->GMAC_TBQBAPQ[queue->que_idx - 1] = (uint32_t)tx_desc_list->buf;
 
 	LOG_INF("Queue %d set to idle", queue->que_idx);
 
@@ -362,7 +362,7 @@ static inline void set_receive_buf_queue_pointer(
 	Gmac *gmac,
 	struct gmac_queue *queue)
 {
-	gmac->GMAC_RBQB = (u32_t)queue->rx_desc_list.buf;
+	gmac->GMAC_RBQB = (uint32_t)queue->rx_desc_list.buf;
 }
 
 static int queue_init(Gmac *gmac, struct gmac_queue *queue)
@@ -379,7 +379,7 @@ static int eth_sam_gmac_setup_qav(Gmac *gmac, int queue_id, bool enable);
 
 static inline void eth_sam_gmac_init_qav(Gmac *gmac)
 {
-	u32_t idx;
+	uint32_t idx;
 
 	for (idx = GMAC_QUE_1; idx <= GMAC_ACTIVE_PRIORITY_QUEUE_NUM; idx++) {
 		eth_sam_gmac_setup_qav(gmac, idx, true);
@@ -405,9 +405,9 @@ static void ring_buf_reset(struct ring_buf *rb)
 /*
  * Get one 32 bit item from the ring buffer
  */
-static u32_t ring_buf_get(struct ring_buf *rb)
+static uint32_t ring_buf_get(struct ring_buf *rb)
 {
-	u32_t val;
+	uint32_t val;
 
 	__ASSERT(rb->tail != rb->head,
 		 "retrieving data from empty ring buffer");
@@ -421,7 +421,7 @@ static u32_t ring_buf_get(struct ring_buf *rb)
 /*
  * Put one 32 bit item into the ring buffer
  */
-static void ring_buf_put(struct ring_buf *rb, u32_t val)
+static void ring_buf_put(struct ring_buf *rb, uint32_t val)
 {
 	rb->buf[rb->head] = val;
 	MODULO_INC(rb->head, rb->len);
@@ -434,7 +434,7 @@ static void ring_buf_put(struct ring_buf *rb, u32_t val)
 /*
  * Free pre-reserved RX buffers
  */
-static void free_rx_bufs(struct net_buf **rx_frag_list, u16_t len)
+static void free_rx_bufs(struct net_buf **rx_frag_list, uint16_t len)
 {
 	for (int i = 0; i < len; i++) {
 		if (rx_frag_list[i]) {
@@ -447,8 +447,8 @@ static void free_rx_bufs(struct net_buf **rx_frag_list, u16_t len)
 /*
  * Set MAC Address for frame filtering logic
  */
-static void mac_addr_set(Gmac *gmac, u8_t index,
-				 u8_t mac_addr[6])
+static void mac_addr_set(Gmac *gmac, uint8_t index,
+				 uint8_t mac_addr[6])
 {
 	__ASSERT(index < 4, "index has to be in the range 0..3");
 
@@ -468,7 +468,7 @@ static int rx_descriptors_init(Gmac *gmac, struct gmac_queue *queue)
 	struct gmac_desc_list *rx_desc_list = &queue->rx_desc_list;
 	struct net_buf **rx_frag_list = queue->rx_frag_list;
 	struct net_buf *rx_buf;
-	u8_t *rx_buf_addr;
+	uint8_t *rx_buf_addr;
 
 	__ASSERT_NO_MSG(rx_frag_list);
 
@@ -485,12 +485,12 @@ static int rx_descriptors_init(Gmac *gmac, struct gmac_queue *queue)
 		rx_frag_list[i] = rx_buf;
 
 		rx_buf_addr = rx_buf->data;
-		__ASSERT(!((u32_t)rx_buf_addr & ~GMAC_RXW0_ADDR),
+		__ASSERT(!((uint32_t)rx_buf_addr & ~GMAC_RXW0_ADDR),
 			 "Misaligned RX buffer address");
 		__ASSERT(rx_buf->size == CONFIG_NET_BUF_DATA_SIZE,
 			 "Incorrect length of RX data buffer");
 		/* Give ownership to GMAC and remove the wrap bit */
-		rx_desc_list->buf[i].w0 = (u32_t)rx_buf_addr & GMAC_RXW0_ADDR;
+		rx_desc_list->buf[i].w0 = (uint32_t)rx_buf_addr & GMAC_RXW0_ADDR;
 		rx_desc_list->buf[i].w1 = 0U;
 	}
 
@@ -532,7 +532,7 @@ static struct gptp_hdr *check_gptp_msg(struct net_if *iface,
 				       struct net_pkt *pkt,
 				       bool is_tx)
 {
-	u8_t *msg_start = net_pkt_data(pkt);
+	uint8_t *msg_start = net_pkt_data(pkt);
 	struct ethernet_context *eth_ctx;
 	struct gptp_hdr *gptp_hdr;
 	int eth_hlen;
@@ -605,7 +605,7 @@ static inline struct net_ptp_time get_ptp_event_rx_ts(Gmac *gmac)
 {
 	struct net_ptp_time ts;
 
-	ts.second = ((u64_t)(gmac->GMAC_EFRSH & 0xffff) << 32)
+	ts.second = ((uint64_t)(gmac->GMAC_EFRSH & 0xffff) << 32)
 			   | gmac->GMAC_EFRSL;
 	ts.nanosecond = gmac->GMAC_EFRN;
 
@@ -616,7 +616,7 @@ static inline struct net_ptp_time get_ptp_peer_event_rx_ts(Gmac *gmac)
 {
 	struct net_ptp_time ts;
 
-	ts.second = ((u64_t)(gmac->GMAC_PEFRSH & 0xffff) << 32)
+	ts.second = ((uint64_t)(gmac->GMAC_PEFRSH & 0xffff) << 32)
 		    | gmac->GMAC_PEFRSL;
 	ts.nanosecond = gmac->GMAC_PEFRN;
 
@@ -627,7 +627,7 @@ static inline struct net_ptp_time get_ptp_event_tx_ts(Gmac *gmac)
 {
 	struct net_ptp_time ts;
 
-	ts.second = ((u64_t)(gmac->GMAC_EFTSH & 0xffff) << 32)
+	ts.second = ((uint64_t)(gmac->GMAC_EFTSH & 0xffff) << 32)
 			   | gmac->GMAC_EFTSL;
 	ts.nanosecond = gmac->GMAC_EFTN;
 
@@ -638,7 +638,7 @@ static inline struct net_ptp_time get_ptp_peer_event_tx_ts(Gmac *gmac)
 {
 	struct net_ptp_time ts;
 
-	ts.second = ((u64_t)(gmac->GMAC_PEFTSH & 0xffff) << 32)
+	ts.second = ((uint64_t)(gmac->GMAC_PEFTSH & 0xffff) << 32)
 		    | gmac->GMAC_PEFTSL;
 	ts.nanosecond = gmac->GMAC_PEFTN;
 
@@ -649,7 +649,7 @@ static inline struct net_ptp_time get_current_ts(Gmac *gmac)
 {
 	struct net_ptp_time ts;
 
-	ts.second = ((u64_t)(gmac->GMAC_TSH & 0xffff) << 32) | gmac->GMAC_TSL;
+	ts.second = ((uint64_t)(gmac->GMAC_TSH & 0xffff) << 32) | gmac->GMAC_TSL;
 	ts.nanosecond = gmac->GMAC_TN;
 
 	return ts;
@@ -699,7 +699,7 @@ static inline void timestamp_rx_pkt(Gmac *gmac, struct gptp_hdr *hdr,
 #endif
 
 static inline struct net_if *get_iface(struct eth_sam_dev_data *ctx,
-				       u16_t vlan_tag)
+				       uint16_t vlan_tag)
 {
 #if defined(CONFIG_NET_VLAN)
 	struct net_if *iface;
@@ -730,7 +730,7 @@ static void tx_completed(Gmac *gmac, struct gmac_queue *queue)
 	struct net_buf *frag;
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 	struct net_pkt *pkt;
-	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
+	uint16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 	struct gptp_hdr *hdr;
 	struct eth_sam_dev_data *dev_data =
 		CONTAINER_OF(queue, struct eth_sam_dev_data,
@@ -864,9 +864,9 @@ static void rx_error_handler(Gmac *gmac, struct gmac_queue *queue)
  *
  * According to 802.3 MDC should be less then 2.5 MHz.
  */
-static int get_mck_clock_divisor(u32_t mck)
+static int get_mck_clock_divisor(uint32_t mck)
 {
-	u32_t mck_divisor;
+	uint32_t mck_divisor;
 
 	if (mck <= 20000000U) {
 		mck_divisor = GMAC_NCFGR_CLK_MCK_8;
@@ -932,7 +932,7 @@ static int eth_sam_gmac_get_qav_status(Gmac *gmac, int queue_id, bool *enabled)
 static int eth_sam_gmac_setup_qav_idle_slope(Gmac *gmac, int queue_id,
 					     unsigned int idle_slope)
 {
-	u32_t cbscr_val;
+	uint32_t cbscr_val;
 
 	/* Verify queue id */
 	if (queue_id < GMAC_QUE_1 || queue_id > GMAC_ACTIVE_PRIORITY_QUEUE_NUM) {
@@ -954,9 +954,9 @@ static int eth_sam_gmac_setup_qav_idle_slope(Gmac *gmac, int queue_id,
 	return 0;
 }
 
-static u32_t eth_sam_gmac_get_bandwidth(Gmac *gmac)
+static uint32_t eth_sam_gmac_get_bandwidth(Gmac *gmac)
 {
-	u32_t bandwidth;
+	uint32_t bandwidth;
 
 	/* See if we operate in 10Mbps or 100Mbps mode,
 	 * Note: according to the manual, portTransmitRate is 0x07735940 for
@@ -997,7 +997,7 @@ static int eth_sam_gmac_get_qav_idle_slope(Gmac *gmac, int queue_id,
 static int eth_sam_gmac_get_qav_delta_bandwidth(Gmac *gmac, int queue_id,
 						unsigned int *delta_bandwidth)
 {
-	u32_t bandwidth;
+	uint32_t bandwidth;
 	unsigned int idle_slope;
 	int ret;
 
@@ -1024,8 +1024,8 @@ static int eth_sam_gmac_get_qav_delta_bandwidth(Gmac *gmac, int queue_id,
 static int eth_sam_gmac_setup_qav_delta_bandwidth(Gmac *gmac, int queue_id,
 						  int queue_share)
 {
-	u32_t bandwidth;
-	u32_t idle_slope;
+	uint32_t bandwidth;
+	uint32_t idle_slope;
 
 	/* Verify queue id */
 	if (queue_id < GMAC_QUE_1 || queue_id > GMAC_ACTIVE_PRIORITY_QUEUE_NUM) {
@@ -1049,7 +1049,7 @@ static void gmac_setup_ptp_clock_divisors(Gmac *gmac)
 	int div;
 	int i;
 
-	u8_t cns, acns, nit;
+	uint8_t cns, acns, nit;
 
 	min_cycles = MCK_FREQ_HZ;
 	min_period = NSEC_PER_SEC;
@@ -1079,7 +1079,7 @@ static void gmac_setup_ptp_clock_divisors(Gmac *gmac)
 }
 #endif
 
-static int gmac_init(Gmac *gmac, u32_t gmac_ncfgr_val)
+static int gmac_init(Gmac *gmac, uint32_t gmac_ncfgr_val)
 {
 	int mck_divisor;
 
@@ -1156,9 +1156,9 @@ static int gmac_init(Gmac *gmac, u32_t gmac_ncfgr_val)
 	return 0;
 }
 
-static void link_configure(Gmac *gmac, u32_t flags)
+static void link_configure(Gmac *gmac, uint32_t flags)
 {
-	u32_t val;
+	uint32_t val;
 
 	val = gmac->GMAC_NCFGR;
 
@@ -1176,9 +1176,9 @@ static int nonpriority_queue_init(Gmac *gmac, struct gmac_queue *queue)
 
 	__ASSERT_NO_MSG(queue->rx_desc_list.len > 0);
 	__ASSERT_NO_MSG(queue->tx_desc_list.len > 0);
-	__ASSERT(!((u32_t)queue->rx_desc_list.buf & ~GMAC_RBQB_ADDR_Msk),
+	__ASSERT(!((uint32_t)queue->rx_desc_list.buf & ~GMAC_RBQB_ADDR_Msk),
 		 "RX descriptors have to be word aligned");
-	__ASSERT(!((u32_t)queue->tx_desc_list.buf & ~GMAC_TBQB_ADDR_Msk),
+	__ASSERT(!((uint32_t)queue->tx_desc_list.buf & ~GMAC_TBQB_ADDR_Msk),
 		 "TX descriptors have to be word aligned");
 
 	/* Setup descriptor lists */
@@ -1204,9 +1204,9 @@ static int nonpriority_queue_init(Gmac *gmac, struct gmac_queue *queue)
 #endif
 
 	/* Set Receive Buffer Queue Pointer Register */
-	gmac->GMAC_RBQB = (u32_t)queue->rx_desc_list.buf;
+	gmac->GMAC_RBQB = (uint32_t)queue->rx_desc_list.buf;
 	/* Set Transmit Buffer Queue Pointer Register */
-	gmac->GMAC_TBQB = (u32_t)queue->tx_desc_list.buf;
+	gmac->GMAC_TBQB = (uint32_t)queue->tx_desc_list.buf;
 
 	/* Configure GMAC DMA transfer */
 	gmac->GMAC_DCFGR =
@@ -1239,11 +1239,11 @@ static struct net_pkt *frame_get(struct gmac_queue *queue)
 	struct net_buf *frag;
 	struct net_buf *new_frag;
 	struct net_buf *last_frag = NULL;
-	u8_t *frag_data;
-	u32_t frag_len;
-	u32_t frame_len = 0U;
-	u16_t tail;
-	u8_t wrap;
+	uint8_t *frag_data;
+	uint32_t frag_len;
+	uint32_t frame_len = 0U;
+	uint16_t tail;
+	uint8_t wrap;
 
 	/* Check if there exists a complete frame in RX descriptor list */
 	tail = rx_desc_list->tail;
@@ -1285,7 +1285,7 @@ static struct net_pkt *frame_get(struct gmac_queue *queue)
 	       && !frame_is_complete) {
 		frag = rx_frag_list[tail];
 		frag_data =
-			(u8_t *)(rx_desc->w0 & GMAC_RXW0_ADDR);
+			(uint8_t *)(rx_desc->w0 & GMAC_RXW0_ADDR);
 		__ASSERT(frag->data == frag_data,
 			 "RX descriptor and buffer list desynchronized");
 		frame_is_complete = (bool)(rx_desc->w1 & GMAC_RXW1_EOF);
@@ -1300,7 +1300,7 @@ static struct net_pkt *frame_get(struct gmac_queue *queue)
 		/* Link frame fragments only if RX net buffer is valid */
 		if (rx_frame != NULL) {
 			/* Assure cache coherency after DMA write operation */
-			dcache_invalidate((u32_t)frag_data, frag->size);
+			dcache_invalidate((uint32_t)frag_data, frag->size);
 
 			/* Get a new data net buffer from the buffer pool */
 			new_frag = net_pkt_get_frag(rx_frame, K_NO_WAIT);
@@ -1329,7 +1329,7 @@ static struct net_pkt *frame_get(struct gmac_queue *queue)
 		__DMB();  /* data memory barrier */
 		/* Update buffer descriptor address word */
 		wrap = (tail == rx_desc_list->len-1U ? GMAC_RXW0_WRAP : 0);
-		rx_desc->w0 = ((u32_t)frag->data & GMAC_RXW0_ADDR) | wrap;
+		rx_desc->w0 = ((uint32_t)frag->data & GMAC_RXW0_ADDR) | wrap;
 
 		MODULO_INC(tail, rx_desc_list->len);
 		rx_desc = &rx_desc_list->buf[tail];
@@ -1347,10 +1347,10 @@ static void eth_rx(struct gmac_queue *queue)
 	struct eth_sam_dev_data *dev_data =
 		CONTAINER_OF(queue, struct eth_sam_dev_data,
 			     queue_list[queue->que_idx]);
-	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
+	uint16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 	struct net_pkt *rx_frame;
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
-	struct device *const dev = net_if_get_device(dev_data->iface);
+	const struct device *dev = net_if_get_device(dev_data->iface);
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
 	Gmac *gmac = cfg->regs;
 	struct gptp_hdr *hdr;
@@ -1418,7 +1418,7 @@ static void eth_rx(struct gmac_queue *queue)
 	((NET_TC_TX_COUNT != NET_TC_RX_COUNT) && defined(CONFIG_NET_VLAN)))
 static int priority2queue(enum net_priority priority)
 {
-	static const u8_t queue_priority_map[] = {
+	static const uint8_t queue_priority_map[] = {
 #if GMAC_ACTIVE_QUEUE_NUM == 1
 		0, 0, 0, 0, 0, 0, 0, 0
 #endif
@@ -1443,7 +1443,7 @@ static int priority2queue(enum net_priority priority)
 }
 #endif
 
-static int eth_tx(struct device *dev, struct net_pkt *pkt)
+static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 {
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
 	struct eth_sam_dev_data *const dev_data = DEV_DATA(dev);
@@ -1453,16 +1453,16 @@ static int eth_tx(struct device *dev, struct net_pkt *pkt)
 	struct gmac_desc *tx_desc;
 	struct gmac_desc *tx_first_desc;
 	struct net_buf *frag;
-	u8_t *frag_data;
-	u16_t frag_len;
-	u32_t err_tx_flushed_count_at_entry;
+	uint8_t *frag_data;
+	uint16_t frag_len;
+	uint32_t err_tx_flushed_count_at_entry;
 #if GMAC_MULTIPLE_TX_PACKETS == 1
 	unsigned int key;
 #endif
-	u8_t pkt_prio;
+	uint8_t pkt_prio;
 #if GMAC_MULTIPLE_TX_PACKETS == 0
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
-	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
+	uint16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 	struct gptp_hdr *hdr;
 #if defined(CONFIG_NET_VLAN)
 	struct net_eth_hdr *eth_hdr;
@@ -1502,7 +1502,7 @@ static int eth_tx(struct device *dev, struct net_pkt *pkt)
 		frag_len = frag->len;
 
 		/* Assure cache coherency before DMA read operation */
-		dcache_clean((u32_t)frag_data, frag->size);
+		dcache_clean((uint32_t)frag_data, frag->size);
 
 #if GMAC_MULTIPLE_TX_PACKETS == 1
 		k_sem_take(&queue->tx_desc_sem, K_FOREVER);
@@ -1524,7 +1524,7 @@ static int eth_tx(struct device *dev, struct net_pkt *pkt)
 		tx_desc = &tx_desc_list->buf[tx_desc_list->head];
 
 		/* Update buffer descriptor address word */
-		tx_desc->w0 = (u32_t)frag_data;
+		tx_desc->w0 = (uint32_t)frag_data;
 
 		/* Update buffer descriptor status word (clear used bit except
 		 * for the first frag).
@@ -1624,9 +1624,8 @@ static int eth_tx(struct device *dev, struct net_pkt *pkt)
 	return 0;
 }
 
-static void queue0_isr(void *arg)
+static void queue0_isr(const struct device *dev)
 {
-	struct device *const dev = (struct device *const)arg;
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
 	struct eth_sam_dev_data *const dev_data = DEV_DATA(dev);
 	Gmac *gmac = cfg->regs;
@@ -1634,7 +1633,7 @@ static void queue0_isr(void *arg)
 	struct gmac_desc_list *rx_desc_list;
 	struct gmac_desc_list *tx_desc_list;
 	struct gmac_desc *tail_desc;
-	u32_t isr;
+	uint32_t isr;
 
 	/* Interrupt Status Register is cleared on read */
 	isr = gmac->GMAC_ISR;
@@ -1675,9 +1674,9 @@ static void queue0_isr(void *arg)
 }
 
 #if GMAC_ACTIVE_PRIORITY_QUEUE_NUM >= 1
-static inline void priority_queue_isr(void *arg, unsigned int queue_idx)
+static inline void priority_queue_isr(const struct device *dev,
+				      unsigned int queue_idx)
 {
-	struct device *const dev = (struct device *const)arg;
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
 	struct eth_sam_dev_data *const dev_data = DEV_DATA(dev);
 	Gmac *gmac = cfg->regs;
@@ -1685,7 +1684,7 @@ static inline void priority_queue_isr(void *arg, unsigned int queue_idx)
 	struct gmac_desc_list *rx_desc_list;
 	struct gmac_desc_list *tx_desc_list;
 	struct gmac_desc *tail_desc;
-	u32_t isrpq;
+	uint32_t isrpq;
 
 	isrpq = gmac->GMAC_ISRPQ[queue_idx - 1];
 	LOG_DBG("GMAC_ISRPQ%d=0x%08x", queue_idx - 1,  isrpq);
@@ -1726,41 +1725,41 @@ static inline void priority_queue_isr(void *arg, unsigned int queue_idx)
 #endif
 
 #if GMAC_ACTIVE_PRIORITY_QUEUE_NUM >= 1
-static void queue1_isr(void *arg)
+static void queue1_isr(const struct device *dev)
 {
-	priority_queue_isr(arg, 1);
+	priority_queue_isr(dev, 1);
 }
 #endif
 
 #if GMAC_ACTIVE_PRIORITY_QUEUE_NUM >= 2
-static void queue2_isr(void *arg)
+static void queue2_isr(const struct device *dev)
 {
-	priority_queue_isr(arg, 2);
+	priority_queue_isr(dev, 2);
 }
 #endif
 
 #if GMAC_ACTIVE_PRIORITY_QUEUE_NUM >= 3
-static void queue3_isr(void *arg)
+static void queue3_isr(const struct device *dev)
 {
-	priority_queue_isr(arg, 3);
+	priority_queue_isr(dev, 3);
 }
 #endif
 
 #if GMAC_ACTIVE_PRIORITY_QUEUE_NUM >= 4
-static void queue4_isr(void *arg)
+static void queue4_isr(const struct device *dev)
 {
-	priority_queue_isr(arg, 4);
+	priority_queue_isr(dev, 4);
 }
 #endif
 
 #if GMAC_ACTIVE_PRIORITY_QUEUE_NUM >= 5
-static void queue5_isr(void *arg)
+static void queue5_isr(const struct device *dev)
 {
-	priority_queue_isr(arg, 5);
+	priority_queue_isr(dev, 5);
 }
 #endif
 
-static int eth_initialize(struct device *dev)
+static int eth_initialize(const struct device *dev)
 {
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
 
@@ -1782,10 +1781,10 @@ static int eth_initialize(struct device *dev)
 }
 
 #ifdef CONFIG_ETH_SAM_GMAC_MAC_I2C_EEPROM
-static void get_mac_addr_from_i2c_eeprom(u8_t mac_addr[6])
+static void get_mac_addr_from_i2c_eeprom(uint8_t mac_addr[6])
 {
-	struct device *dev;
-	u32_t iaddr = CONFIG_ETH_SAM_GMAC_MAC_I2C_INT_ADDRESS;
+	const struct device *dev;
+	uint32_t iaddr = CONFIG_ETH_SAM_GMAC_MAC_I2C_INT_ADDRESS;
 
 	dev = device_get_binding(CONFIG_ETH_SAM_GMAC_MAC_I2C_DEV_NAME);
 	if (!dev) {
@@ -1799,7 +1798,7 @@ static void get_mac_addr_from_i2c_eeprom(u8_t mac_addr[6])
 }
 #endif
 
-static void generate_mac(u8_t mac_addr[6])
+static void generate_mac(uint8_t mac_addr[6])
 {
 #if defined(CONFIG_ETH_SAM_GMAC_MAC_I2C_EEPROM)
 	get_mac_addr_from_i2c_eeprom(mac_addr);
@@ -1812,10 +1811,10 @@ static void monitor_work_handler(struct k_work *work)
 {
 	struct eth_sam_dev_data *const dev_data =
 		CONTAINER_OF(work, struct eth_sam_dev_data, monitor_work);
-	struct device *const dev = net_if_get_device(dev_data->iface);
+	const struct device *dev = net_if_get_device(dev_data->iface);
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
 	bool link_status;
-	u32_t link_config;
+	uint32_t link_config;
 	int result;
 
 	/* Poll PHY link status */
@@ -1853,11 +1852,11 @@ finally:
 
 static void eth0_iface_init(struct net_if *iface)
 {
-	struct device *const dev = net_if_get_device(iface);
+	const struct device *dev = net_if_get_device(iface);
 	struct eth_sam_dev_data *const dev_data = DEV_DATA(dev);
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
 	static bool init_done;
-	u32_t gmac_ncfgr_val;
+	uint32_t gmac_ncfgr_val;
 	int result;
 	int i;
 
@@ -1975,7 +1974,7 @@ static void eth0_iface_init(struct net_if *iface)
 	init_done = true;
 }
 
-static enum ethernet_hw_caps eth_sam_gmac_get_capabilities(struct device *dev)
+static enum ethernet_hw_caps eth_sam_gmac_get_capabilities(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
@@ -1991,7 +1990,7 @@ static enum ethernet_hw_caps eth_sam_gmac_get_capabilities(struct device *dev)
 }
 
 #if GMAC_ACTIVE_PRIORITY_QUEUE_NUM >= 1
-static int eth_sam_gmac_set_qav_param(struct device *dev,
+static int eth_sam_gmac_set_qav_param(const struct device *dev,
 				      enum ethernet_config_type type,
 				      const struct ethernet_config *config)
 {
@@ -2033,7 +2032,7 @@ static int eth_sam_gmac_set_qav_param(struct device *dev,
 }
 #endif
 
-static int eth_sam_gmac_set_config(struct device *dev,
+static int eth_sam_gmac_set_config(const struct device *dev,
 				   enum ethernet_config_type type,
 				   const struct ethernet_config *config)
 {
@@ -2050,7 +2049,7 @@ static int eth_sam_gmac_set_config(struct device *dev,
 }
 
 #if GMAC_ACTIVE_PRIORITY_QUEUE_NUM >= 1
-static int eth_sam_gmac_get_qav_param(struct device *dev,
+static int eth_sam_gmac_get_qav_param(const struct device *dev,
 				      enum ethernet_config_type type,
 				      struct ethernet_config *config)
 {
@@ -2099,7 +2098,7 @@ static int eth_sam_gmac_get_qav_param(struct device *dev,
 }
 #endif
 
-static int eth_sam_gmac_get_config(struct device *dev,
+static int eth_sam_gmac_get_config(const struct device *dev,
 				   enum ethernet_config_type type,
 				   struct ethernet_config *config)
 {
@@ -2119,7 +2118,7 @@ static int eth_sam_gmac_get_config(struct device *dev,
 }
 
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
-static struct device *eth_sam_gmac_get_ptp_clock(struct device *dev)
+static const struct device *eth_sam_gmac_get_ptp_clock(const struct device *dev)
 {
 	struct eth_sam_dev_data *const dev_data = DEV_DATA(dev);
 
@@ -2140,7 +2139,7 @@ static const struct ethernet_api eth_api = {
 #endif
 };
 
-static struct device DEVICE_NAME_GET(eth0_sam_gmac);
+DEVICE_DECLARE(eth0_sam_gmac);
 
 static void eth0_irq_config(void)
 {
@@ -2218,12 +2217,12 @@ static struct eth_sam_dev_data eth0_data = {
 			.rx_frag_list = rx_frag_list_que0,
 #if GMAC_MULTIPLE_TX_PACKETS == 1
 			.tx_frag_list = {
-				.buf = (u32_t *)tx_frag_list_que0,
+				.buf = (uint32_t *)tx_frag_list_que0,
 				.len = ARRAY_SIZE(tx_frag_list_que0),
 			},
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 			.tx_frames = {
-				.buf = (u32_t *)tx_frame_list_que0,
+				.buf = (uint32_t *)tx_frame_list_que0,
 				.len = ARRAY_SIZE(tx_frame_list_que0),
 			},
 #endif
@@ -2243,12 +2242,12 @@ static struct eth_sam_dev_data eth0_data = {
 			.rx_frag_list = rx_frag_list_que1,
 #if GMAC_MULTIPLE_TX_PACKETS == 1
 			.tx_frag_list = {
-				.buf = (u32_t *)tx_frag_list_que1,
+				.buf = (uint32_t *)tx_frag_list_que1,
 				.len = ARRAY_SIZE(tx_frag_list_que1),
 			},
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 			.tx_frames = {
-				.buf = (u32_t *)tx_frame_list_que1,
+				.buf = (uint32_t *)tx_frame_list_que1,
 				.len = ARRAY_SIZE(tx_frame_list_que1),
 			}
 #endif
@@ -2270,12 +2269,12 @@ static struct eth_sam_dev_data eth0_data = {
 			.rx_frag_list = rx_frag_list_que2,
 #if GMAC_MULTIPLE_TX_PACKETS == 1
 			.tx_frag_list = {
-				.buf = (u32_t *)tx_frag_list_que2,
+				.buf = (uint32_t *)tx_frag_list_que2,
 				.len = ARRAY_SIZE(tx_frag_list_que2),
 			},
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 			.tx_frames = {
-				.buf = (u32_t *)tx_frame_list_que2,
+				.buf = (uint32_t *)tx_frame_list_que2,
 				.len = ARRAY_SIZE(tx_frame_list_que2),
 			}
 #endif
@@ -2297,12 +2296,12 @@ static struct eth_sam_dev_data eth0_data = {
 			.rx_frag_list = rx_frag_list_que3,
 #if GMAC_MULTIPLE_TX_PACKETS == 1
 			.tx_frag_list = {
-				.buf = (u32_t *)tx_frag_list_que3,
+				.buf = (uint32_t *)tx_frag_list_que3,
 				.len = ARRAY_SIZE(tx_frag_list_que3),
 			},
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 			.tx_frames = {
-				.buf = (u32_t *)tx_frame_list_que3,
+				.buf = (uint32_t *)tx_frame_list_que3,
 				.len = ARRAY_SIZE(tx_frame_list_que3),
 			}
 #endif
@@ -2324,12 +2323,12 @@ static struct eth_sam_dev_data eth0_data = {
 			.rx_frag_list = rx_frag_list_que4,
 #if GMAC_MULTIPLE_TX_PACKETS == 1
 			.tx_frag_list = {
-				.buf = (u32_t *)tx_frag_list_que4,
+				.buf = (uint32_t *)tx_frag_list_que4,
 				.len = ARRAY_SIZE(tx_frag_list_que4),
 			},
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 			.tx_frames = {
-				.buf = (u32_t *)tx_frame_list_que4,
+				.buf = (uint32_t *)tx_frame_list_que4,
 				.len = ARRAY_SIZE(tx_frame_list_que4),
 			}
 #endif
@@ -2351,12 +2350,12 @@ static struct eth_sam_dev_data eth0_data = {
 			.rx_frag_list = rx_frag_list_que5,
 #if GMAC_MULTIPLE_TX_PACKETS == 1
 			.tx_frag_list = {
-				.buf = (u32_t *)tx_frag_list_que5,
+				.buf = (uint32_t *)tx_frag_list_que5,
 				.len = ARRAY_SIZE(tx_frag_list_que5),
 			},
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 			.tx_frames = {
-				.buf = (u32_t *)tx_frame_list_que5,
+				.buf = (uint32_t *)tx_frame_list_que5,
 				.len = ARRAY_SIZE(tx_frame_list_que5),
 			}
 #endif
@@ -2374,15 +2373,15 @@ ETH_NET_DEVICE_INIT(eth0_sam_gmac, DT_INST_LABEL(0),
 
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 struct ptp_context {
-	struct device *eth_dev;
+	const struct device *eth_dev;
 };
 
 static struct ptp_context ptp_gmac_0_context;
 
-static int ptp_clock_sam_gmac_set(struct device *dev,
+static int ptp_clock_sam_gmac_set(const struct device *dev,
 				  struct net_ptp_time *tm)
 {
-	struct ptp_context *ptp_context = dev->driver_data;
+	struct ptp_context *ptp_context = dev->data;
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(ptp_context->eth_dev);
 	Gmac *gmac = cfg->regs;
 
@@ -2393,22 +2392,22 @@ static int ptp_clock_sam_gmac_set(struct device *dev,
 	return 0;
 }
 
-static int ptp_clock_sam_gmac_get(struct device *dev,
+static int ptp_clock_sam_gmac_get(const struct device *dev,
 				  struct net_ptp_time *tm)
 {
-	struct ptp_context *ptp_context = dev->driver_data;
+	struct ptp_context *ptp_context = dev->data;
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(ptp_context->eth_dev);
 	Gmac *gmac = cfg->regs;
 
-	tm->second = ((u64_t)(gmac->GMAC_TSH & 0xffff) << 32) | gmac->GMAC_TSL;
+	tm->second = ((uint64_t)(gmac->GMAC_TSH & 0xffff) << 32) | gmac->GMAC_TSL;
 	tm->nanosecond = gmac->GMAC_TN;
 
 	return 0;
 }
 
-static int ptp_clock_sam_gmac_adjust(struct device *dev, int increment)
+static int ptp_clock_sam_gmac_adjust(const struct device *dev, int increment)
 {
-	struct ptp_context *ptp_context = dev->driver_data;
+	struct ptp_context *ptp_context = dev->data;
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(ptp_context->eth_dev);
 	Gmac *gmac = cfg->regs;
 
@@ -2425,7 +2424,8 @@ static int ptp_clock_sam_gmac_adjust(struct device *dev, int increment)
 	return 0;
 }
 
-static int ptp_clock_sam_gmac_rate_adjust(struct device *dev, float ratio)
+static int ptp_clock_sam_gmac_rate_adjust(const struct device *dev,
+					  float ratio)
 {
 	return -ENOTSUP;
 }
@@ -2437,11 +2437,11 @@ static const struct ptp_clock_driver_api ptp_api = {
 	.rate_adjust = ptp_clock_sam_gmac_rate_adjust,
 };
 
-static int ptp_gmac_init(struct device *port)
+static int ptp_gmac_init(const struct device *port)
 {
-	struct device *eth_dev = DEVICE_GET(eth0_sam_gmac);
-	struct eth_sam_dev_data *dev_data = eth_dev->driver_data;
-	struct ptp_context *ptp_context = port->driver_data;
+	const struct device *eth_dev = DEVICE_GET(eth0_sam_gmac);
+	struct eth_sam_dev_data *dev_data = eth_dev->data;
+	struct ptp_context *ptp_context = port->data;
 
 	dev_data->ptp_clock = port;
 	ptp_context->eth_dev = eth_dev;

@@ -12,12 +12,13 @@
 
 LOG_MODULE_REGISTER(MAX30101, CONFIG_SENSOR_LOG_LEVEL);
 
-static int max30101_sample_fetch(struct device *dev, enum sensor_channel chan)
+static int max30101_sample_fetch(const struct device *dev,
+				 enum sensor_channel chan)
 {
-	struct max30101_data *data = dev->driver_data;
-	const struct max30101_config *config = dev->config_info;
-	u8_t buffer[MAX30101_MAX_BYTES_PER_SAMPLE];
-	u32_t fifo_data;
+	struct max30101_data *data = dev->data;
+	const struct max30101_config *config = dev->config;
+	uint8_t buffer[MAX30101_MAX_BYTES_PER_SAMPLE];
+	uint32_t fifo_data;
 	int fifo_chan;
 	int num_bytes;
 	int i;
@@ -44,10 +45,11 @@ static int max30101_sample_fetch(struct device *dev, enum sensor_channel chan)
 	return 0;
 }
 
-static int max30101_channel_get(struct device *dev, enum sensor_channel chan,
+static int max30101_channel_get(const struct device *dev,
+				enum sensor_channel chan,
 				struct sensor_value *val)
 {
-	struct max30101_data *data = dev->driver_data;
+	struct max30101_data *data = dev->data;
 	enum max30101_led_channel led_chan;
 	int fifo_chan;
 
@@ -91,13 +93,13 @@ static const struct sensor_driver_api max30101_driver_api = {
 	.channel_get = max30101_channel_get,
 };
 
-static int max30101_init(struct device *dev)
+static int max30101_init(const struct device *dev)
 {
-	const struct max30101_config *config = dev->config_info;
-	struct max30101_data *data = dev->driver_data;
-	u8_t part_id;
-	u8_t mode_cfg;
-	u32_t led_chan;
+	const struct max30101_config *config = dev->config;
+	struct max30101_data *data = dev->data;
+	uint8_t part_id;
+	uint8_t mode_cfg;
+	uint32_t led_chan;
 	int fifo_chan;
 
 	/* Get the I2C device */
@@ -168,7 +170,7 @@ static int max30101_init(struct device *dev)
 	}
 
 #ifdef CONFIG_MAX30101_MULTI_LED_MODE
-	u8_t multi_led[2];
+	uint8_t multi_led[2];
 
 	/* Write the multi-LED mode control registers */
 	multi_led[0] = (config->slot[1] << 4) | (config->slot[0]);

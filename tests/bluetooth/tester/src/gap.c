@@ -32,8 +32,14 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 static atomic_t current_settings;
 struct bt_conn_auth_cb cb;
+static uint8_t oob_legacy_tk[16] = { 0 };
 
-static void le_connected(struct bt_conn *conn, u8_t err)
+#if !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY)
+static struct bt_le_oob oob_sc_local = { 0 };
+static struct bt_le_oob oob_sc_remote = { 0 };
+#endif /* !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY) */
+
+static void le_connected(struct bt_conn *conn, uint8_t err)
 {
 	struct gap_device_connected_ev ev;
 	struct bt_conn_info info;
@@ -51,10 +57,10 @@ static void le_connected(struct bt_conn *conn, u8_t err)
 	ev.timeout = sys_cpu_to_le16(info.le.timeout);
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_EV_DEVICE_CONNECTED,
-		    CONTROLLER_INDEX, (u8_t *) &ev, sizeof(ev));
+		    CONTROLLER_INDEX, (uint8_t *) &ev, sizeof(ev));
 }
 
-static void le_disconnected(struct bt_conn *conn, u8_t reason)
+static void le_disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	struct gap_device_disconnected_ev ev;
 	const bt_addr_le_t *addr = bt_conn_get_dst(conn);
@@ -63,7 +69,7 @@ static void le_disconnected(struct bt_conn *conn, u8_t reason)
 	ev.address_type = addr->type;
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_EV_DEVICE_DISCONNECTED,
-		    CONTROLLER_INDEX, (u8_t *) &ev, sizeof(ev));
+		    CONTROLLER_INDEX, (uint8_t *) &ev, sizeof(ev));
 }
 
 static void le_identity_resolved(struct bt_conn *conn, const bt_addr_le_t *rpa,
@@ -79,11 +85,11 @@ static void le_identity_resolved(struct bt_conn *conn, const bt_addr_le_t *rpa,
 	       sizeof(ev.identity_address));
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_EV_IDENTITY_RESOLVED,
-		    CONTROLLER_INDEX, (u8_t *) &ev, sizeof(ev));
+		    CONTROLLER_INDEX, (uint8_t *) &ev, sizeof(ev));
 }
 
-static void le_param_updated(struct bt_conn *conn, u16_t interval,
-			     u16_t latency, u16_t timeout)
+static void le_param_updated(struct bt_conn *conn, uint16_t interval,
+			     uint16_t latency, uint16_t timeout)
 {
 	struct gap_conn_param_update_ev ev;
 	const bt_addr_le_t *addr = bt_conn_get_dst(conn);
@@ -95,7 +101,7 @@ static void le_param_updated(struct bt_conn *conn, u16_t interval,
 	ev.timeout = sys_cpu_to_le16(timeout);
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_EV_CONN_PARAM_UPDATE,
-		    CONTROLLER_INDEX, (u8_t *) &ev, sizeof(ev));
+		    CONTROLLER_INDEX, (uint8_t *) &ev, sizeof(ev));
 }
 
 static struct bt_conn_cb conn_callbacks = {
@@ -105,9 +111,9 @@ static struct bt_conn_cb conn_callbacks = {
 	.le_param_updated = le_param_updated,
 };
 
-static void supported_commands(u8_t *data, u16_t len)
+static void supported_commands(uint8_t *data, uint16_t len)
 {
-	u8_t cmds[4];
+	uint8_t cmds[4];
 	struct gap_read_supported_commands_rp *rp = (void *) &cmds;
 
 	(void)memset(cmds, 0, sizeof(cmds));
@@ -130,15 +136,20 @@ static void supported_commands(u8_t *data, u16_t len)
 	tester_set_bit(cmds, GAP_PASSKEY_CONFIRM);
 	tester_set_bit(cmds, GAP_CONN_PARAM_UPDATE);
 	tester_set_bit(cmds, GAP_SET_MITM);
+	tester_set_bit(cmds, GAP_OOB_LEGACY_SET_DATA);
+#if !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY)
+	tester_set_bit(cmds, GAP_OOB_SC_GET_LOCAL_DATA);
+	tester_set_bit(cmds, GAP_OOB_SC_SET_REMOTE_DATA);
+#endif /* !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY) */
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_READ_SUPPORTED_COMMANDS,
-		    CONTROLLER_INDEX, (u8_t *) rp, sizeof(cmds));
+		    CONTROLLER_INDEX, (uint8_t *) rp, sizeof(cmds));
 }
 
-static void controller_index_list(u8_t *data,  u16_t len)
+static void controller_index_list(uint8_t *data,  uint16_t len)
 {
 	struct gap_read_controller_index_list_rp *rp;
-	u8_t buf[sizeof(*rp) + 1];
+	uint8_t buf[sizeof(*rp) + 1];
 
 	rp = (void *) buf;
 
@@ -146,25 +157,34 @@ static void controller_index_list(u8_t *data,  u16_t len)
 	rp->index[0] = CONTROLLER_INDEX;
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_READ_CONTROLLER_INDEX_LIST,
-		    BTP_INDEX_NONE, (u8_t *) rp, sizeof(buf));
+		    BTP_INDEX_NONE, (uint8_t *) rp, sizeof(buf));
 }
 
-static void controller_info(u8_t *data, u16_t len)
+static void controller_info(uint8_t *data, uint16_t len)
 {
 	struct gap_read_controller_info_rp rp;
-	struct bt_le_oob oob;
-	u32_t supported_settings;
+	uint32_t supported_settings;
 
 	(void)memset(&rp, 0, sizeof(rp));
 
-	bt_le_oob_get_local(BT_ID_DEFAULT, &oob);
-	memcpy(rp.address, &oob.addr.a, sizeof(bt_addr_t));
+	struct bt_le_oob oob_local = { 0 };
+
+	bt_le_oob_get_local(BT_ID_DEFAULT, &oob_local);
+	memcpy(rp.address, &oob_local.addr.a, sizeof(bt_addr_t));
+
+	/*
+	 * Re-use the oob data read here in get_oob_sc_local_data()
+	 */
+#if !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY)
+	oob_sc_local = oob_local;
+#endif /* !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY) */
+
 	/*
 	 * If privacy is used, the device uses random type address, otherwise
 	 * static random or public type address is used.
 	 */
 #if !defined(CONFIG_BT_PRIVACY)
-	if (oob.addr.type == BT_ADDR_LE_RANDOM) {
+	if (oob_local.addr.type == BT_ADDR_LE_RANDOM) {
 		atomic_set_bit(&current_settings, GAP_SETTINGS_STATIC_ADDRESS);
 	}
 #endif /* CONFIG_BT_PRIVACY */
@@ -181,10 +201,122 @@ static void controller_info(u8_t *data, u16_t len)
 	memcpy(rp.name, CONTROLLER_NAME, sizeof(CONTROLLER_NAME));
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_READ_CONTROLLER_INFO,
-		    CONTROLLER_INDEX, (u8_t *) &rp, sizeof(rp));
+		    CONTROLLER_INDEX, (uint8_t *) &rp, sizeof(rp));
 }
 
-static void set_connectable(u8_t *data, u16_t len)
+#if !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY)
+static const char *oob_config_str(int oob_config)
+{
+	switch (oob_config) {
+	case BT_CONN_OOB_LOCAL_ONLY:
+		return "Local";
+	case BT_CONN_OOB_REMOTE_ONLY:
+		return "Remote";
+	case BT_CONN_OOB_BOTH_PEERS:
+		return "Local and Remote";
+	case BT_CONN_OOB_NO_DATA:
+	default:
+		return "no";
+	}
+}
+#endif /* !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY) */
+
+static void oob_data_request(struct bt_conn *conn,
+			     struct bt_conn_oob_info *oob_info)
+{
+	struct bt_conn_info info;
+	int err = bt_conn_get_info(conn, &info);
+
+	if (err) {
+		return;
+	}
+
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(info.le.dst, addr, sizeof(addr));
+
+#if !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY)
+	if (oob_info->type == BT_CONN_OOB_LE_SC) {
+		LOG_DBG("Set %s OOB SC data for %s, ",
+			oob_config_str(oob_info->lesc.oob_config),
+			log_strdup(addr));
+
+		struct bt_le_oob_sc_data *oobd_local =
+			oob_info->lesc.oob_config != BT_CONN_OOB_REMOTE_ONLY ?
+				      &oob_sc_local.le_sc_data :
+				      NULL;
+
+		struct bt_le_oob_sc_data *oobd_remote =
+			oob_info->lesc.oob_config != BT_CONN_OOB_LOCAL_ONLY ?
+				      &oob_sc_remote.le_sc_data :
+				      NULL;
+
+		if (oobd_remote) {
+			/* Assume that oob_sc_remote
+			 * corresponds to the currently connected peer
+			 */
+			bt_addr_le_copy(&oob_sc_remote.addr, info.le.remote);
+		}
+
+		if (oobd_local &&
+		    bt_addr_le_cmp(info.le.local, &oob_sc_local.addr)) {
+			bt_addr_le_to_str(info.le.local, addr, sizeof(addr));
+			LOG_DBG("No OOB data available for local %s",
+				log_strdup(addr));
+			bt_conn_auth_cancel(conn);
+			return;
+		}
+
+		err = bt_le_oob_set_sc_data(conn, oobd_local, oobd_remote);
+		if (err) {
+			LOG_DBG("bt_le_oob_set_sc_data failed with: %d", err);
+		}
+
+		return;
+	}
+#endif /* !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY) */
+
+	LOG_DBG("Legacy OOB TK requested from remote %s", log_strdup(addr));
+
+	err = bt_le_oob_set_legacy_tk(conn, oob_legacy_tk);
+	if (err < 0) {
+		LOG_ERR("Failed to set OOB Temp Key: %d", err);
+	}
+}
+
+#if !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY)
+static void get_oob_sc_local_data(void)
+{
+	cb.oob_data_request = oob_data_request;
+	struct gap_oob_sc_get_local_data_rp rp = { 0 };
+
+	memcpy(&rp.conf[0], &oob_sc_local.le_sc_data.c[0], sizeof(rp.conf));
+	memcpy(&rp.rand[0], &oob_sc_local.le_sc_data.r[0], sizeof(rp.rand));
+	tester_send(BTP_SERVICE_ID_GAP, GAP_OOB_SC_GET_LOCAL_DATA,
+		    CONTROLLER_INDEX, (uint8_t *)&rp, sizeof(rp));
+}
+
+static void set_oob_sc_remote_data(const uint8_t *data, uint16_t len)
+{
+	cb.oob_data_request = oob_data_request;
+	bt_set_oob_data_flag(true);
+
+	const struct gap_oob_sc_set_remote_data_cmd *cmd = (void *)data;
+
+	/* Note that the .addr field
+	 * will be set by the oob_data_request callback
+	 */
+	memcpy(&oob_sc_remote.le_sc_data.r[0], &cmd->rand[0],
+	       sizeof(oob_sc_remote.le_sc_data.r));
+	memcpy(&oob_sc_remote.le_sc_data.c[0], &cmd->conf[0],
+	       sizeof(oob_sc_remote.le_sc_data.c));
+
+	tester_rsp(BTP_SERVICE_ID_GAP, GAP_OOB_SC_SET_REMOTE_DATA,
+		   CONTROLLER_INDEX, BTP_STATUS_SUCCESS);
+}
+#endif /* !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY) */
+
+static void set_connectable(uint8_t *data, uint16_t len)
 {
 	const struct gap_set_connectable_cmd *cmd = (void *) data;
 	struct gap_set_connectable_rp rp;
@@ -198,16 +330,16 @@ static void set_connectable(u8_t *data, u16_t len)
 	rp.current_settings = sys_cpu_to_le32(current_settings);
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_SET_CONNECTABLE, CONTROLLER_INDEX,
-		    (u8_t *) &rp, sizeof(rp));
+		    (uint8_t *) &rp, sizeof(rp));
 }
 
-static u8_t ad_flags = BT_LE_AD_NO_BREDR;
+static uint8_t ad_flags = BT_LE_AD_NO_BREDR;
 static struct bt_data ad[10] = {
 	BT_DATA(BT_DATA_FLAGS, &ad_flags, sizeof(ad_flags)),
 };
 static struct bt_data sd[10];
 
-static void set_discoverable(u8_t *data, u16_t len)
+static void set_discoverable(uint8_t *data, uint16_t len)
 {
 	const struct gap_set_discoverable_cmd *cmd = (void *) data;
 	struct gap_set_discoverable_rp rp;
@@ -237,10 +369,10 @@ static void set_discoverable(u8_t *data, u16_t len)
 	rp.current_settings = sys_cpu_to_le32(current_settings);
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_SET_DISCOVERABLE, CONTROLLER_INDEX,
-		    (u8_t *) &rp, sizeof(rp));
+		    (uint8_t *) &rp, sizeof(rp));
 }
 
-static void set_bondable(u8_t *data, u16_t len)
+static void set_bondable(uint8_t *data, uint16_t len)
 {
 	const struct gap_set_bondable_cmd *cmd = (void *) data;
 	struct gap_set_bondable_rp rp;
@@ -258,14 +390,14 @@ static void set_bondable(u8_t *data, u16_t len)
 	rp.current_settings = sys_cpu_to_le32(current_settings);
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_SET_BONDABLE, CONTROLLER_INDEX,
-		    (u8_t *) &rp, sizeof(rp));
+		    (uint8_t *) &rp, sizeof(rp));
 }
 
-static void start_advertising(const u8_t *data, u16_t len)
+static void start_advertising(const uint8_t *data, uint16_t len)
 {
 	const struct gap_start_advertising_cmd *cmd = (void *) data;
 	struct gap_start_advertising_rp rp;
-	u8_t adv_len, sd_len;
+	uint8_t adv_len, sd_len;
 	bool adv_conn;
 	int i;
 
@@ -275,21 +407,21 @@ static void start_advertising(const u8_t *data, u16_t len)
 			goto fail;
 		}
 
-		ad[adv_len].type = cmd->adv_data[i++];
-		ad[adv_len].data_len = cmd->adv_data[i++];
-		ad[adv_len].data = &cmd->adv_data[i];
+		ad[adv_len].type = cmd->adv_sr_data[i++];
+		ad[adv_len].data_len = cmd->adv_sr_data[i++];
+		ad[adv_len].data = &cmd->adv_sr_data[i];
 		i += ad[adv_len].data_len;
 	}
 
-	for (i = 0, sd_len = 0U; i < cmd->scan_rsp_len; sd_len++) {
+	for (sd_len = 0U; i < cmd->adv_data_len+cmd->scan_rsp_len; sd_len++) {
 		if (sd_len >= ARRAY_SIZE(sd)) {
 			LOG_ERR("sd[] Out of memory");
 			goto fail;
 		}
 
-		sd[sd_len].type = cmd->scan_rsp[i++];
-		sd[sd_len].data_len = cmd->scan_rsp[i++];
-		sd[sd_len].data = &cmd->scan_rsp[i];
+		sd[sd_len].type = cmd->adv_sr_data[i++];
+		sd[sd_len].data_len = cmd->adv_sr_data[i++];
+		sd[sd_len].data = &cmd->adv_sr_data[i];
 		i += sd[sd_len].data_len;
 	}
 
@@ -306,14 +438,14 @@ static void start_advertising(const u8_t *data, u16_t len)
 	rp.current_settings = sys_cpu_to_le32(current_settings);
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_START_ADVERTISING, CONTROLLER_INDEX,
-		    (u8_t *) &rp, sizeof(rp));
+		    (uint8_t *) &rp, sizeof(rp));
 	return;
 fail:
 	tester_rsp(BTP_SERVICE_ID_GAP, GAP_START_ADVERTISING, CONTROLLER_INDEX,
 		   BTP_STATUS_FAILED);
 }
 
-static void stop_advertising(const u8_t *data, u16_t len)
+static void stop_advertising(const uint8_t *data, uint16_t len)
 {
 	struct gap_stop_advertising_rp rp;
 	int err;
@@ -330,12 +462,12 @@ static void stop_advertising(const u8_t *data, u16_t len)
 	rp.current_settings = sys_cpu_to_le32(current_settings);
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_STOP_ADVERTISING, CONTROLLER_INDEX,
-		    (u8_t *) &rp, sizeof(rp));
+		    (uint8_t *) &rp, sizeof(rp));
 }
 
-static u8_t get_ad_flags(struct net_buf_simple *ad)
+static uint8_t get_ad_flags(struct net_buf_simple *ad)
 {
-	u8_t len, i;
+	uint8_t len, i;
 
 	/* Parse advertisement to get flags */
 	for (i = 0U; i < ad->len; i += len - 1) {
@@ -360,10 +492,10 @@ static u8_t get_ad_flags(struct net_buf_simple *ad)
 	return 0;
 }
 
-static u8_t discovery_flags;
+static uint8_t discovery_flags;
 static struct net_buf_simple *adv_buf = NET_BUF_SIMPLE(ADV_BUF_LEN);
 
-static void store_adv(const bt_addr_le_t *addr, s8_t rssi,
+static void store_adv(const bt_addr_le_t *addr, int8_t rssi,
 		      struct net_buf_simple *ad)
 {
 	struct gap_device_found_ev *ev;
@@ -381,13 +513,13 @@ static void store_adv(const bt_addr_le_t *addr, s8_t rssi,
 	memcpy(net_buf_simple_add(adv_buf, ad->len), ad->data, ad->len);
 }
 
-static void device_found(const bt_addr_le_t *addr, s8_t rssi, u8_t evtype,
+static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t evtype,
 			 struct net_buf_simple *ad)
 {
 	/* if General/Limited Discovery - parse Advertising data to get flags */
 	if (!(discovery_flags & GAP_DISCOVERY_FLAG_LE_OBSERVE) &&
 	    (evtype != BT_GAP_ADV_TYPE_SCAN_RSP)) {
-		u8_t flags = get_ad_flags(ad);
+		uint8_t flags = get_ad_flags(ad);
 
 		/* ignore non-discoverable devices */
 		if (!(flags & BT_LE_AD_DISCOV_MASK)) {
@@ -443,6 +575,7 @@ static void device_found(const bt_addr_le_t *addr, s8_t rssi, u8_t evtype,
 	if (adv_buf->len) {
 		tester_send(BTP_SERVICE_ID_GAP, GAP_EV_DEVICE_FOUND,
 			    CONTROLLER_INDEX, adv_buf->data, adv_buf->len);
+		net_buf_simple_reset(adv_buf);
 	}
 
 	store_adv(addr, rssi, ad);
@@ -457,12 +590,13 @@ static void device_found(const bt_addr_le_t *addr, s8_t rssi, u8_t evtype,
 done:
 	tester_send(BTP_SERVICE_ID_GAP, GAP_EV_DEVICE_FOUND,
 		    CONTROLLER_INDEX, adv_buf->data, adv_buf->len);
+	net_buf_simple_reset(adv_buf);
 }
 
-static void start_discovery(const u8_t *data, u16_t len)
+static void start_discovery(const uint8_t *data, uint16_t len)
 {
 	const struct gap_start_discovery_cmd *cmd = (void *) data;
-	u8_t status;
+	uint8_t status;
 
 	/* only LE scan is supported */
 	if (cmd->flags & GAP_DISCOVERY_FLAG_BREDR) {
@@ -488,9 +622,9 @@ reply:
 		   status);
 }
 
-static void stop_discovery(const u8_t *data, u16_t len)
+static void stop_discovery(const uint8_t *data, uint16_t len)
 {
-	u8_t status = BTP_STATUS_SUCCESS;
+	uint8_t status = BTP_STATUS_SUCCESS;
 	int err;
 
 	err = bt_le_scan_stop();
@@ -503,10 +637,10 @@ static void stop_discovery(const u8_t *data, u16_t len)
 		   status);
 }
 
-static void connect(const u8_t *data, u16_t len)
+static void connect(const uint8_t *data, uint16_t len)
 {
 	struct bt_conn *conn;
-	u8_t status;
+	uint8_t status;
 	int err;
 
 	err = bt_conn_le_create((bt_addr_le_t *) data, BT_CONN_LE_CREATE_CONN,
@@ -524,10 +658,10 @@ rsp:
 	tester_rsp(BTP_SERVICE_ID_GAP, GAP_CONNECT, CONTROLLER_INDEX, status);
 }
 
-static void disconnect(const u8_t *data, u16_t len)
+static void disconnect(const uint8_t *data, uint16_t len)
 {
 	struct bt_conn *conn;
-	u8_t status;
+	uint8_t status;
 
 	conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, (bt_addr_le_t *)data);
 	if (!conn) {
@@ -560,7 +694,7 @@ static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
 	ev.passkey = sys_cpu_to_le32(passkey);
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_EV_PASSKEY_DISPLAY,
-		    CONTROLLER_INDEX, (u8_t *) &ev, sizeof(ev));
+		    CONTROLLER_INDEX, (uint8_t *) &ev, sizeof(ev));
 }
 
 static void auth_passkey_entry(struct bt_conn *conn)
@@ -572,7 +706,7 @@ static void auth_passkey_entry(struct bt_conn *conn)
 	ev.address_type = addr->type;
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_EV_PASSKEY_ENTRY_REQ,
-		    CONTROLLER_INDEX, (u8_t *) &ev, sizeof(ev));
+		    CONTROLLER_INDEX, (uint8_t *) &ev, sizeof(ev));
 }
 
 static void auth_passkey_confirm(struct bt_conn *conn, unsigned int passkey)
@@ -585,7 +719,7 @@ static void auth_passkey_confirm(struct bt_conn *conn, unsigned int passkey)
 	ev.passkey = sys_cpu_to_le32(passkey);
 
 	tester_send(BTP_SERVICE_ID_GAP, GAP_EV_PASSKEY_CONFIRM_REQ,
-		    CONTROLLER_INDEX, (u8_t *) &ev, sizeof(ev));
+		    CONTROLLER_INDEX, (uint8_t *) &ev, sizeof(ev));
 }
 
 static void auth_cancel(struct bt_conn *conn)
@@ -593,10 +727,10 @@ static void auth_cancel(struct bt_conn *conn)
 	/* TODO */
 }
 
-static void set_io_cap(const u8_t *data, u16_t len)
+static void set_io_cap(const uint8_t *data, uint16_t len)
 {
 	const struct gap_set_io_cap_cmd *cmd = (void *) data;
-	u8_t status;
+	uint8_t status;
 
 	/* Reset io cap requirements */
 	(void)memset(&cb, 0, sizeof(cb));
@@ -641,10 +775,10 @@ rsp:
 		   status);
 }
 
-static void pair(const u8_t *data, u16_t len)
+static void pair(const uint8_t *data, uint16_t len)
 {
 	struct bt_conn *conn;
-	u8_t status;
+	uint8_t status;
 	int err;
 
 	conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, (bt_addr_le_t *)data);
@@ -669,12 +803,12 @@ rsp:
 	tester_rsp(BTP_SERVICE_ID_GAP, GAP_PAIR, CONTROLLER_INDEX, status);
 }
 
-static void unpair(const u8_t *data, u16_t len)
+static void unpair(const uint8_t *data, uint16_t len)
 {
 	struct gap_unpair_cmd *cmd = (void *) data;
 	struct bt_conn *conn;
 	bt_addr_le_t addr;
-	u8_t status;
+	uint8_t status;
 	int err;
 
 	addr.type = cmd->address_type;
@@ -703,11 +837,11 @@ rsp:
 	tester_rsp(BTP_SERVICE_ID_GAP, GAP_UNPAIR, CONTROLLER_INDEX, status);
 }
 
-static void passkey_entry(const u8_t *data, u16_t len)
+static void passkey_entry(const uint8_t *data, uint16_t len)
 {
 	const struct gap_passkey_entry_cmd *cmd = (void *) data;
 	struct bt_conn *conn;
-	u8_t status;
+	uint8_t status;
 	int err;
 
 	conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, (bt_addr_le_t *)data);
@@ -730,11 +864,11 @@ rsp:
 		   status);
 }
 
-static void passkey_confirm(const u8_t *data, u16_t len)
+static void passkey_confirm(const uint8_t *data, uint16_t len)
 {
 	const struct gap_passkey_confirm_cmd *cmd = (void *) data;
 	struct bt_conn *conn;
-	u8_t status;
+	uint8_t status;
 	int err;
 
 	conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, (bt_addr_le_t *)data);
@@ -765,7 +899,7 @@ rsp:
 }
 
 
-static void conn_param_update(const u8_t *data, u16_t len)
+static void conn_param_update(const uint8_t *data, uint16_t len)
 {
 	const struct gap_conn_param_update_cmd *cmd = (void *) data;
 	struct bt_le_conn_param param = {
@@ -775,7 +909,7 @@ static void conn_param_update(const u8_t *data, u16_t len)
 		.timeout = sys_le16_to_cpu(cmd->timeout),
 	};
 	struct bt_conn *conn;
-	u8_t status = BTP_STATUS_FAILED;
+	uint8_t status = BTP_STATUS_FAILED;
 	int err;
 
 	conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, (bt_addr_le_t *)data);
@@ -793,11 +927,11 @@ static void conn_param_update(const u8_t *data, u16_t len)
 	status = err < 0 ? BTP_STATUS_FAILED : BTP_STATUS_SUCCESS;
 
 rsp:
-	tester_rsp(BTP_SERVICE_ID_GAP, GAP_PASSKEY_ENTRY, CONTROLLER_INDEX,
+	tester_rsp(BTP_SERVICE_ID_GAP, GAP_CONN_PARAM_UPDATE, CONTROLLER_INDEX,
 		   status);
 }
 
-static void set_mitm(const u8_t *data, u16_t len)
+static void set_mitm(const uint8_t *data, uint16_t len)
 {
 	LOG_WRN("Use CONFIG_BT_SMP_ENFORCE_MITM instead");
 
@@ -805,9 +939,21 @@ static void set_mitm(const u8_t *data, u16_t len)
 		   BTP_STATUS_SUCCESS);
 }
 
+static void set_oob_legacy_data(const uint8_t *data, uint16_t len)
+{
+	const struct gap_oob_legacy_set_data_cmd *cmd = (void *) data;
 
-void tester_handle_gap(u8_t opcode, u8_t index, u8_t *data,
-		       u16_t len)
+	memcpy(oob_legacy_tk, cmd->oob_data, 16);
+
+	bt_set_oob_data_flag(true);
+	cb.oob_data_request = oob_data_request;
+
+	tester_rsp(BTP_SERVICE_ID_GAP, GAP_OOB_LEGACY_SET_DATA,
+		   CONTROLLER_INDEX, BTP_STATUS_SUCCESS);
+}
+
+void tester_handle_gap(uint8_t opcode, uint8_t index, uint8_t *data,
+		       uint16_t len)
 {
 	LOG_DBG("opcode: 0x%02x", opcode);
 	switch (opcode) {
@@ -890,6 +1036,17 @@ void tester_handle_gap(u8_t opcode, u8_t index, u8_t *data,
 	case GAP_SET_MITM:
 		set_mitm(data, len);
 		return;
+	case GAP_OOB_LEGACY_SET_DATA:
+		set_oob_legacy_data(data, len);
+		return;
+#if !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY)
+	case GAP_OOB_SC_GET_LOCAL_DATA:
+		get_oob_sc_local_data();
+		return;
+	case GAP_OOB_SC_SET_REMOTE_DATA:
+		set_oob_sc_remote_data(data, len);
+		return;
+#endif /* !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY) */
 	default:
 		LOG_WRN("Unknown opcode: 0x%x", opcode);
 		tester_rsp(BTP_SERVICE_ID_GAP, opcode, index,
@@ -922,7 +1079,7 @@ static void tester_init_gap_cb(int err)
 		   BTP_STATUS_SUCCESS);
 }
 
-u8_t tester_init_gap(void)
+uint8_t tester_init_gap(void)
 {
 	int err;
 
@@ -935,7 +1092,7 @@ u8_t tester_init_gap(void)
 	return BTP_STATUS_SUCCESS;
 }
 
-u8_t tester_unregister_gap(void)
+uint8_t tester_unregister_gap(void)
 {
 	return BTP_STATUS_SUCCESS;
 }

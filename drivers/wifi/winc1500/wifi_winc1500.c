@@ -118,26 +118,24 @@ typedef struct {
 #define WINC1500_REGION		ASIA
 #endif
 
-#define WINC1500_BIND_TIMEOUT 500
-#define WINC1500_LISTEN_TIMEOUT 500
-#define WINC1500_BUF_TIMEOUT 100
+#define WINC1500_BIND_TIMEOUT K_MSEC(500)
+#define WINC1500_LISTEN_TIMEOUT K_MSEC(500)
+#define WINC1500_BUF_TIMEOUT K_MSEC(100)
 
 NET_BUF_POOL_DEFINE(winc1500_tx_pool, CONFIG_WIFI_WINC1500_BUF_CTR,
 		    CONFIG_WIFI_WINC1500_MAX_PACKET_SIZE, 0, NULL);
 NET_BUF_POOL_DEFINE(winc1500_rx_pool, CONFIG_WIFI_WINC1500_BUF_CTR,
 		    CONFIG_WIFI_WINC1500_MAX_PACKET_SIZE, 0, NULL);
 
-K_THREAD_STACK_MEMBER(winc1500_stack, CONFIG_WIFI_WINC1500_THREAD_STACK_SIZE);
+K_KERNEL_STACK_MEMBER(winc1500_stack, CONFIG_WIFI_WINC1500_THREAD_STACK_SIZE);
 struct k_thread winc1500_thread_data;
 
 struct socket_data {
 	struct net_context		*context;
 	net_context_connect_cb_t	connect_cb;
 	net_tcp_accept_cb_t		accept_cb;
-	net_context_send_cb_t		send_cb;
 	net_context_recv_cb_t		recv_cb;
 	void				*connect_user_data;
-	void				*send_user_data;
 	void				*recv_user_data;
 	void				*accept_user_data;
 	struct net_pkt			*rx_pkt;
@@ -152,7 +150,7 @@ struct winc1500_data {
 	struct net_if *iface;
 	unsigned char mac[6];
 	scan_result_cb_t scan_cb;
-	u8_t scan_result;
+	uint8_t scan_result;
 	bool connecting;
 	bool connected;
 };
@@ -166,7 +164,7 @@ static void stack_stats(void)
 	log_stack_usage(&winc1500_thread_data);
 }
 
-static char *socket_error_string(s8_t err)
+static char *socket_error_string(int8_t err)
 {
 	switch (err) {
 	case SOCK_ERR_NO_ERROR:
@@ -225,7 +223,7 @@ static char *socket_error_string(s8_t err)
 	}
 }
 
-static char *wifi_cb_msg_2_str(u8_t message_type)
+static char *wifi_cb_msg_2_str(uint8_t message_type)
 {
 	switch (message_type) {
 	case M2M_WIFI_RESP_CURRENT_RSSI:
@@ -261,7 +259,7 @@ static char *wifi_cb_msg_2_str(u8_t message_type)
 	}
 }
 
-static char *socket_message_to_string(u8_t message)
+static char *socket_message_to_string(uint8_t message)
 {
 	switch (message) {
 	case SOCKET_MSG_BIND:
@@ -298,19 +296,21 @@ static int winc1500_get(sa_family_t family,
 			struct net_context **context)
 {
 	struct socket_data *sd;
+	SOCKET sock;
 
 	if (family != AF_INET) {
 		LOG_ERR("Only AF_INET is supported!");
 		return -1;
 	}
 
-	(*context)->offload_context = (void *)(sint32)socket(family, type, 0);
-	if ((*context)->offload_context < 0) {
+	sock = socket(family, type, 0);
+	if (sock < 0) {
 		LOG_ERR("socket error!");
 		return -1;
 	}
 
-	sd = &w1500_data.socket_data[(int)(*context)->offload_context];
+	(*context)->offload_context = (void *)(intptr_t)sock;
+	sd = &w1500_data.socket_data[sock];
 
 	k_sem_init(&sd->wait_sem, 0, 1);
 
@@ -383,7 +383,7 @@ static int winc1500_connect(struct net_context *context,
 			    const struct sockaddr *addr,
 			    socklen_t addrlen,
 			    net_context_connect_cb_t cb,
-			    s32_t timeout,
+			    int32_t timeout,
 			    void *user_data)
 {
 	SOCKET socket = (int)context->offload_context;
@@ -414,7 +414,7 @@ static int winc1500_connect(struct net_context *context,
  */
 static int winc1500_accept(struct net_context *context,
 			   net_tcp_accept_cb_t cb,
-			   s32_t timeout,
+			   int32_t timeout,
 			   void *user_data)
 {
 	SOCKET socket = (int)context->offload_context;
@@ -431,12 +431,9 @@ static int winc1500_accept(struct net_context *context,
 
 	if (timeout) {
 		if (k_sem_take(&w1500_data.socket_data[socket].wait_sem,
-			       timeout)) {
+			       K_MSEC(timeout))) {
 			return -ETIMEDOUT;
 		}
-	} else {
-		k_sem_take(&w1500_data.socket_data[socket].wait_sem,
-			   K_FOREVER);
 	}
 
 	return w1500_data.socket_data[socket].ret_code;
@@ -447,7 +444,7 @@ static int winc1500_accept(struct net_context *context,
  */
 static int winc1500_send(struct net_pkt *pkt,
 			 net_context_send_cb_t cb,
-			 s32_t timeout,
+			 int32_t timeout,
 			 void *user_data)
 {
 	struct net_context *context = pkt->context;
@@ -459,9 +456,6 @@ static int winc1500_send(struct net_pkt *pkt,
 	if (!buf) {
 		return -ENOBUFS;
 	}
-
-	w1500_data.socket_data[socket].send_cb = cb;
-	w1500_data.socket_data[socket].send_user_data = user_data;
 
 	if (net_pkt_read(pkt, buf->data, net_pkt_get_len(pkt))) {
 		ret = -ENOBUFS;
@@ -490,7 +484,7 @@ static int winc1500_sendto(struct net_pkt *pkt,
 			   const struct sockaddr *dst_addr,
 			   socklen_t addrlen,
 			   net_context_send_cb_t cb,
-			   s32_t timeout,
+			   int32_t timeout,
 			   void *user_data)
 {
 	struct net_context *context = pkt->context;
@@ -502,9 +496,6 @@ static int winc1500_sendto(struct net_pkt *pkt,
 	if (!buf) {
 		return -ENOBUFS;
 	}
-
-	w1500_data.socket_data[socket].send_cb = cb;
-	w1500_data.socket_data[socket].send_user_data = user_data;
 
 	if (net_pkt_read(pkt, buf->data, net_pkt_get_len(pkt))) {
 		ret = -ENOBUFS;
@@ -558,7 +549,7 @@ static int prepare_pkt(struct socket_data *sock_data)
  */
 static int winc1500_recv(struct net_context *context,
 			 net_context_recv_cb_t cb,
-			 s32_t timeout,
+			 int32_t timeout,
 			 void *user_data)
 {
 	SOCKET socket = (int) context->offload_context;
@@ -641,9 +632,9 @@ static void handle_wifi_con_state_changed(void *pvMsg)
 
 static void handle_wifi_dhcp_conf(void *pvMsg)
 {
-	u8_t *pu8IPAddress = (u8_t *)pvMsg;
+	uint8_t *pu8IPAddress = (uint8_t *)pvMsg;
 	struct in_addr addr;
-	u8_t i;
+	uint8_t i;
 
 	/* Connected and got IP address*/
 	LOG_DBG("Wi-Fi connected, IP is %u.%u.%u.%u",
@@ -740,7 +731,7 @@ static void handle_scan_done(void *pvMsg)
 	}
 }
 
-static void winc1500_wifi_cb(u8_t message_type, void *pvMsg)
+static void winc1500_wifi_cb(uint8_t message_type, void *pvMsg)
 {
 	LOG_DBG("Msg Type %d %s",
 		message_type, wifi_cb_msg_2_str(message_type));
@@ -811,7 +802,7 @@ static bool handle_socket_msg_recv(SOCKET sock,
 	}
 
 	if (recv(sock, sd->pkt_buf->data,
-		 CONFIG_WIFI_WINC1500_MAX_PACKET_SIZE, K_NO_WAIT)) {
+		 CONFIG_WIFI_WINC1500_MAX_PACKET_SIZE, 0)) {
 		LOG_ERR("Could not receive packet in the buffer");
 		return false;
 	}
@@ -939,7 +930,6 @@ static void winc1500_socket_cb(SOCKET sock, uint8 message, void *pvMsg)
 		break;
 	case SOCKET_MSG_ACCEPT:
 		handle_socket_msg_accept(sd, pvMsg);
-		k_sem_give(&sd->wait_sem);
 
 		break;
 	}
@@ -957,7 +947,7 @@ static void winc1500_thread(void)
 	}
 }
 
-static int winc1500_mgmt_scan(struct device *dev, scan_result_cb_t cb)
+static int winc1500_mgmt_scan(const struct device *dev, scan_result_cb_t cb)
 {
 	if (w1500_data.scan_cb) {
 		return -EALREADY;
@@ -974,13 +964,13 @@ static int winc1500_mgmt_scan(struct device *dev, scan_result_cb_t cb)
 	return 0;
 }
 
-static int winc1500_mgmt_connect(struct device *dev,
+static int winc1500_mgmt_connect(const struct device *dev,
 				 struct wifi_connect_req_params *params)
 {
-	u8_t ssid[M2M_MAX_SSID_LEN];
+	uint8_t ssid[M2M_MAX_SSID_LEN];
 	tuniM2MWifiAuth psk;
-	u8_t security;
-	u16_t channel;
+	uint8_t security;
+	uint16_t channel;
 	void *auth;
 
 	memcpy(ssid, params->ssid, params->ssid_length);
@@ -1020,7 +1010,7 @@ static int winc1500_mgmt_connect(struct device *dev,
 	return 0;
 }
 
-static int winc1500_mgmt_disconnect(struct device *device)
+static int winc1500_mgmt_disconnect(const struct device *device)
 {
 	if (!w1500_data.connected) {
 		return -EALREADY;
@@ -1055,7 +1045,7 @@ static const struct net_wifi_mgmt_offload winc1500_api = {
 	.disconnect	= winc1500_mgmt_disconnect,
 };
 
-static int winc1500_init(struct device *dev)
+static int winc1500_init(const struct device *dev)
 {
 	tstrWifiInitParam param = {
 		.pfAppWifiCb = winc1500_wifi_cb,

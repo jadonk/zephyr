@@ -35,7 +35,7 @@ volatile struct {
  * master core that it's waken
  *
  */
-volatile u32_t arc_cpu_wake_flag;
+volatile uint32_t arc_cpu_wake_flag;
 
 volatile char *arc_cpu_sp;
 /*
@@ -87,7 +87,7 @@ void z_arc_slave_start(int cpu_num)
 
 #ifdef CONFIG_SMP
 
-static void sched_ipi_handler(void *unused)
+static void sched_ipi_handler(const void *unused)
 {
 	ARG_UNUSED(unused);
 
@@ -98,7 +98,7 @@ static void sched_ipi_handler(void *unused)
 /* arch implementation of sched_ipi */
 void arch_sched_ipi(void)
 {
-	u32_t i;
+	uint32_t i;
 
 	/* broadcast sched_ipi request to other cores
 	 * if the target is current core, hardware will ignore it
@@ -108,7 +108,7 @@ void arch_sched_ipi(void)
 	}
 }
 
-static int arc_smp_init(struct device *dev)
+static int arc_smp_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 	struct arc_connect_bcr bcr;
@@ -129,6 +129,17 @@ static int arc_smp_init(struct device *dev)
 		__ASSERT(0,
 			"ARC connect has no inter-core interrupt\n");
 		return -ENODEV;
+	}
+
+	if (bcr.dbg) {
+	/* configure inter-core debug unit if available */
+		uint32_t core_mask = (1 << CONFIG_MP_NUM_CPUS) - 1;
+		z_arc_connect_debug_select_set(core_mask);
+		/* Debugger halt cores at conditions */
+		z_arc_connect_debug_mask_set(core_mask,	(ARC_CONNECT_CMD_DEBUG_MASK_SH
+			| ARC_CONNECT_CMD_DEBUG_MASK_BH | ARC_CONNECT_CMD_DEBUG_MASK_AH
+			| ARC_CONNECT_CMD_DEBUG_MASK_H));
+
 	}
 
 	if (bcr.gfrc) {

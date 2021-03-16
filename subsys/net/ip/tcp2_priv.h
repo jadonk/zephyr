@@ -12,8 +12,8 @@
 #define MIN3(_a, _b, _c) MIN((_a), MIN((_b), (_c)))
 #endif
 
-#define th_seq(_x) ntohl((_x)->th_seq)
-#define th_ack(_x) ntohl((_x)->th_ack)
+#define th_seq(_x) ntohl(UNALIGNED_GET(&(_x)->th_seq))
+#define th_ack(_x) ntohl(UNALIGNED_GET(&(_x)->th_ack))
 
 #define tcp_slist(_slist, _op, _type, _link)				\
 ({									\
@@ -83,7 +83,7 @@
 
 #define conn_mss(_conn)					\
 	((_conn)->recv_options.mss_found ?		\
-	 (_conn)->recv_options.mss : NET_IPV6_MTU)
+	 (_conn)->recv_options.mss : (uint16_t)NET_IPV6_MTU)
 
 #define conn_state(_conn, _s)						\
 ({									\
@@ -99,7 +99,7 @@
 		"send_win=%hu, mss=%hu",				\
 		(_conn), net_pkt_get_len((_conn)->send_data),		\
 		conn->unacked_len, conn->send_win,			\
-		conn_mss((_conn)));					\
+		(uint16_t)conn_mss((_conn)));				\
 	NET_DBG("conn: %p send_data_timer=%hu, send_data_retries=%hu",	\
 		(_conn),						\
 		(bool)k_delayed_work_remaining_get(&(_conn)->send_data_timer),\
@@ -117,22 +117,22 @@ enum pkt_addr {
 };
 
 struct tcphdr {
-	u16_t th_sport;
-	u16_t th_dport;
-	u32_t th_seq;
-	u32_t th_ack;
+	uint16_t th_sport;
+	uint16_t th_dport;
+	uint32_t th_seq;
+	uint32_t th_ack;
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-	u8_t th_x2:4;	/* unused */
-	u8_t th_off:4;	/* data offset */
+	uint8_t th_x2:4;	/* unused */
+	uint8_t th_off:4;	/* data offset */
 #endif
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-	u8_t th_off:4;
-	u8_t th_x2:4;
+	uint8_t th_off:4;
+	uint8_t th_x2:4;
 #endif
-	u8_t th_flags;
-	u16_t th_win;
-	u16_t th_sum;
-	u16_t th_urp;
+	uint8_t th_flags;
+	uint16_t th_win;
+	uint16_t th_sum;
+	uint16_t th_urp;
 };
 
 enum th_flags {
@@ -142,6 +142,8 @@ enum th_flags {
 	PSH = 1 << 3,
 	ACK = 1 << 4,
 	URG = 1 << 5,
+	ECN = 1 << 6,
+	CWR = 1 << 7,
 };
 
 enum tcp_state {
@@ -170,8 +172,8 @@ union tcp_endpoint {
 };
 
 struct tcp_options {
-	u16_t mss;
-	u16_t window;
+	uint16_t mss;
+	uint16_t window;
 	bool mss_found : 1;
 	bool wnd_found : 1;
 };
@@ -179,38 +181,47 @@ struct tcp_options {
 struct tcp { /* TCP connection */
 	sys_snode_t next;
 	struct net_context *context;
-	struct k_mutex lock;
+	struct net_pkt *send_data;
+	struct net_if *iface;
 	void *recv_user_data;
-	enum tcp_state state;
-	u32_t seq;
-	u32_t ack;
-	union tcp_endpoint src;
-	union tcp_endpoint dst;
-	u16_t recv_win;
-	u16_t send_win;
+	sys_slist_t send_queue;
+	union {
+		net_tcp_accept_cb_t accept_cb;
+		struct tcp *accepted_conn;
+	};
+	struct k_mutex lock;
+	struct k_sem connect_sem; /* semaphore for blocking connect */
+	struct k_fifo recv_data;  /* temp queue before passing data to app */
 	struct tcp_options recv_options;
 	struct k_delayed_work send_timer;
-	sys_slist_t send_queue;
 	struct k_delayed_work send_data_timer;
-	struct net_pkt *send_data;
-	size_t send_data_total;
-	u8_t send_data_retries;
-	int unacked_len;
-	enum tcp_data_mode data_mode;
-	bool in_retransmission;
-	size_t send_retries;
 	struct k_delayed_work timewait_timer;
-	struct net_if *iface;
-	net_tcp_accept_cb_t accept_cb;
+	struct k_delayed_work fin_timer;
+	union tcp_endpoint src;
+	union tcp_endpoint dst;
+	size_t send_data_total;
+	size_t send_retries;
+	int unacked_len;
 	atomic_t ref_count;
+	enum tcp_state state;
+	enum tcp_data_mode data_mode;
+	uint32_t seq;
+	uint32_t ack;
+	uint16_t recv_win;
+	uint16_t send_win;
+	uint8_t send_data_retries;
+	bool in_retransmission : 1;
+	bool in_connect : 1;
+	bool in_close : 1;
 };
 
 #define _flags(_fl, _op, _mask, _cond)					\
 ({									\
 	bool result = false;						\
 									\
-	if (*(_fl) && (_cond) && (*(_fl) _op (_mask))) {		\
-		*(_fl) &= ~(_mask);					\
+	if (UNALIGNED_GET(_fl) && (_cond) &&				\
+	    (UNALIGNED_GET(_fl) _op(_mask))) {				\
+		UNALIGNED_PUT(UNALIGNED_GET(_fl) & ~(_mask), _fl);	\
 		result = true;						\
 	}								\
 									\
@@ -219,3 +230,5 @@ struct tcp { /* TCP connection */
 
 #define FL(_fl, _op, _mask, _args...)					\
 	_flags(_fl, _op, _mask, strlen("" #_args) ? _args : true)
+
+typedef void (*net_tcp_cb_t)(struct tcp *conn, void *user_data);

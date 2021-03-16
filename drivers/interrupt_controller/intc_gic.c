@@ -48,10 +48,10 @@ bool arm_gic_irq_is_enabled(unsigned int irq)
 }
 
 void arm_gic_irq_set_priority(
-	unsigned int irq, unsigned int prio, u32_t flags)
+	unsigned int irq, unsigned int prio, uint32_t flags)
 {
 	int int_grp, int_off;
-	u32_t val;
+	uint32_t val;
 
 	/* Set priority */
 	sys_write8(prio & 0xff, GICD_IPRIORITYRn + irq);
@@ -79,6 +79,16 @@ unsigned int arm_gic_get_active(void)
 
 void arm_gic_eoi(unsigned int irq)
 {
+	/*
+	 * Ensure the write to peripheral registers are *complete* before the write
+	 * to GIC_EOIR.
+	 *
+	 * Note: The completion gurantee depends on various factors of system design
+	 * and the barrier is the best core can do by which execution of further
+	 * instructions waits till the barrier is alive.
+	 */
+	__DSB();
+
 	/* set to inactive */
 	sys_write32(irq, GICC_EOIR);
 }
@@ -144,7 +154,7 @@ static void gic_dist_init(void)
 static void gic_cpu_init(void)
 {
 	int i;
-	u32_t val;
+	uint32_t val;
 
 	/*
 	 * Deal with the banked PPI and SGI interrupts - disable all
@@ -186,8 +196,10 @@ static void gic_cpu_init(void)
 #define GIC_PARENT_IRQ 0
 #define GIC_PARENT_IRQ_PRI 0
 #define GIC_PARENT_IRQ_FLAGS 0
-int arm_gic_init(void)
+int arm_gic_init(const struct device *unused)
 {
+	ARG_UNUSED(unused);
+
 	/* Init of Distributor interface registers */
 	gic_dist_init();
 
@@ -196,3 +208,5 @@ int arm_gic_init(void)
 
 	return 0;
 }
+
+SYS_INIT(arm_gic_init, PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);

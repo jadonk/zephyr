@@ -106,16 +106,16 @@ static int flash_sync(struct stream_flash_ctx *ctx)
 	return rc;
 }
 
-int stream_flash_buffered_write(struct stream_flash_ctx *ctx, const u8_t *data,
+int stream_flash_buffered_write(struct stream_flash_ctx *ctx, const uint8_t *data,
 				size_t len, bool flush)
 {
 	int processed = 0;
 	int rc = 0;
 	int buf_empty_bytes;
 	size_t fill_length;
-	u8_t filler;
+	uint8_t filler;
 
-	if (!ctx || !data) {
+	if (!ctx) {
 		return -EFAULT;
 	}
 
@@ -165,9 +165,12 @@ int stream_flash_buffered_write(struct stream_flash_ctx *ctx, const u8_t *data,
 
 			memset(ctx->buf + ctx->buf_bytes, filler, fill_length);
 			ctx->buf_bytes += fill_length;
+		} else {
+			fill_length = 0;
 		}
 
 		rc = flash_sync(ctx);
+		ctx->bytes_written -= fill_length;
 	}
 
 	return rc;
@@ -178,18 +181,39 @@ size_t stream_flash_bytes_written(struct stream_flash_ctx *ctx)
 	return ctx->bytes_written;
 }
 
-int stream_flash_init(struct stream_flash_ctx *ctx, struct device *fdev,
-		      u8_t *buf, size_t buf_len, size_t offset, size_t size,
+struct _inspect_flash {
+	size_t buf_len;
+	size_t total_size;
+};
+
+static bool find_flash_total_size(const struct flash_pages_info *info,
+				  void *data)
+{
+	struct _inspect_flash *ctx = (struct _inspect_flash *) data;
+
+	if (ctx->buf_len > info->size) {
+		LOG_ERR("Buffer size is bigger than page");
+		ctx->total_size = 0;
+		return false;
+	}
+
+	ctx->total_size += info->size;
+
+	return true;
+}
+
+int stream_flash_init(struct stream_flash_ctx *ctx, const struct device *fdev,
+		      uint8_t *buf, size_t buf_len, size_t offset, size_t size,
 		      stream_flash_callback_t cb)
 {
 	if (!ctx || !fdev || !buf) {
 		return -EFAULT;
 	}
 
-	size_t layout_size = 0;
-	size_t total_size = 0;
-	const struct flash_pages_layout *layout;
-	const struct flash_driver_api *api = fdev->driver_api;
+	struct _inspect_flash inspect_flash_ctx = {
+		.buf_len = buf_len,
+		.total_size = 0
+	};
 
 	if (buf_len % flash_get_write_block_size(fdev)) {
 		LOG_ERR("Buffer size is not aligned to minimal write-block-size");
@@ -197,22 +221,15 @@ int stream_flash_init(struct stream_flash_ctx *ctx, struct device *fdev,
 	}
 
 	/* Calculate the total size of the flash device */
-	api->page_layout(fdev, &layout, &layout_size);
-	for (int i = 0; i < layout_size; i++) {
+	flash_page_foreach(fdev, find_flash_total_size, &inspect_flash_ctx);
 
-		total_size += layout->pages_count * layout->pages_size;
-
-		if (buf_len > layout->pages_size) {
-			LOG_ERR("Buffer size is bigger than page");
-			return -EFAULT;
-		}
-
-		layout++;
-
+	/* The flash size counted should never be equal zero */
+	if (inspect_flash_ctx.total_size == 0) {
+		return -EFAULT;
 	}
 
-	if ((offset + size) > total_size ||
-	    offset % api->write_block_size) {
+	if ((offset + size) > inspect_flash_ctx.total_size ||
+	    offset % flash_get_write_block_size(fdev)) {
 		LOG_ERR("Incorrect parameter");
 		return -EFAULT;
 	}
@@ -223,7 +240,8 @@ int stream_flash_init(struct stream_flash_ctx *ctx, struct device *fdev,
 	ctx->bytes_written = 0;
 	ctx->buf_bytes = 0U;
 	ctx->offset = offset;
-	ctx->available = (size == 0 ? total_size - offset : size);
+	ctx->available = (size == 0 ? inspect_flash_ctx.total_size - offset :
+				      size);
 	ctx->callback = cb;
 
 #ifdef CONFIG_STREAM_FLASH_ERASE

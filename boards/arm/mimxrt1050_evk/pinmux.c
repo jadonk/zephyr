@@ -29,17 +29,17 @@ static gpio_pin_config_t enet_gpio_config = {
  */
 
 static void mimxrt1050_evk_usdhc_pinmux(
-	u16_t nusdhc, bool init,
-	u32_t speed, u32_t strength)
+	uint16_t nusdhc, bool init,
+	uint32_t speed, uint32_t strength)
 {
-	u32_t cmd_data = IOMUXC_SW_PAD_CTL_PAD_SPEED(speed) |
+	uint32_t cmd_data = IOMUXC_SW_PAD_CTL_PAD_SPEED(speed) |
 				IOMUXC_SW_PAD_CTL_PAD_SRE_MASK |
 				IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
 				IOMUXC_SW_PAD_CTL_PAD_PUE_MASK |
 				IOMUXC_SW_PAD_CTL_PAD_HYS_MASK |
 				IOMUXC_SW_PAD_CTL_PAD_PUS(1) |
 				IOMUXC_SW_PAD_CTL_PAD_DSE(strength);
-	u32_t clk = IOMUXC_SW_PAD_CTL_PAD_SPEED(speed) |
+	uint32_t clk = IOMUXC_SW_PAD_CTL_PAD_SPEED(speed) |
 				IOMUXC_SW_PAD_CTL_PAD_SRE_MASK |
 				IOMUXC_SW_PAD_CTL_PAD_HYS_MASK |
 				IOMUXC_SW_PAD_CTL_PAD_PUS(0) |
@@ -102,7 +102,7 @@ static void mimxrt1050_evk_usdhc_pinmux(
 }
 #endif
 
-static int mimxrt1050_evk_init(struct device *dev)
+static int mimxrt1050_evk_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
@@ -118,8 +118,8 @@ static int mimxrt1050_evk_init(struct device *dev)
 			    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
 #endif
 
-#if !DT_NODE_HAS_STATUS(DT_NODELABEL(enet), okay)
-	/* LED */
+#if !CONFIG_NET_L2_ETHERNET
+	/* Shared GPIO between USER_LED and ENET_RST */
 	IOMUXC_SetPinMux(IOMUXC_GPIO_AD_B0_09_GPIO1_IO09, 0);
 
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_09_GPIO1_IO09,
@@ -225,7 +225,9 @@ static int mimxrt1050_evk_init(struct device *dev)
 	IOMUXC_SetPinMux(IOMUXC_GPIO_EMC_40_ENET_MDC, 0);
 	IOMUXC_SetPinMux(IOMUXC_GPIO_EMC_41_ENET_MDIO, 0);
 
+	/* Shared GPIO between USER_LED and ENET_RST */
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_09_GPIO1_IO09, 0xB0A9u);
+
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_10_GPIO1_IO10, 0xB0A9u);
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_04_ENET_RX_DATA00, 0xB0E9);
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_05_ENET_RX_DATA01, 0xB0E9);
@@ -317,7 +319,7 @@ static int mimxrt1050_evk_init(struct device *dev)
 }
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(enet), okay) && CONFIG_NET_L2_ETHERNET
-static int mimxrt1050_evk_phy_reset(struct device *dev)
+static int mimxrt1050_evk_phy_reset(const struct device *dev)
 {
 	/* RESET PHY chip. */
 	k_busy_wait(USEC_PER_MSEC * 10U);

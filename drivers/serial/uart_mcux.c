@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017, NXP
+ * Copyright (c) 2020 PHYTEC Messtechnik GmbH
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -17,24 +18,110 @@ struct uart_mcux_config {
 	UART_Type *base;
 	char *clock_name;
 	clock_control_subsys_t clock_subsys;
-	u32_t baud_rate;
-	u8_t hw_flow_control;
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
-	void (*irq_config_func)(struct device *dev);
+	void (*irq_config_func)(const struct device *dev);
 #endif
 };
 
 struct uart_mcux_data {
+	struct uart_config uart_cfg;
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	uart_irq_callback_user_data_t callback;
 	void *cb_data;
 #endif
 };
 
-static int uart_mcux_poll_in(struct device *dev, unsigned char *c)
+static int uart_mcux_configure(const struct device *dev,
+			       const struct uart_config *cfg)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t flags = UART_GetStatusFlags(config->base);
+	const struct uart_mcux_config *config = dev->config;
+	struct uart_mcux_data *data = dev->data;
+	uart_config_t uart_config;
+	const struct device *clock_dev;
+	uint32_t clock_freq;
+	status_t retval;
+
+	clock_dev = device_get_binding(config->clock_name);
+	if (clock_dev == NULL) {
+		return -EINVAL;
+	}
+
+	if (clock_control_get_rate(clock_dev, config->clock_subsys,
+				   &clock_freq)) {
+		return -EINVAL;
+	}
+
+	UART_GetDefaultConfig(&uart_config);
+
+	uart_config.enableTx = true;
+	uart_config.enableRx = true;
+	uart_config.baudRate_Bps = cfg->baudrate;
+
+	switch (cfg->stop_bits) {
+	case UART_CFG_STOP_BITS_1:
+#if defined(FSL_FEATURE_UART_HAS_STOP_BIT_CONFIG_SUPPORT) && \
+FSL_FEATURE_UART_HAS_STOP_BIT_CONFIG_SUPPORT
+		uart_config.stopBitCount = kUART_OneStopBit;
+		break;
+	case UART_CFG_STOP_BITS_2:
+		uart_config.stopBitCount = kUART_TwoStopBit;
+#endif
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	switch (cfg->flow_ctrl) {
+	case UART_CFG_FLOW_CTRL_NONE:
+		uart_config.enableRxRTS = false;
+		uart_config.enableTxCTS = false;
+		break;
+	case UART_CFG_FLOW_CTRL_RTS_CTS:
+		uart_config.enableRxRTS = true;
+		uart_config.enableTxCTS = true;
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	switch (cfg->parity) {
+	case UART_CFG_PARITY_NONE:
+		uart_config.parityMode = kUART_ParityDisabled;
+		break;
+	case UART_CFG_PARITY_EVEN:
+		uart_config.parityMode = kUART_ParityEven;
+		break;
+	case UART_CFG_PARITY_ODD:
+		uart_config.parityMode = kUART_ParityOdd;
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	retval = UART_Init(config->base, &uart_config, clock_freq);
+	if (retval != kStatus_Success) {
+		return -EINVAL;
+	}
+
+	data->uart_cfg = *cfg;
+
+	return 0;
+}
+
+static int uart_mcux_config_get(const struct device *dev,
+				struct uart_config *cfg)
+{
+	struct uart_mcux_data *data = dev->data;
+
+	*cfg = data->uart_cfg;
+
+	return 0;
+}
+
+static int uart_mcux_poll_in(const struct device *dev, unsigned char *c)
+{
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t flags = UART_GetStatusFlags(config->base);
 	int ret = -1;
 
 	if (flags & kUART_RxDataRegFullFlag) {
@@ -45,9 +132,9 @@ static int uart_mcux_poll_in(struct device *dev, unsigned char *c)
 	return ret;
 }
 
-static void uart_mcux_poll_out(struct device *dev, unsigned char c)
+static void uart_mcux_poll_out(const struct device *dev, unsigned char c)
 {
-	const struct uart_mcux_config *config = dev->config_info;
+	const struct uart_mcux_config *config = dev->config;
 
 	while (!(UART_GetStatusFlags(config->base) & kUART_TxDataRegEmptyFlag)) {
 	}
@@ -55,10 +142,10 @@ static void uart_mcux_poll_out(struct device *dev, unsigned char c)
 	UART_WriteByte(config->base, c);
 }
 
-static int uart_mcux_err_check(struct device *dev)
+static int uart_mcux_err_check(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t flags = UART_GetStatusFlags(config->base);
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t flags = UART_GetStatusFlags(config->base);
 	int err = 0;
 
 	if (flags & kUART_RxOverrunFlag) {
@@ -81,11 +168,12 @@ static int uart_mcux_err_check(struct device *dev)
 }
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
-static int uart_mcux_fifo_fill(struct device *dev, const u8_t *tx_data,
+static int uart_mcux_fifo_fill(const struct device *dev,
+			       const uint8_t *tx_data,
 			       int len)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u8_t num_tx = 0U;
+	const struct uart_mcux_config *config = dev->config;
+	uint8_t num_tx = 0U;
 
 	while ((len - num_tx > 0) &&
 	       (UART_GetStatusFlags(config->base) & kUART_TxDataRegEmptyFlag)) {
@@ -96,11 +184,11 @@ static int uart_mcux_fifo_fill(struct device *dev, const u8_t *tx_data,
 	return num_tx;
 }
 
-static int uart_mcux_fifo_read(struct device *dev, u8_t *rx_data,
+static int uart_mcux_fifo_read(const struct device *dev, uint8_t *rx_data,
 			       const int len)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u8_t num_rx = 0U;
+	const struct uart_mcux_config *config = dev->config;
+	uint8_t num_rx = 0U;
 
 	while ((len - num_rx > 0) &&
 	       (UART_GetStatusFlags(config->base) & kUART_RxDataRegFullFlag)) {
@@ -111,150 +199,135 @@ static int uart_mcux_fifo_read(struct device *dev, u8_t *rx_data,
 	return num_rx;
 }
 
-static void uart_mcux_irq_tx_enable(struct device *dev)
+static void uart_mcux_irq_tx_enable(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t mask = kUART_TxDataRegEmptyInterruptEnable;
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t mask = kUART_TxDataRegEmptyInterruptEnable;
 
 	UART_EnableInterrupts(config->base, mask);
 }
 
-static void uart_mcux_irq_tx_disable(struct device *dev)
+static void uart_mcux_irq_tx_disable(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t mask = kUART_TxDataRegEmptyInterruptEnable;
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t mask = kUART_TxDataRegEmptyInterruptEnable;
 
 	UART_DisableInterrupts(config->base, mask);
 }
 
-static int uart_mcux_irq_tx_complete(struct device *dev)
+static int uart_mcux_irq_tx_complete(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t flags = UART_GetStatusFlags(config->base);
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t flags = UART_GetStatusFlags(config->base);
 
-	return (flags & kUART_TxDataRegEmptyFlag) != 0U;
+	return (flags & kUART_TransmissionCompleteFlag) != 0U;
 }
 
-static int uart_mcux_irq_tx_ready(struct device *dev)
+static int uart_mcux_irq_tx_ready(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t mask = kUART_TxDataRegEmptyInterruptEnable;
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t mask = kUART_TxDataRegEmptyInterruptEnable;
+	uint32_t flags = UART_GetStatusFlags(config->base);
 
 	return (UART_GetEnabledInterrupts(config->base) & mask)
-		&& uart_mcux_irq_tx_complete(dev);
+		&& (flags & kUART_TxDataRegEmptyFlag);
 }
 
-static void uart_mcux_irq_rx_enable(struct device *dev)
+static void uart_mcux_irq_rx_enable(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t mask = kUART_RxDataRegFullInterruptEnable;
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t mask = kUART_RxDataRegFullInterruptEnable;
 
 	UART_EnableInterrupts(config->base, mask);
 }
 
-static void uart_mcux_irq_rx_disable(struct device *dev)
+static void uart_mcux_irq_rx_disable(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t mask = kUART_RxDataRegFullInterruptEnable;
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t mask = kUART_RxDataRegFullInterruptEnable;
 
 	UART_DisableInterrupts(config->base, mask);
 }
 
-static int uart_mcux_irq_rx_full(struct device *dev)
+static int uart_mcux_irq_rx_full(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t flags = UART_GetStatusFlags(config->base);
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t flags = UART_GetStatusFlags(config->base);
 
 	return (flags & kUART_RxDataRegFullFlag) != 0U;
 }
 
-static int uart_mcux_irq_rx_ready(struct device *dev)
+static int uart_mcux_irq_rx_ready(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t mask = kUART_RxDataRegFullInterruptEnable;
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t mask = kUART_RxDataRegFullInterruptEnable;
 
 	return (UART_GetEnabledInterrupts(config->base) & mask)
 		&& uart_mcux_irq_rx_full(dev);
 }
 
-static void uart_mcux_irq_err_enable(struct device *dev)
+static void uart_mcux_irq_err_enable(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t mask = kUART_NoiseErrorInterruptEnable |
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t mask = kUART_NoiseErrorInterruptEnable |
 			kUART_FramingErrorInterruptEnable |
 			kUART_ParityErrorInterruptEnable;
 
 	UART_EnableInterrupts(config->base, mask);
 }
 
-static void uart_mcux_irq_err_disable(struct device *dev)
+static void uart_mcux_irq_err_disable(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	u32_t mask = kUART_NoiseErrorInterruptEnable |
+	const struct uart_mcux_config *config = dev->config;
+	uint32_t mask = kUART_NoiseErrorInterruptEnable |
 			kUART_FramingErrorInterruptEnable |
 			kUART_ParityErrorInterruptEnable;
 
 	UART_DisableInterrupts(config->base, mask);
 }
 
-static int uart_mcux_irq_is_pending(struct device *dev)
+static int uart_mcux_irq_is_pending(const struct device *dev)
 {
 	return uart_mcux_irq_tx_ready(dev) || uart_mcux_irq_rx_ready(dev);
 }
 
-static int uart_mcux_irq_update(struct device *dev)
+static int uart_mcux_irq_update(const struct device *dev)
 {
 	return 1;
 }
 
-static void uart_mcux_irq_callback_set(struct device *dev,
+static void uart_mcux_irq_callback_set(const struct device *dev,
 				       uart_irq_callback_user_data_t cb,
 				       void *cb_data)
 {
-	struct uart_mcux_data *data = dev->driver_data;
+	struct uart_mcux_data *data = dev->data;
 
 	data->callback = cb;
 	data->cb_data = cb_data;
 }
 
-static void uart_mcux_isr(void *arg)
+static void uart_mcux_isr(const struct device *dev)
 {
-	struct device *dev = arg;
-	struct uart_mcux_data *data = dev->driver_data;
+	struct uart_mcux_data *data = dev->data;
 
 	if (data->callback) {
-		data->callback(data->cb_data);
+		data->callback(dev, data->cb_data);
 	}
 }
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
 
-static int uart_mcux_init(struct device *dev)
+static int uart_mcux_init(const struct device *dev)
 {
-	const struct uart_mcux_config *config = dev->config_info;
-	uart_config_t uart_config;
-	struct device *clock_dev;
-	u32_t clock_freq;
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	const struct uart_mcux_config *config = dev->config;
+#endif
+	struct uart_mcux_data *data = dev->data;
+	int err;
 
-	clock_dev = device_get_binding(config->clock_name);
-	if (clock_dev == NULL) {
-		return -EINVAL;
+	err = uart_mcux_configure(dev, &data->uart_cfg);
+	if (err != 0) {
+		return err;
 	}
-
-	if (clock_control_get_rate(clock_dev, config->clock_subsys,
-				   &clock_freq)) {
-		return -EINVAL;
-	}
-
-	UART_GetDefaultConfig(&uart_config);
-	uart_config.enableTx = true;
-	uart_config.enableRx = true;
-	if (config->hw_flow_control) {
-		uart_config.enableRxRTS = true;
-		uart_config.enableTxCTS = true;
-	}
-	uart_config.baudRate_Bps = config->baud_rate;
-
-	UART_Init(config->base, &uart_config, clock_freq);
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	config->irq_config_func(dev);
@@ -267,6 +340,8 @@ static const struct uart_driver_api uart_mcux_driver_api = {
 	.poll_in = uart_mcux_poll_in,
 	.poll_out = uart_mcux_poll_out,
 	.err_check = uart_mcux_err_check,
+	.configure = uart_mcux_configure,
+	.config_get = uart_mcux_config_get,
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.fifo_fill = uart_mcux_fifo_fill,
 	.fifo_read = uart_mcux_fifo_read,
@@ -290,14 +365,12 @@ static const struct uart_mcux_config uart_mcux_##n##_config = {		\
 	.base = (UART_Type *)DT_INST_REG_ADDR(n),			\
 	.clock_name = DT_INST_CLOCKS_LABEL(n),				\
 	.clock_subsys = (clock_control_subsys_t)DT_INST_CLOCKS_CELL(n, name),\
-	.baud_rate = DT_INST_PROP(n, current_speed),			\
-	.hw_flow_control = DT_INST_PROP(n, hw_flow_control),		\
 	IRQ_FUNC_INIT							\
 }
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 #define UART_MCUX_CONFIG_FUNC(n)					\
-	static void uart_mcux_config_func_##n(struct device *dev)	\
+	static void uart_mcux_config_func_##n(const struct device *dev)	\
 	{								\
 		IRQ_CONNECT(DT_INST_IRQ_BY_NAME(n, status, irq),	\
 			    DT_INST_IRQ_BY_NAME(n, status, priority),	\
@@ -324,7 +397,16 @@ static const struct uart_mcux_config uart_mcux_##n##_config = {		\
 
 #define UART_MCUX_INIT(n)						\
 									\
-	static struct uart_mcux_data uart_mcux_##n##_data;		\
+	static struct uart_mcux_data uart_mcux_##n##_data = {		\
+		.uart_cfg = {						\
+			.stop_bits = UART_CFG_STOP_BITS_1,		\
+			.data_bits = UART_CFG_DATA_BITS_8,		\
+			.baudrate  = DT_INST_PROP(n, current_speed),	\
+			.parity    = UART_CFG_PARITY_NONE,		\
+			.flow_ctrl = DT_INST_PROP(n, hw_flow_control) ?	\
+				UART_CFG_FLOW_CTRL_RTS_CTS : UART_CFG_FLOW_CTRL_NONE,\
+		},							\
+	};								\
 									\
 	static const struct uart_mcux_config uart_mcux_##n##_config;	\
 									\

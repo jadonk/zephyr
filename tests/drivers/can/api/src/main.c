@@ -51,7 +51,7 @@ CAN_DEFINE_MSGQ(can_msgq, 5);
 struct k_sem rx_isr_sem;
 struct k_sem rx_cb_sem;
 struct k_sem tx_cb_sem;
-struct device *can_dev;
+const struct device *can_dev;
 
 struct zcan_frame test_std_msg = {
 	.id_type = CAN_STANDARD_IDENTIFIER,
@@ -128,7 +128,7 @@ const struct zcan_filter test_std_some_filter = {
 struct zcan_work can_work;
 
 static inline void check_msg(struct zcan_frame *msg1, struct zcan_frame *msg2,
-			     u32_t mask)
+			     uint32_t mask)
 {
 	int cmp_res;
 
@@ -153,7 +153,7 @@ static inline void check_msg(struct zcan_frame *msg1, struct zcan_frame *msg2,
 	zassert_equal(cmp_res, 0, "Received data differ");
 }
 
-static void tx_std_isr(u32_t error_flags, void *arg)
+static void tx_std_isr(uint32_t error_flags, void *arg)
 {
 	struct zcan_frame *msg = (struct zcan_frame *)arg;
 
@@ -162,7 +162,7 @@ static void tx_std_isr(u32_t error_flags, void *arg)
 	zassert_equal(msg->std_id, TEST_CAN_STD_ID, "Arg does not match");
 }
 
-static void tx_std_masked_isr(u32_t error_flags, void *arg)
+static void tx_std_masked_isr(uint32_t error_flags, void *arg)
 {
 	struct zcan_frame *msg = (struct zcan_frame *)arg;
 
@@ -171,7 +171,7 @@ static void tx_std_masked_isr(u32_t error_flags, void *arg)
 	zassert_equal(msg->std_id, TEST_CAN_STD_MASK_ID, "Arg does not match");
 }
 
-static void tx_ext_isr(u32_t error_flags, void *arg)
+static void tx_ext_isr(uint32_t error_flags, void *arg)
 {
 	struct zcan_frame *msg = (struct zcan_frame *)arg;
 
@@ -180,7 +180,7 @@ static void tx_ext_isr(u32_t error_flags, void *arg)
 	zassert_equal(msg->ext_id, TEST_CAN_EXT_ID, "Arg does not match");
 }
 
-static void tx_ext_masked_isr(u32_t error_flags, void *arg)
+static void tx_ext_masked_isr(uint32_t error_flags, void *arg)
 {
 	struct zcan_frame *msg = (struct zcan_frame *)arg;
 
@@ -245,7 +245,8 @@ static void rx_ext_mask_cb(struct zcan_frame *msg, void *arg)
 	k_sem_give(&rx_cb_sem);
 }
 
-static void send_test_msg(struct device *can_dev, struct zcan_frame *msg)
+static void send_test_msg(const struct device *can_dev,
+			  struct zcan_frame *msg)
 {
 	int ret;
 
@@ -255,7 +256,8 @@ static void send_test_msg(struct device *can_dev, struct zcan_frame *msg)
 	zassert_equal(ret, CAN_TX_OK, "Can't send a message. Err: %d", ret);
 }
 
-static void send_test_msg_nowait(struct device *can_dev, struct zcan_frame *msg)
+static void send_test_msg_nowait(const struct device *can_dev,
+				 struct zcan_frame *msg)
 {
 	int ret;
 
@@ -282,7 +284,7 @@ static void send_test_msg_nowait(struct device *can_dev, struct zcan_frame *msg)
 	zassert_equal(ret, CAN_TX_OK, "Can't send a message. Err: %d", ret);
 }
 
-static inline int attach_msgq(struct device *can_dev,
+static inline int attach_msgq(const struct device *can_dev,
 			      const struct zcan_filter *filter)
 {
 	int filter_id;
@@ -295,8 +297,8 @@ static inline int attach_msgq(struct device *can_dev,
 	return filter_id;
 }
 
-static inline int attach_workq(struct device *can_dev,
-			      const struct zcan_filter *filter)
+static inline int attach_workq(const struct device *can_dev,
+			       const struct zcan_filter *filter)
 {
 	int filter_id;
 
@@ -329,7 +331,7 @@ static inline int attach_workq(struct device *can_dev,
 	return filter_id;
 }
 
-static inline int attach_isr(struct device *can_dev,
+static inline int attach_isr(const struct device *can_dev,
 			     const struct zcan_filter *filter)
 {
 	int filter_id;
@@ -365,7 +367,7 @@ static void send_receive(const struct zcan_filter *filter, struct zcan_frame *ms
 {
 	int ret, filter_id;
 	struct zcan_frame msg_buffer;
-	u32_t mask = 0U;
+	uint32_t mask = 0U;
 
 	zassert_not_null(can_dev, "Device not not found");
 

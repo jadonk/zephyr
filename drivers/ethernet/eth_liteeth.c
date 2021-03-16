@@ -59,33 +59,33 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 struct eth_liteeth_dev_data {
 	struct net_if *iface;
-	u8_t mac_addr[6];
+	uint8_t mac_addr[6];
 
-	u8_t txslot;
-	u8_t rxslot;
+	uint8_t txslot;
+	uint8_t rxslot;
 
-	u8_t *tx_buf[2];
-	u8_t *rx_buf[2];
+	uint8_t *tx_buf[2];
+	uint8_t *rx_buf[2];
 };
 
 struct eth_liteeth_config {
 	void (*config_func)(void);
 };
 
-static int eth_initialize(struct device *dev)
+static int eth_initialize(const struct device *dev)
 {
-	const struct eth_liteeth_config *config = dev->config_info;
+	const struct eth_liteeth_config *config = dev->config;
 
 	config->config_func();
 
 	return 0;
 }
 
-static int eth_tx(struct device *dev, struct net_pkt *pkt)
+static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 {
 	int key;
-	u16_t len;
-	struct eth_liteeth_dev_data *context = dev->driver_data;
+	uint16_t len;
+	struct eth_liteeth_dev_data *context = dev->data;
 
 	key = irq_lock();
 
@@ -113,13 +113,13 @@ static int eth_tx(struct device *dev, struct net_pkt *pkt)
 	return 0;
 }
 
-static void eth_rx(struct device *port)
+static void eth_rx(const struct device *port)
 {
 	struct net_pkt *pkt;
-	struct eth_liteeth_dev_data *context = port->driver_data;
+	struct eth_liteeth_dev_data *context = port->data;
 
 	unsigned int key, r;
-	u16_t len = 0;
+	uint16_t len = 0;
 
 	key = irq_lock();
 
@@ -158,7 +158,7 @@ out:
 	irq_unlock(key);
 }
 
-static void eth_irq_handler(struct device *port)
+static void eth_irq_handler(const struct device *port)
 {
 	/* check sram reader events (tx) */
 	if (sys_read8(LITEETH_TX_EV_PENDING) & LITEETH_EV_TX) {
@@ -190,8 +190,8 @@ static const struct eth_liteeth_config eth_config = {
 
 static void eth_iface_init(struct net_if *iface)
 {
-	struct device *port = net_if_get_device(iface);
-	struct eth_liteeth_dev_data *context = port->driver_data;
+	const struct device *port = net_if_get_device(iface);
+	struct eth_liteeth_dev_data *context = port->data;
 	static bool init_done;
 
 	/* initialize only once */
@@ -220,18 +220,18 @@ static void eth_iface_init(struct net_if *iface)
 
 	/* setup tx slots */
 	context->txslot = 0;
-	context->tx_buf[0] = (u8_t *)LITEETH_SLOT_TX0;
-	context->tx_buf[1] = (u8_t *)LITEETH_SLOT_TX1;
+	context->tx_buf[0] = (uint8_t *)LITEETH_SLOT_TX0;
+	context->tx_buf[1] = (uint8_t *)LITEETH_SLOT_TX1;
 
 	/* setup rx slots */
 	context->rxslot = 0;
-	context->rx_buf[0] = (u8_t *)LITEETH_SLOT_RX0;
-	context->rx_buf[1] = (u8_t *)LITEETH_SLOT_RX1;
+	context->rx_buf[0] = (uint8_t *)LITEETH_SLOT_RX0;
+	context->rx_buf[1] = (uint8_t *)LITEETH_SLOT_RX1;
 
 	init_done = true;
 }
 
-static enum ethernet_hw_caps eth_caps(struct device *dev)
+static enum ethernet_hw_caps eth_caps(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 	return ETHERNET_LINK_10BASE_T | ETHERNET_LINK_100BASE_T |

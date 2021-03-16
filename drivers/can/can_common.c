@@ -39,10 +39,10 @@ static void can_msgq_put(struct zcan_frame *frame, void *arg)
 	}
 }
 
-int z_impl_can_attach_msgq(struct device *dev, struct k_msgq *msg_q,
+int z_impl_can_attach_msgq(const struct device *dev, struct k_msgq *msg_q,
 			   const struct zcan_filter *filter)
 {
-	const struct can_driver_api *api = dev->driver_api;
+	const struct can_driver_api *api = dev->api;
 
 	return api->attach_isr(dev, can_msgq_put, msg_q, filter);
 }
@@ -56,7 +56,7 @@ static inline void can_work_buffer_init(struct can_frame_buffer *buffer)
 static inline int can_work_buffer_put(struct zcan_frame *frame,
 				      struct can_frame_buffer *buffer)
 {
-	u16_t next_head = WORK_BUF_MOD_SIZE(buffer->head + 1);
+	uint16_t next_head = WORK_BUF_MOD_SIZE(buffer->head + 1);
 
 	if (buffer->head == WORK_BUF_FULL) {
 		return -1;
@@ -87,7 +87,7 @@ struct zcan_frame *can_work_buffer_get_next(struct can_frame_buffer *buffer)
 
 static inline void can_work_buffer_free_next(struct can_frame_buffer *buffer)
 {
-	u16_t next_tail = WORK_BUF_MOD_SIZE(buffer->tail + 1);
+	uint16_t next_tail = WORK_BUF_MOD_SIZE(buffer->tail + 1);
 
 	if (buffer->head == buffer->tail) {
 		return;
@@ -128,12 +128,12 @@ static void can_work_isr_put(struct zcan_frame *frame, void *arg)
 	k_work_submit_to_queue(work->work_queue, &work->work_item);
 }
 
-int can_attach_workq(struct device *dev, struct k_work_q *work_q,
+int can_attach_workq(const struct device *dev, struct k_work_q *work_q,
 			    struct zcan_work *work,
 			    can_rx_callback_t callback, void *callback_arg,
 			    const struct zcan_filter *filter)
 {
-	const struct can_driver_api *api = dev->driver_api;
+	const struct can_driver_api *api = dev->api;
 
 	k_work_init(&work->work_item, can_work_handler);
 	work->work_queue = work_q;

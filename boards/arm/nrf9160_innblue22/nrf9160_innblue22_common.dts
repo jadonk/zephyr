@@ -98,6 +98,10 @@
 		compatible = "ti,bq274xx";
 		label = "BQ274XX";
 		reg = <0x55>;
+		design-voltage = <3700>;
+		design-capacity = <1800>;
+		taper-current = <45>;
+		terminate-voltage = <3000>;
 	};
 
 	lis2dh12-accel@19 {
@@ -164,10 +168,7 @@
 };
 
 &flash0 {
-	/*
-	 * For more information, see:
-	 * http://docs.zephyrproject.org/latest/guides/dts/index.html#flash-partitions
-	 */
+
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
@@ -175,15 +176,15 @@
 
 		boot_partition: partition@0 {
 			label = "mcuboot";
-			reg = <0x00000000 0x10000>;
+			reg = <0x00000000 0xc000>;
 		};
-		slot0_partition: partition@10000 {
+		slot0_partition: partition@c000 {
 			label = "image-0";
 		};
-		slot0_ns_partition: partition@40000 {
+		slot0_ns_partition: partition@3e000 {
 			label = "image-0-nonsecure";
 		};
-		slot1_partition: partition@80000 {
+		slot1_partition: partition@7e000 {
 			label = "image-1";
 		};
 		slot1_ns_partition: partition@b0000 {
@@ -203,13 +204,11 @@
 / {
 	/* SRAM allocated and used by the BSD library */
 	sram0_bsd: memory@20010000 {
-		device_type = "memory";
 		compatible = "mmio-sram";
 	};
 
 	/* SRAM allocated to the Non-Secure image */
 	sram0_ns: memory@20020000 {
-		device_type = "memory";
 		compatible = "mmio-sram";
 	};
 };

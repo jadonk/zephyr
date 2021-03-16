@@ -68,30 +68,30 @@ static int parse_long_range(long *out, const struct shell *shell,
 	return 0;
 }
 
-static int parse_freq(u32_t *out, const struct shell *shell, const char *arg)
+static int parse_freq(uint32_t *out, const struct shell *shell, const char *arg)
 {
 	char *eptr;
-	long long llval;
+	unsigned long val;
 
-	llval = strtoll(arg, &eptr, 0);
+	val = strtoul(arg, &eptr, 0);
 	if (*eptr != '\0') {
 		shell_error(shell, "Invalid frequency, '%s' is not an integer",
 			    arg);
 		return -EINVAL;
 	}
 
-	if (llval < 0 || llval > UINT32_MAX) {
-		shell_error(shell, "Frequency %lli out of range", llval);
+	if (val == ULONG_MAX) {
+		shell_error(shell, "Frequency %s out of range", arg);
 		return -EINVAL;
 	}
 
-	*out = (u32_t)llval;
+	*out = (uint32_t)val;
 	return 0;
 }
 
-static struct device *get_modem(const struct shell *shell)
+static const struct device *get_modem(const struct shell *shell)
 {
-	struct device *dev;
+	const struct device *dev;
 
 	dev = device_get_binding(DEFAULT_RADIO);
 	if (!dev) {
@@ -102,10 +102,10 @@ static struct device *get_modem(const struct shell *shell)
 	return dev;
 }
 
-static struct device *get_configured_modem(const struct shell *shell)
+static const struct device *get_configured_modem(const struct shell *shell)
 {
 	int ret;
-	struct device *dev;
+	const struct device *dev;
 
 	dev = get_modem(shell);
 	if (!dev) {
@@ -232,7 +232,7 @@ static int cmd_lora_send(const struct shell *shell,
 			size_t argc, char **argv)
 {
 	int ret;
-	struct device *dev;
+	const struct device *dev;
 
 	modem_config.tx = true;
 	dev = get_configured_modem(shell);
@@ -252,11 +252,11 @@ static int cmd_lora_send(const struct shell *shell,
 static int cmd_lora_recv(const struct shell *shell, size_t argc, char **argv)
 {
 	static char buf[0xff];
-	struct device *dev;
+	const struct device *dev;
 	long timeout = 0;
 	int ret;
-	s16_t rssi;
-	s8_t snr;
+	int16_t rssi;
+	int8_t snr;
 
 	modem_config.tx = false;
 	dev = get_configured_modem(shell);
@@ -286,9 +286,9 @@ static int cmd_lora_recv(const struct shell *shell, size_t argc, char **argv)
 static int cmd_lora_test_cw(const struct shell *shell,
 			    size_t argc, char **argv)
 {
-	struct device *dev;
+	const struct device *dev;
 	int ret;
-	u32_t freq;
+	uint32_t freq;
 	long power, duration;
 
 	dev = get_modem(shell);
@@ -304,7 +304,7 @@ static int cmd_lora_test_cw(const struct shell *shell,
 		return -EINVAL;
 	}
 
-	ret = lora_test_cw(dev, (u32_t)freq, (s8_t)power, (u16_t)duration);
+	ret = lora_test_cw(dev, (uint32_t)freq, (int8_t)power, (uint16_t)duration);
 	if (ret < 0) {
 		shell_error(shell, "LoRa test CW failed: %i", ret);
 		return ret;

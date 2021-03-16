@@ -11,10 +11,10 @@
 #include <sys/printk.h>
 
 
-static s32_t read_sensor(struct device *sensor)
+static int32_t read_sensor(const struct device *sensor)
 {
 	struct sensor_value val[3];
-	s32_t ret = 0;
+	int32_t ret = 0;
 
 	ret = sensor_sample_fetch(sensor);
 	if (ret) {
@@ -38,7 +38,7 @@ end:
 
 void main(void)
 {
-	struct device *dev;
+	const struct device *dev;
 
 	dev = device_get_binding(DT_LABEL(DT_INST(0, honeywell_hmc5883l)));
 

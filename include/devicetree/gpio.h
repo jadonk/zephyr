@@ -24,6 +24,47 @@ extern "C" {
  */
 
 /**
+ * @brief Get the node identifier for the controller phandle from a
+ *        gpio phandle-array property at an index
+ *
+ * Example devicetree fragment:
+ *
+ *     gpio1: gpio@... { };
+ *
+ *     gpio2: gpio@... { };
+ *
+ *     n: node {
+ *             gpios = <&gpio1 10 GPIO_ACTIVE_LOW>,
+ *                     <&gpio2 30 GPIO_ACTIVE_HIGH>;
+ *     };
+ *
+ * Example usage:
+ *
+ *     DT_GPIO_CTLR_BY_IDX(DT_NODELABEL(n), gpios, 1) // DT_NODELABEL(gpio2)
+ *
+ * @param node_id node identifier
+ * @param gpio_pha lowercase-and-underscores GPIO property with
+ *        type "phandle-array"
+ * @param idx logical index into "gpio_pha"
+ * @return the node identifier for the gpio controller referenced at
+ *         index "idx"
+ * @see DT_PHANDLE_BY_IDX()
+ */
+#define DT_GPIO_CTLR_BY_IDX(node_id, gpio_pha, idx) \
+	DT_PHANDLE_BY_IDX(node_id, gpio_pha, idx)
+
+/**
+ * @brief Equivalent to DT_GPIO_CTLR_BY_IDX(node_id, gpio_pha, 0)
+ * @param node_id node identifier
+ * @param gpio_pha lowercase-and-underscores GPIO property with
+ *        type "phandle-array"
+ * @return the label property of the node referenced at index 0
+ * @see DT_GPIO_CTLR_BY_IDX()
+ */
+#define DT_GPIO_CTLR(node_id, gpio_pha) \
+	DT_GPIO_CTLR_BY_IDX(node_id, gpio_pha, 0)
+
+/**
  * @brief Get a label property from a gpio phandle-array property
  *        at an index
  *
@@ -58,7 +99,7 @@ extern "C" {
  * @see DT_PHANDLE_BY_IDX()
  */
 #define DT_GPIO_LABEL_BY_IDX(node_id, gpio_pha, idx) \
-	DT_PROP_BY_PHANDLE_IDX(node_id, gpio_pha, idx, label)
+	DT_PROP(DT_GPIO_CTLR_BY_IDX(node_id, gpio_pha, idx), label)
 
 /**
  * @brief Equivalent to DT_GPIO_LABEL_BY_IDX(node_id, gpio_pha, 0)
@@ -129,8 +170,10 @@ extern "C" {
 /**
  * @brief Get a GPIO specifier's flags cell at an index
  *
- * This macro only works for GPIO specifiers with cells named "flags".
- * Refer to the node's binding to check if necessary.
+ * This macro expects GPIO specifiers with cells named "flags".
+ * If there is no "flags" cell in the GPIO specifier, zero is returned.
+ * Refer to the node's binding to check specifier cell names if necessary.
+ *
  * Example devicetree fragment:
  *
  *     gpio1: gpio@... {
@@ -163,18 +206,18 @@ extern "C" {
  * @param gpio_pha lowercase-and-underscores GPIO property with
  *        type "phandle-array"
  * @param idx logical index into "gpio_pha"
- * @return the flags cell value at index "idx"
+ * @return the flags cell value at index "idx", or zero if there is none
  * @see DT_PHA_BY_IDX()
  */
 #define DT_GPIO_FLAGS_BY_IDX(node_id, gpio_pha, idx) \
-	DT_PHA_BY_IDX(node_id, gpio_pha, idx, flags)
+	DT_PHA_BY_IDX_OR(node_id, gpio_pha, idx, flags, 0)
 
 /**
  * @brief Equivalent to DT_GPIO_FLAGS_BY_IDX(node_id, gpio_pha, 0)
  * @param node_id node identifier
  * @param gpio_pha lowercase-and-underscores GPIO property with
  *        type "phandle-array"
- * @return the flags cell value at index 0
+ * @return the flags cell value at index 0, or zero if there is none
  * @see DT_GPIO_FLAGS_BY_IDX()
  */
 #define DT_GPIO_FLAGS(node_id, gpio_pha) \
@@ -233,7 +276,7 @@ extern "C" {
  * @param gpio_pha lowercase-and-underscores GPIO property with
  *        type "phandle-array"
  * @param idx logical index into "gpio_pha"
- * @return the flags cell value at index "idx"
+ * @return the flags cell value at index "idx", or zero if there is none
  * @see DT_GPIO_FLAGS_BY_IDX()
  */
 #define DT_INST_GPIO_FLAGS_BY_IDX(inst, gpio_pha, idx) \
@@ -244,7 +287,7 @@ extern "C" {
  * @param inst DT_DRV_COMPAT instance number
  * @param gpio_pha lowercase-and-underscores GPIO property with
  *        type "phandle-array"
- * @return the flags cell value at index 0
+ * @return the flags cell value at index 0, or zero if there is none
  * @see DT_INST_GPIO_FLAGS_BY_IDX()
  */
 #define DT_INST_GPIO_FLAGS(inst, gpio_pha) \

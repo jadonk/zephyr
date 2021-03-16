@@ -83,6 +83,16 @@ config LWM2M_ENGINE_DEFAULT_LIFETIME
 	help
 	  Set the default lifetime (in seconds) for the LWM2M library engine
 
+config LWM2M_SECONDS_TO_UPDATE_EARLY
+	int "LWM2M Registration Update transmission time before timeout"
+	default 6
+	range 1 65535
+	help
+	  Time in seconds before the registration timeout, when the LWM2M
+	  Registration Update is sent by the engine. In networks with large
+	  round trip times (like NB-IoT), it might be needed to set this value
+	  higher, in order to allow the response to arrive before timeout.
+
 config LWM2M_QUEUE_MODE_ENABLED
 	bool "Enable Queue Mode UDP binding"
 	help
@@ -109,6 +119,23 @@ config LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP
 	bool "Enable bootstrap support"
 	help
 	  Enabling this setting allows the RD client to support bootstrap mode.
+
+config LWM2M_RD_CLIENT_ENDPOINT_NAME_MAX_LENGTH
+	int "Maximum length of client endpoint name"
+	depends on LWM2M_RD_CLIENT_SUPPORT
+	default 33
+	help
+	  Default: room for 32 hexadeciaml digits (UUID) + NULL
+
+config LWM2M_RD_CLIENT_MAX_RETRIES
+	int "Specify maximum number of registration retries"
+	default 5
+	help
+	  Specify maximum number of registration retries, before the application
+	  is notified about the network failure. Once application is notified,
+	  it's up to the application to handle this situation in a way
+	  appropriate for the specific use-case (for instance by waiting for
+	  LTE link to be re-established).
 
 config LWM2M_PEER_PORT
 	int "LWM2M server port"
@@ -239,6 +266,14 @@ config LWM2M_DEVICE_ERROR_CODE_MAX
 	help
 	  This value sets the maximum number of error codes that the device
 	  object will store before ignoring new values.
+
+config LWM2M_DEVICE_EXT_DEV_INFO_MAX
+	int "Maximum # of device obj external device info to store"
+	default 5
+	range 1 20
+	help
+	  This value sets the maximum number of external device info that the
+	  device object will store before ignoring new values.
 
 config LWM2M_NUM_ATTR
 	int "Maximum # of LWM2M attributes"

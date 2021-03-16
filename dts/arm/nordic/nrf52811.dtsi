@@ -25,24 +25,6 @@
 		};
 	};
 
-	aliases {
-		i2c-0 = &i2c0;
-		spi-0 = &spi0;
-		spi-1 = &spi1;
-		uart-0 = &uart0;
-		adc-0 = &adc;
-		gpio-0 = &gpio0;
-		gpiote-0 = &gpiote;
-		wdt-0 = &wdt;
-		pwm-0 = &pwm0;
-		qdec-0 = &qdec;
-		rtc-0 = &rtc0;
-		rtc-1 = &rtc1;
-		timer-0 = &timer0;
-		timer-1 = &timer1;
-		timer-2 = &timer2;
-	};
-
 	soc {
 
 		flash_controller: flash-controller@4001e000 {
@@ -190,6 +172,7 @@
 		rtc0: rtc@4000b000 {
 			compatible = "nordic,nrf-rtc";
 			reg = <0x4000b000 0x1000>;
+			cc-num = <3>;
 			interrupts = <11 1>;
 			status = "okay";
 			clock-frequency = <32768>;
@@ -200,6 +183,7 @@
 		rtc1: rtc@40011000 {
 			compatible = "nordic,nrf-rtc";
 			reg = <0x40011000 0x1000>;
+			cc-num = <4>;
 			interrupts = <17 1>;
 			status = "okay";
 			clock-frequency = <32768>;
@@ -211,6 +195,7 @@
 			compatible = "nordic,nrf-timer";
 			status = "okay";
 			reg = <0x40008000 0x1000>;
+			cc-num = <4>;
 			interrupts = <8 1>;
 			prescaler = <0>;
 			label = "TIMER_0";
@@ -220,6 +205,7 @@
 			compatible = "nordic,nrf-timer";
 			status = "okay";
 			reg = <0x40009000 0x1000>;
+			cc-num = <4>;
 			interrupts = <9 1>;
 			prescaler = <0>;
 			label = "TIMER_1";
@@ -229,6 +215,7 @@
 			compatible = "nordic,nrf-timer";
 			status = "okay";
 			reg = <0x4000a000 0x1000>;
+			cc-num = <4>;
 			interrupts = <10 1>;
 			prescaler = <0>;
 			label = "TIMER_2";

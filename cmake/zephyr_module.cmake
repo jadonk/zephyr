@@ -18,10 +18,11 @@ if(ZEPHYR_EXTRA_MODULES)
   set(ZEPHYR_EXTRA_MODULES_ARG "--extra-modules" ${ZEPHYR_EXTRA_MODULES})
 endif()
 
-set(KCONFIG_MODULES_FILE ${CMAKE_BINARY_DIR}/Kconfig.modules)
+set(KCONFIG_MODULES_FILE ${KCONFIG_BINARY_DIR}/Kconfig.modules)
+set(ZEPHYR_SETTINGS_FILE ${CMAKE_BINARY_DIR}/zephyr_settings.txt)
 
 if(WEST)
-  set(WEST_ARG "--west-path" ${WEST} "--zephyr-base" ${ZEPHYR_BASE})
+  set(WEST_ARG "--zephyr-base" ${ZEPHYR_BASE})
 endif()
 
 if(WEST OR ZEPHYR_MODULES)
@@ -35,16 +36,56 @@ if(WEST OR ZEPHYR_MODULES)
     ${ZEPHYR_EXTRA_MODULES_ARG}
     --kconfig-out ${KCONFIG_MODULES_FILE}
     --cmake-out ${CMAKE_BINARY_DIR}/zephyr_modules.txt
+    --settings-out ${ZEPHYR_SETTINGS_FILE}
+    WORKING_DIRECTORY ${ZEPHYR_BASE}
     ERROR_VARIABLE
     zephyr_module_error_text
     RESULT_VARIABLE
     zephyr_module_return
   )
 
- if(${zephyr_module_return})
+  if(${zephyr_module_return})
       message(FATAL_ERROR "${zephyr_module_error_text}")
   endif()
 
+  if(EXISTS ${ZEPHYR_SETTINGS_FILE})
+    file(STRINGS ${ZEPHYR_SETTINGS_FILE} ZEPHYR_SETTINGS_TXT ENCODING UTF-8)
+    foreach(setting ${ZEPHYR_SETTINGS_TXT})
+      # Match <key>:<value> for each line of file, each corresponding to
+      # a setting.  The use of quotes is required due to CMake not supporting
+      # lazy regexes (it supports greedy only).
+      string(REGEX REPLACE "\"(.*)\":\".*\"" "\\1" key ${setting})
+      string(REGEX REPLACE "\".*\":\"(.*)\"" "\\1" value ${setting})
+      list(APPEND ${key} ${value})
+    endforeach()
+  endif()
+
+  if(EXISTS ${CMAKE_BINARY_DIR}/zephyr_modules.txt)
+    file(STRINGS ${CMAKE_BINARY_DIR}/zephyr_modules.txt ZEPHYR_MODULES_TXT
+         ENCODING UTF-8)
+    set(ZEPHYR_MODULE_NAMES)
+
+    foreach(module ${ZEPHYR_MODULES_TXT})
+      # Match "<name>":"<path>" for each line of file, each corresponding to
+      # one module. The use of quotes is required due to CMake not supporting
+      # lazy regexes (it supports greedy only).
+      string(REGEX REPLACE "\"(.*)\":\".*\":\".*\"" "\\1" module_name ${module})
+      string(REGEX REPLACE "\".*\":\"(.*)\":\".*\"" "\\1" module_path ${module})
+      string(REGEX REPLACE "\".*\":\".*\":\"(.*)\"" "\\1" cmake_path ${module})
+
+      list(APPEND ZEPHYR_MODULE_NAMES ${module_name})
+
+      string(TOUPPER ${module_name} MODULE_NAME_UPPER)
+      if(NOT ${MODULE_NAME_UPPER} STREQUAL CURRENT)
+        set(ZEPHYR_${MODULE_NAME_UPPER}_MODULE_DIR ${module_path})
+        set(ZEPHYR_${MODULE_NAME_UPPER}_CMAKE_DIR ${cmake_path})
+      else()
+        message(FATAL_ERROR "Found Zephyr module named: ${module_name}\n\
+${MODULE_NAME_UPPER} is a restricted name for Zephyr modules as it is used for \
+\${ZEPHYR_${MODULE_NAME_UPPER}_MODULE_DIR} CMake variable.")
+      endif()
+    endforeach()
+  endif()
 else()
 
   file(WRITE ${KCONFIG_MODULES_FILE}

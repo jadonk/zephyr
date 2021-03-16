@@ -316,7 +316,7 @@ void test_so_priority(void)
 	struct sockaddr_in bind_addr4;
 	struct sockaddr_in6 bind_addr6;
 	int sock1, sock2, rv;
-	u8_t optval;
+	uint8_t optval;
 
 	prepare_sock_udp_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR, 55555,
 			    &sock1, &bind_addr4);
@@ -470,6 +470,54 @@ void test_v4_sendmsg_recvfrom(void)
 	zassert_equal(rv, 0, "close failed");
 }
 
+void test_v4_sendmsg_recvfrom_no_aux_data(void)
+{
+	int rv;
+	int client_sock;
+	int server_sock;
+	struct sockaddr_in client_addr;
+	struct sockaddr_in server_addr;
+	struct msghdr msg;
+	struct iovec io_vector[1];
+
+	prepare_sock_udp_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR, ANY_PORT,
+			    &client_sock, &client_addr);
+	prepare_sock_udp_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR, SERVER_PORT,
+			    &server_sock, &server_addr);
+
+	rv = bind(server_sock,
+		  (struct sockaddr *)&server_addr,
+		  sizeof(server_addr));
+	zassert_equal(rv, 0, "server bind failed");
+
+	rv = bind(client_sock,
+		  (struct sockaddr *)&client_addr,
+		  sizeof(client_addr));
+	zassert_equal(rv, 0, "client bind failed");
+
+	io_vector[0].iov_base = TEST_STR_SMALL;
+	io_vector[0].iov_len = strlen(TEST_STR_SMALL);
+
+	memset(&msg, 0, sizeof(msg));
+	msg.msg_iov = io_vector;
+	msg.msg_iovlen = 1;
+	msg.msg_name = &server_addr;
+	msg.msg_namelen = sizeof(server_addr);
+
+	comm_sendmsg_recvfrom(client_sock,
+			      (struct sockaddr *)&client_addr,
+			      sizeof(client_addr),
+			      &msg,
+			      server_sock,
+			      (struct sockaddr *)&server_addr,
+			      sizeof(server_addr));
+
+	rv = close(client_sock);
+	zassert_equal(rv, 0, "close failed");
+	rv = close(server_sock);
+	zassert_equal(rv, 0, "close failed");
+}
+
 void test_v6_sendmsg_recvfrom(void)
 {
 	int rv;
@@ -572,8 +620,6 @@ void test_v4_sendmsg_recvfrom_connected(void)
 	msg.msg_controllen = sizeof(cmsgbuf.buf);
 	msg.msg_iov = io_vector;
 	msg.msg_iovlen = 1;
-	msg.msg_name = &server_addr;
-	msg.msg_namelen = sizeof(server_addr);
 
 	cmsg = CMSG_FIRSTHDR(&msg);
 	cmsg->cmsg_len = CMSG_LEN(sizeof(int));
@@ -636,8 +682,6 @@ void test_v6_sendmsg_recvfrom_connected(void)
 	msg.msg_controllen = sizeof(cmsgbuf.buf);
 	msg.msg_iov = io_vector;
 	msg.msg_iovlen = 1;
-	msg.msg_name = &server_addr;
-	msg.msg_namelen = sizeof(server_addr);
 
 	cmsg = CMSG_FIRSTHDR(&msg);
 	cmsg->cmsg_len = CMSG_LEN(sizeof(int));
@@ -738,7 +782,7 @@ static void comm_sendmsg_with_txtime(int client_sock,
  */
 struct eth_fake_context {
 	struct net_if *iface;
-	u8_t mac_address[6];
+	uint8_t mac_address[6];
 };
 
 static struct eth_fake_context eth_fake_data;
@@ -752,7 +796,7 @@ static ZTEST_BMEM bool test_started;
 static ZTEST_BMEM bool test_failed;
 static struct in6_addr my_addr1 = { { { 0x20, 0x01, 0x0d, 0xb8, 1, 0, 0, 0,
 					0, 0, 0, 0, 0, 0, 0, 0x1 } } };
-static u8_t server_lladdr[] = { 0x01, 0x02, 0x03, 0xff, 0xfe,
+static uint8_t server_lladdr[] = { 0x01, 0x02, 0x03, 0xff, 0xfe,
 				0x04, 0x05, 0x06 };
 static struct net_linkaddr server_link_addr = {
 	.addr = server_lladdr,
@@ -765,8 +809,8 @@ static struct net_linkaddr server_link_addr = {
 
 static void eth_fake_iface_init(struct net_if *iface)
 {
-	struct device *dev = net_if_get_device(iface);
-	struct eth_fake_context *ctx = dev->driver_data;
+	const struct device *dev = net_if_get_device(iface);
+	struct eth_fake_context *ctx = dev->data;
 
 	ctx->iface = iface;
 
@@ -777,9 +821,9 @@ static void eth_fake_iface_init(struct net_if *iface)
 	ethernet_init(iface);
 }
 
-static int eth_fake_send(struct device *dev, struct net_pkt *pkt)
+static int eth_fake_send(const struct device *dev, struct net_pkt *pkt)
 {
-	u64_t txtime;
+	uint64_t txtime;
 
 	ARG_UNUSED(dev);
 	ARG_UNUSED(pkt);
@@ -805,7 +849,7 @@ static struct ethernet_api eth_fake_api_funcs = {
 	.send = eth_fake_send,
 };
 
-static int eth_fake_init(struct device *dev)
+static int eth_fake_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
@@ -850,14 +894,14 @@ void test_v6_sendmsg_with_txtime(void)
 	int rv;
 	int client_sock;
 	bool optval;
-	u64_t txtime;
+	uint64_t txtime;
 	struct sockaddr_in6 client_addr;
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
 	struct iovec io_vector[1];
 	union {
 		struct cmsghdr hdr;
-		unsigned char  buf[CMSG_SPACE(sizeof(u64_t))];
+		unsigned char  buf[CMSG_SPACE(sizeof(uint64_t))];
 	} cmsgbuf;
 
 	prepare_sock_udp_v6(MY_IPV6_ADDR, ANY_PORT, &client_sock,
@@ -885,7 +929,7 @@ void test_v6_sendmsg_with_txtime(void)
 	cmsg->cmsg_len = CMSG_LEN(sizeof(txtime));
 	cmsg->cmsg_level = SOL_SOCKET;
 	cmsg->cmsg_type = SCM_TXTIME;
-	*(u64_t *)CMSG_DATA(cmsg) = txtime;
+	*(uint64_t *)CMSG_DATA(cmsg) = txtime;
 
 	optval = true;
 	rv = setsockopt(client_sock, SOL_SOCKET, SO_TXTIME, &optval,
@@ -924,6 +968,8 @@ void test_main(void)
 			 ztest_unit_test(test_so_txtime),
 			 ztest_unit_test(test_v4_sendmsg_recvfrom),
 			 ztest_user_unit_test(test_v4_sendmsg_recvfrom),
+			 ztest_unit_test(test_v4_sendmsg_recvfrom_no_aux_data),
+			 ztest_user_unit_test(test_v4_sendmsg_recvfrom_no_aux_data),
 			 ztest_unit_test(test_v6_sendmsg_recvfrom),
 			 ztest_user_unit_test(test_v6_sendmsg_recvfrom),
 			 ztest_unit_test(test_v4_sendmsg_recvfrom_connected),

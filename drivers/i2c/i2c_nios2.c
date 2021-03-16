@@ -20,7 +20,7 @@ LOG_MODULE_REGISTER(i2c_nios2);
 #define NIOS2_I2C_TIMEOUT_USEC		1000
 
 #define DEV_CFG(dev) \
-	((struct i2c_nios2_config *)(dev)->config_info)
+	((struct i2c_nios2_config *)(dev)->config)
 
 struct i2c_nios2_config {
 	ALT_AVALON_I2C_DEV_t	i2c_dev;
@@ -28,10 +28,10 @@ struct i2c_nios2_config {
 	struct k_sem		sem_lock;
 };
 
-static int i2c_nios2_configure(struct device *dev, u32_t dev_config)
+static int i2c_nios2_configure(const struct device *dev, uint32_t dev_config)
 {
 	struct i2c_nios2_config *config = DEV_CFG(dev);
-	s32_t rc = 0;
+	int32_t rc = 0;
 
 	k_sem_take(&config->sem_lock, K_FOREVER);
 	if (!(I2C_MODE_MASTER & dev_config)) {
@@ -59,13 +59,13 @@ i2c_cfg_err:
 	return rc;
 }
 
-static int i2c_nios2_transfer(struct device *dev, struct i2c_msg *msgs,
-			      u8_t num_msgs, u16_t addr)
+static int i2c_nios2_transfer(const struct device *dev, struct i2c_msg *msgs,
+			      uint8_t num_msgs, uint16_t addr)
 {
 	struct i2c_nios2_config *config = DEV_CFG(dev);
 	ALT_AVALON_I2C_STATUS_CODE status;
-	u32_t restart, stop;
-	s32_t i, timeout, rc = 0;
+	uint32_t restart, stop;
+	int32_t i, timeout, rc = 0;
 
 	k_sem_take(&config->sem_lock, K_FOREVER);
 	/* register the optional interrupt callback */
@@ -141,16 +141,15 @@ i2c_transfer_err:
 	return rc;
 }
 
-static void i2c_nios2_isr(void *arg)
+static void i2c_nios2_isr(const struct device *dev)
 {
-	struct device *dev = (struct device *)arg;
 	struct i2c_nios2_config *config = DEV_CFG(dev);
 
 	/* Call Altera HAL driver ISR */
 	alt_handle_irq(&config->i2c_dev, I2C_0_IRQ);
 }
 
-static int i2c_nios2_init(struct device *dev);
+static int i2c_nios2_init(const struct device *dev);
 
 static struct i2c_driver_api i2c_nios2_driver_api = {
 	.configure = i2c_nios2_configure,
@@ -166,12 +165,12 @@ static struct i2c_nios2_config i2c_nios2_cfg = {
 	},
 };
 
-DEVICE_AND_API_INIT(i2c_nios2_0, DT_INST_LABEL(0), &i2c_nios2_init,
+DEVICE_DT_INST_DEFINE(0, &i2c_nios2_init, device_pm_control_nop,
 		    NULL, &i2c_nios2_cfg,
 		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		    &i2c_nios2_driver_api);
 
-static int i2c_nios2_init(struct device *dev)
+static int i2c_nios2_init(const struct device *dev)
 {
 	struct i2c_nios2_config *config = DEV_CFG(dev);
 	int rc;
@@ -191,7 +190,7 @@ static int i2c_nios2_init(struct device *dev)
 	alt_avalon_i2c_int_clear(&config->i2c_dev,
 			ALT_AVALON_I2C_ISR_ALL_CLEARABLE_INTS_MSK);
 	IRQ_CONNECT(I2C_0_IRQ, CONFIG_I2C_0_IRQ_PRI,
-			i2c_nios2_isr, DEVICE_GET(i2c_nios2_0), 0);
+			i2c_nios2_isr, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(I2C_0_IRQ);
 	return 0;
 }

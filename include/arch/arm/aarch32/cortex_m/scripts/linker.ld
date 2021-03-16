@@ -106,6 +106,14 @@ MEMORY
     SRAM1                 (rw) : ORIGIN = RAM1_ADDR, LENGTH = RAM1_SIZE
     SRAM2                 (rw) : ORIGIN = RAM2_ADDR, LENGTH = RAM2_SIZE
 #endif
+#ifdef CONFIG_MEMC_STM32_SDRAM
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(sdram1), okay)
+    SDRAM1                (rw) : ORIGIN = DT_REG_ADDR(DT_NODELABEL(sdram1)), LENGTH = DT_REG_SIZE(DT_NODELABEL(sdram1))
+#endif
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(sdram2), okay)
+    SDRAM2                (rw) : ORIGIN = DT_REG_ADDR(DT_NODELABEL(sdram2)), LENGTH = DT_REG_SIZE(DT_NODELABEL(sdram2))
+#endif
+#endif
     /* Used by and documented in include/linker/intlist.ld */
     IDT_LIST  (wx)      : ORIGIN = (RAM_ADDR + RAM_SIZE), LENGTH = 2K
     }
@@ -160,6 +168,7 @@ SECTIONS
 
 	*(.text)
 	*(".text.*")
+	*(".TEXT.*")
 	*(.gnu.linkonce.t.*)
 
 	/*
@@ -200,6 +209,7 @@ SECTIONS
 	_image_rodata_start = .;
 
 #include <linker/common-rom.ld>
+#include <linker/thread-local-storage.ld>
 
     SECTION_PROLOGUE(_RODATA_SECTION_NAME,,)
 	{
@@ -211,14 +221,6 @@ SECTIONS
  * zephyr_linker_sources() Cmake function.
  */
 #include <snippets-rodata.ld>
-#ifdef CONFIG_SOC_RODATA_LD
-#include <soc-rodata.ld>
-#endif
-
-#ifdef CONFIG_CUSTOM_RODATA_LD
-/* Located in project source directory */
-#include <custom-rodata.ld>
-#endif
 
 #include <linker/kobject-rom.ld>
 
@@ -321,25 +323,7 @@ SECTIONS
 	__bss_end = ALIGN(4);
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
 
-    SECTION_PROLOGUE(_NOINIT_SECTION_NAME,(NOLOAD),)
-        {
-        /*
-         * This section is used for non-initialized objects that
-         * will not be cleared during the boot process.
-         */
-        *(.noinit)
-        *(".noinit.*")
-	*(".kernel_noinit.*")
-
-/* Located in generated directory. This file is populated by the
- * zephyr_linker_sources() Cmake function.
- */
-#include <snippets-noinit.ld>
-#ifdef CONFIG_SOC_NOINIT_LD
-#include <soc-noinit.ld>
-#endif
-
-        } GROUP_LINK_IN(RAMABLE_REGION)
+#include <linker/common-noinit.ld>
 
 #endif  /* CONFIG_USERSPACE */
 
@@ -354,14 +338,6 @@ SECTIONS
  * zephyr_linker_sources() Cmake function.
  */
 #include <snippets-rwdata.ld>
-#ifdef CONFIG_SOC_RWDATA_LD
-#include <soc-rwdata.ld>
-#endif
-
-#ifdef CONFIG_CUSTOM_RWDATA_LD
-/* Located in project source directory */
-#include <custom-rwdata.ld>
-#endif
 
 #ifdef CONFIG_CODE_DATA_RELOCATION
 #include <linker_sram_data_relocate.ld>
@@ -419,9 +395,6 @@ SECTIONS
  * zephyr_linker_sources() Cmake function.
  */
 #include <snippets-noinit.ld>
-#ifdef CONFIG_SOC_NOINIT_LD
-#include <soc-noinit.ld>
-#endif
 
         } GROUP_LINK_IN(RAMABLE_REGION)
 #endif /* CONFIG_USERSPACE */
@@ -471,10 +444,6 @@ GROUP_START(DTCM)
 	__dtcm_data_rom_start = LOADADDR(_DTCM_DATA_SECTION_NAME);
 
 GROUP_END(DTCM)
-#endif
-#ifdef CONFIG_CUSTOM_SECTIONS_LD
-/* Located in project source directory */
-#include <custom-sections.ld>
 #endif
 
 /* Located in generated directory. This file is populated by the

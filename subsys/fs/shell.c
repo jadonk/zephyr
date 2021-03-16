@@ -188,7 +188,7 @@ static int cmd_trunc(const struct shell *shell, size_t argc, char **argv)
 		length = 0;
 	}
 
-	err = fs_open(&file, path);
+	err = fs_open(&file, path, FS_O_CREATE | FS_O_RDWR);
 	if (err) {
 		shell_error(shell, "Failed to open %s (%d)", path, err);
 		return -ENOEXEC;;
@@ -277,7 +277,7 @@ static int cmd_read(const struct shell *shell, size_t argc, char **argv)
 
 	shell_print(shell, "File size: %zd", dirent.size);
 
-	err = fs_open(&file, path);
+	err = fs_open(&file, path, FS_O_CREATE | FS_O_RDWR);
 	if (err) {
 		shell_error(shell, "Failed to open %s (%d)", path, err);
 		return -ENOEXEC;
@@ -295,7 +295,7 @@ static int cmd_read(const struct shell *shell, size_t argc, char **argv)
 
 	while (count > 0) {
 		ssize_t read;
-		u8_t buf[16];
+		uint8_t buf[16];
 		int i;
 
 		read = fs_read(&file, buf, MIN(count, sizeof(buf)));
@@ -354,8 +354,8 @@ static int cmd_statvfs(const struct shell *shell, size_t argc, char **argv)
 static int cmd_write(const struct shell *shell, size_t argc, char **argv)
 {
 	char path[MAX_PATH_LEN];
-	u8_t buf[BUF_CNT];
-	u8_t buf_len;
+	uint8_t buf[BUF_CNT];
+	uint8_t buf_len;
 	int arg_offset;
 	struct fs_file_t file;
 	off_t offset = -1;
@@ -376,7 +376,7 @@ static int cmd_write(const struct shell *shell, size_t argc, char **argv)
 		arg_offset = 2;
 	}
 
-	err = fs_open(&file, path);
+	err = fs_open(&file, path, FS_O_CREATE | FS_O_RDWR);
 	if (err) {
 		shell_error(shell, "Failed to open %s (%d)", path, err);
 		return -ENOEXEC;

@@ -15,41 +15,43 @@
 LOG_MODULE_REGISTER(clock_control);
 
 struct rv32m1_pcc_config {
-	u32_t base_address;
+	uint32_t base_address;
 };
 
-#define DEV_CFG(dev)  ((struct rv32m1_pcc_config *)(dev->config_info))
+#define DEV_CFG(dev)  ((struct rv32m1_pcc_config *)(dev->config))
 #define DEV_BASE(dev) (DEV_CFG(dev)->base_address)
 
-static inline clock_ip_name_t clock_ip(struct device *dev,
+static inline clock_ip_name_t clock_ip(const struct device *dev,
 				       clock_control_subsys_t sub_system)
 {
-	u32_t offset = POINTER_TO_UINT(sub_system);
+	uint32_t offset = POINTER_TO_UINT(sub_system);
 
 	return MAKE_PCC_REGADDR(DEV_BASE(dev), offset);
 }
 
-static int rv32m1_pcc_on(struct device *dev, clock_control_subsys_t sub_system)
+static int rv32m1_pcc_on(const struct device *dev,
+			 clock_control_subsys_t sub_system)
 {
 	CLOCK_EnableClock(clock_ip(dev, sub_system));
 	return 0;
 }
 
-static int rv32m1_pcc_off(struct device *dev, clock_control_subsys_t sub_system)
+static int rv32m1_pcc_off(const struct device *dev,
+			  clock_control_subsys_t sub_system)
 {
 	CLOCK_DisableClock(clock_ip(dev, sub_system));
 	return 0;
 }
 
-static int rv32m1_pcc_get_rate(struct device *dev,
+static int rv32m1_pcc_get_rate(const struct device *dev,
 			       clock_control_subsys_t sub_system,
-			       u32_t *rate)
+			       uint32_t *rate)
 {
 	*rate = CLOCK_GetIpFreq(clock_ip(dev, sub_system));
 	return 0;
 }
 
-static int rv32m1_pcc_init(struct device *dev)
+static int rv32m1_pcc_init(const struct device *dev)
 {
 	return 0;
 }

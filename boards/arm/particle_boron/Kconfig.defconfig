@@ -18,17 +18,10 @@ config USB_DEVICE_STACK
 
 endif # USB
 
-config IEEE802154_NRF5
-	default y
-	depends on IEEE802154
-
 config BT_CTLR
 	default BT
 
 if MODEM
-
-config UART_1_NRF_FLOW_CONTROL
-	default y
 
 config MODEM_UBLOX_SARA
 	default y

@@ -20,12 +20,25 @@
 
 import argparse
 from collections import defaultdict
+import logging
 import os
 import pathlib
+import pickle
 import re
 import sys
 
 import edtlib
+
+class LogFormatter(logging.Formatter):
+    '''A log formatter that prints the level name in lower case,
+    for compatibility with earlier versions of edtlib.'''
+
+    def __init__(self):
+        super().__init__(fmt='%(levelnamelower)s: %(message)s')
+
+    def format(self, record):
+        record.levelnamelower = record.levelname.lower()
+        return super().format(record)
 
 def main():
     global header_file
@@ -33,12 +46,15 @@ def main():
 
     args = parse_args()
 
+    setup_edtlib_logging()
+
     try:
         edt = edtlib.EDT(args.dts, args.bindings_dirs,
                          # Suppress this warning if it's suppressed in dtc
                          warn_reg_unit_address_mismatch=
                              "-Wno-simple_bus_reg" not in args.dtc_flags,
-                         default_prop_types=True)
+                         default_prop_types=True,
+                         infer_binding_for_paths=["/zephyr,user"])
     except edtlib.EDTError as e:
         sys.exit(f"devicetree error: {e}")
 
@@ -67,6 +83,7 @@ def main():
         edt.compat2nodes[compat] = sorted(
             nodes, key=lambda node: 0 if node.status == "okay" else 1)
 
+    # Create the generated header.
     with open(args.header_out, "w", encoding="utf-8") as header_file:
         write_top_comment(edt)
 
@@ -84,6 +101,7 @@ def main():
                               f"DT_{node.parent.z_path_id}")
 
             write_child_functions(node)
+            write_dep_info(node)
             write_idents_and_existence(node)
             write_bus(node)
             write_special_props(node)
@@ -92,6 +110,20 @@ def main():
         write_chosen(edt)
         write_global_compat_info(edt)
 
+    if args.edt_pickle_out:
+        write_pickled_edt(edt, args.edt_pickle_out)
+
+def setup_edtlib_logging():
+    # The edtlib module emits logs using the standard 'logging' module.
+    # Configure it so that warnings and above are printed to stderr,
+    # using the LogFormatter class defined above to format each message.
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(LogFormatter())
+
+    logger = logging.getLogger('edtlib')
+    logger.setLevel(logging.WARNING)
+    logger.addHandler(handler)
 
 def node_z_path_id(node):
     # Return the node specific bit of the node's path identifier:
@@ -127,6 +159,8 @@ def parse_args():
     parser.add_argument("--dts-out", required=True,
                         help="path to write merged DTS source code to (e.g. "
                              "as a debugging aid)")
+    parser.add_argument("--edt-pickle-out",
+                        help="path to write pickled edtlib.EDT object to")
 
     return parser.parse_args()
 
@@ -144,10 +178,10 @@ DTS input file:
 Directories with bindings:
   {", ".join(map(relativize, edt.bindings_dirs))}
 
-Nodes in dependency order (ordinal and path):
+Node dependency ordering (ordinal and path):
 """
 
-    for scc in edt.scc_order():
+    for scc in edt.scc_order:
         if len(scc) > 1:
             err("cycle in devicetree involving "
                 + ", ".join(node.path for node in scc))
@@ -167,26 +201,20 @@ def write_node_comment(node):
     s = f"""\
 Devicetree node: {node.path}
 
-Node's generated path identifier: DT_{node.z_path_id}
+Node identifier: DT_{node.z_path_id}
 """
 
     if node.matching_compat:
-        s += f"""
+        if node.binding_path:
+            s += f"""
 Binding (compatible = {node.matching_compat}):
   {relativize(node.binding_path)}
 """
-
-    s += f"\nDependency Ordinal: {node.dep_ordinal}\n"
-
-    if node.depends_on:
-        s += "\nRequires:\n"
-        for dep in node.depends_on:
-            s += f"  {dep.dep_ordinal:<3} {dep.path}\n"
-
-    if node.required_by:
-        s += "\nSupports:\n"
-        for req in node.required_by:
-            s += f"  {req.dep_ordinal:<3} {req.path}\n"
+        else:
+            s += f"""
+Binding (compatible = {node.matching_compat}):
+  No yaml (bindings inferred from properties)
+"""
 
     if node.description:
         # Indent description by two spaces
@@ -420,16 +448,29 @@ def write_vanilla_props(node):
         if prop.enum_index is not None:
             # DT_N_<node-id>_P_<prop-id>_ENUM_IDX
             macro2val[macro + "_ENUM_IDX"] = prop.enum_index
+            spec = prop.spec
+
+            if spec.enum_tokenizable:
+                as_token = prop.val_as_token
+
+                # DT_N_<node-id>_P_<prop-id>_ENUM_TOKEN
+                macro2val[macro + "_ENUM_TOKEN"] = as_token
+
+                if spec.enum_upper_tokenizable:
+                    # DT_N_<node-id>_P_<prop-id>_ENUM_UPPER_TOKEN
+                    macro2val[macro + "_ENUM_UPPER_TOKEN"] = as_token.upper()
 
         if "phandle" in prop.type:
             macro2val.update(phandle_macros(prop, macro))
         elif "array" in prop.type:
             # DT_N_<node-id>_P_<prop-id>_IDX_<i>
+            # DT_N_<node-id>_P_<prop-id>_IDX_<i>_EXISTS
             for i, subval in enumerate(prop.val):
                 if isinstance(subval, str):
                     macro2val[macro + f"_IDX_{i}"] = quote_str(subval)
                 else:
                     macro2val[macro + f"_IDX_{i}"] = subval
+                macro2val[macro + f"_IDX_{i}_EXISTS"] = 1
 
         plen = prop_len(prop)
         if plen is not None:
@@ -444,6 +485,31 @@ def write_vanilla_props(node):
             out_dt_define(macro, val)
     else:
         out_comment("(No generic property macros)")
+
+
+def write_dep_info(node):
+    # Write dependency-related information about the node.
+
+    def fmt_dep_list(dep_list):
+        if dep_list:
+            # Sort the list by dependency ordinal for predictability.
+            sorted_list = sorted(dep_list, key=lambda node: node.dep_ordinal)
+            return "\\\n\t" + \
+                " \\\n\t".join(f"{n.dep_ordinal}, /* {n.path} */"
+                               for n in sorted_list)
+        else:
+            return "/* nothing */"
+
+    out_comment("Node's dependency ordinal:")
+    out_dt_define(f"{node.z_path_id}_ORD", node.dep_ordinal)
+
+    out_comment("Ordinals for what this node depends on directly:")
+    out_dt_define(f"{node.z_path_id}_REQUIRES_ORDS",
+                  fmt_dep_list(node.depends_on))
+
+    out_comment("Ordinals for what depends directly on this node:")
+    out_dt_define(f"{node.z_path_id}_SUPPORTS_ORDS",
+                  fmt_dep_list(node.required_by))
 
 
 def prop2value(prop):
@@ -514,9 +580,11 @@ def phandle_macros(prop, macro):
     if prop.type == "phandle":
         # A phandle is treated as a phandles with fixed length 1.
         ret[f"{macro}_IDX_0_PH"] = f"DT_{prop.val.z_path_id}"
+        ret[f"{macro}_IDX_0_EXISTS"] = 1
     elif prop.type == "phandles":
         for i, node in enumerate(prop.val):
             ret[f"{macro}_IDX_{i}_PH"] = f"DT_{node.z_path_id}"
+            ret[f"{macro}_IDX_{i}_EXISTS"] = 1
     elif prop.type == "phandle-array":
         for i, entry in enumerate(prop.val):
             ret.update(controller_and_data_macros(entry, i, macro))
@@ -534,6 +602,8 @@ def controller_and_data_macros(entry, i, macro):
     ret = {}
     data = entry.data
 
+    # DT_N_<node-id>_P_<prop-id>_IDX_<i>_EXISTS
+    ret[f"{macro}_IDX_{i}_EXISTS"] = 1
     # DT_N_<node-id>_P_<prop-id>_IDX_<i>_PH
     ret[f"{macro}_IDX_{i}_PH"] = f"DT_{entry.controller.z_path_id}"
     # DT_N_<node-id>_P_<prop-id>_IDX_<i>_VAL_<VAL>
@@ -711,6 +781,21 @@ def quote_str(s):
     # backslashes within it
 
     return f'"{escape(s)}"'
+
+
+def write_pickled_edt(edt, out_file):
+    # Writes the edt object in pickle format to out_file.
+
+    with open(out_file, 'wb') as f:
+        # Pickle protocol version 4 is the default as of Python 3.8
+        # and was introduced in 3.4, so it is both available and
+        # recommended on all versions of Python that Zephyr supports
+        # (at time of writing, Python 3.6 was Zephyr's minimum
+        # version, and 3.8 the most recent CPython release).
+        #
+        # Using a common protocol version here will hopefully avoid
+        # reproducibility issues in different Python installations.
+        pickle.dump(edt, f, protocol=4)
 
 
 def err(s):

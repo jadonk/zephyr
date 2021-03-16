@@ -16,8 +16,10 @@ supported:
   - i2c
   - nvs
   - spi
+  - counter
   - watchdog
   - adc
+  - dac
 testing:
   ignore_tags:
     - net

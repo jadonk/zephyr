@@ -13,6 +13,7 @@ LOG_MODULE_REGISTER(net_test, CONFIG_DNS_RESOLVER_LOG_LEVEL);
 #include <string.h>
 #include <errno.h>
 #include <sys/printk.h>
+#include <random/rand32.h>
 
 #include <ztest.h>
 
@@ -74,18 +75,18 @@ static struct dns_resolve_context resv_ipv6_2;
 #define WAIT_TIME K_MSEC((DNS_TIMEOUT + 300) * 3)
 
 struct net_if_test {
-	u8_t idx;
-	u8_t mac_addr[sizeof(struct net_eth_addr)];
+	uint8_t idx;
+	uint8_t mac_addr[sizeof(struct net_eth_addr)];
 };
 
-static int net_iface_dev_init(struct device *dev)
+static int net_iface_dev_init(const struct device *dev)
 {
 	return 0;
 }
 
-static u8_t *net_iface_get_mac(struct device *dev)
+static uint8_t *net_iface_get_mac(const struct device *dev)
 {
-	struct net_if_test *data = dev->driver_data;
+	struct net_if_test *data = dev->data;
 
 	if (data->mac_addr[2] == 0x00) {
 		/* 00-00-5E-00-53-xx Documentation RFC 7042 */
@@ -102,13 +103,13 @@ static u8_t *net_iface_get_mac(struct device *dev)
 
 static void net_iface_init(struct net_if *iface)
 {
-	u8_t *mac = net_iface_get_mac(net_if_get_device(iface));
+	uint8_t *mac = net_iface_get_mac(net_if_get_device(iface));
 
 	net_if_set_link_addr(iface, mac, sizeof(struct net_eth_addr),
 			     NET_LINK_ETHERNET);
 }
 
-static int sender_iface(struct device *dev, struct net_pkt *pkt)
+static int sender_iface(const struct device *dev, struct net_pkt *pkt)
 {
 	if (!pkt->frags) {
 		DBG("No data to send!\n");
@@ -142,7 +143,7 @@ NET_DEVICE_INIT_INSTANCE(net_iface1_test,
 			 127);
 
 static void dns_evt_handler(struct net_mgmt_event_callback *cb,
-			      u32_t mgmt_event, struct net_if *iface)
+			      uint32_t mgmt_event, struct net_if *iface)
 {
 	if (mgmt_event == NET_EVENT_DNS_SERVER_ADD) {
 		k_sem_give(&dns_added);
@@ -160,7 +161,7 @@ static void test_init(void)
 
 	iface1 = net_if_get_by_index(1);
 
-	((struct net_if_test *)net_if_get_device(iface1)->driver_data)->idx =
+	((struct net_if_test *) net_if_get_device(iface1)->data)->idx =
 		net_if_get_by_iface(iface1);
 
 #if defined(CONFIG_NET_IPV6)

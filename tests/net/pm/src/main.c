@@ -9,6 +9,7 @@
 #include <zephyr.h>
 #include <linker/sections.h>
 #include <ztest.h>
+#include <random/rand32.h>
 
 #include <net/ethernet.h>
 #include <net/dummy.h>
@@ -16,23 +17,23 @@
 #include <net/socket.h>
 
 struct fake_dev_context {
-	u8_t mac_addr[sizeof(struct net_eth_addr)];
+	uint8_t mac_addr[sizeof(struct net_eth_addr)];
 	struct net_if *iface;
 };
 
-static int fake_dev_pm_control(struct device *dev, u32_t command,
+static int fake_dev_pm_control(const struct device *dev, uint32_t command,
 			       void *context, device_pm_cb cb, void *arg)
 {
-	struct fake_dev_context *ctx = dev->driver_data;
+	struct fake_dev_context *ctx = dev->data;
 	int ret = 0;
 
 	if (command == DEVICE_PM_SET_POWER_STATE) {
-		if (*(u32_t *)context == DEVICE_PM_SUSPEND_STATE) {
+		if (*(uint32_t *)context == DEVICE_PM_SUSPEND_STATE) {
 			ret = net_if_suspend(ctx->iface);
 			if (ret == -EBUSY) {
 				goto out;
 			}
-		} else if (*(u32_t *)context == DEVICE_PM_ACTIVE_STATE) {
+		} else if (*(uint32_t *)context == DEVICE_PM_ACTIVE_STATE) {
 			ret = net_if_resume(ctx->iface);
 		}
 	} else {
@@ -48,7 +49,7 @@ out:
 }
 
 
-static int fake_dev_send(struct device *dev, struct net_pkt *pkt)
+static int fake_dev_send(const struct device *dev, struct net_pkt *pkt)
 {
 	ARG_UNUSED(dev);
 	ARG_UNUSED(pkt);
@@ -56,7 +57,7 @@ static int fake_dev_send(struct device *dev, struct net_pkt *pkt)
 	return 0;
 }
 
-static u8_t *fake_dev_get_mac(struct fake_dev_context *ctx)
+static uint8_t *fake_dev_get_mac(struct fake_dev_context *ctx)
 {
 	if (ctx->mac_addr[2] == 0x00) {
 		/* 00-00-5E-00-53-xx Documentation RFC 7042 */
@@ -73,16 +74,16 @@ static u8_t *fake_dev_get_mac(struct fake_dev_context *ctx)
 
 static void fake_dev_iface_init(struct net_if *iface)
 {
-	struct device *dev = net_if_get_device(iface);
-	struct fake_dev_context *ctx = dev->driver_data;
-	u8_t *mac = fake_dev_get_mac(ctx);
+	const struct device *dev = net_if_get_device(iface);
+	struct fake_dev_context *ctx = dev->data;
+	uint8_t *mac = fake_dev_get_mac(ctx);
 
 	net_if_set_link_addr(iface, mac, 6, NET_LINK_ETHERNET);
 
 	ctx->iface = iface;
 }
 
-int fake_dev_init(struct device *dev)
+int fake_dev_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
@@ -120,7 +121,7 @@ void test_setup(void)
 void test_pm(void)
 {
 	struct net_if *iface = net_if_get_default();
-	struct device *dev = net_if_get_device(iface);
+	const struct device *dev = net_if_get_device(iface);
 	char data[] = "some data";
 	struct sockaddr_in addr4;
 	int sock;
@@ -177,6 +178,8 @@ void test_pm(void)
 	ret = sendto(sock, data, ARRAY_SIZE(data), 0,
 		     (struct sockaddr *)&addr4, sizeof(struct sockaddr_in));
 	zassert_true(ret > 0, "Could not send data");
+
+	close(sock);
 }
 
 void test_main(void)

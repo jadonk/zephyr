@@ -7,6 +7,9 @@
 
 #include <ztest.h>
 
+/**
+ * @brief Define and initialize test_pipe at compile time
+ */
 K_PIPE_DEFINE(test_pipe, 256, 4);
 #define STACK_SIZE (512 + CONFIG_TEST_EXTRA_STACKSIZE)
 #define PIPE_SIZE (256)
@@ -18,16 +21,14 @@ K_SEM_DEFINE(put_sem, 1, 1);
 K_SEM_DEFINE(sync_sem, 0, 1);
 K_SEM_DEFINE(multiple_send_sem, 0, 1);
 
-
-ZTEST_BMEM u8_t tx_buffer[PIPE_SIZE + 1];
-ZTEST_BMEM u8_t rx_buffer[PIPE_SIZE + 1];
+ZTEST_BMEM uint8_t tx_buffer[PIPE_SIZE + 1];
+ZTEST_BMEM uint8_t rx_buffer[PIPE_SIZE + 1];
 
 #define TOTAL_ELEMENTS (sizeof(single_elements) / sizeof(struct pipe_sequence))
 #define TOTAL_WAIT_ELEMENTS (sizeof(wait_elements) / \
 			     sizeof(struct pipe_sequence))
 #define TOTAL_TIMEOUT_ELEMENTS (sizeof(timeout_elements) / \
 				sizeof(struct pipe_sequence))
-
 
 /* Minimum tx/rx size*/
 /* the pipe will always pass */
@@ -45,9 +46,9 @@ ZTEST_BMEM u8_t rx_buffer[PIPE_SIZE + 1];
 
 /* encompasing structs */
 struct pipe_sequence {
-	u32_t size;
-	u32_t min_size;
-	u32_t sent_bytes;
+	uint32_t size;
+	uint32_t min_size;
+	uint32_t sent_bytes;
 	int return_value;
 };
 
@@ -116,9 +117,9 @@ struct k_thread get_single_tid;
 
 /* Helper functions */
 
-u32_t rx_buffer_check(char *buffer, u32_t size)
+uint32_t rx_buffer_check(char *buffer, uint32_t size)
 {
-	u32_t index;
+	uint32_t index;
 
 	for (index = 0U; index < size; index++) {
 		if (buffer[index] != (char) index) {
@@ -135,7 +136,7 @@ u32_t rx_buffer_check(char *buffer, u32_t size)
 /******************************************************************************/
 void pipe_put_single(void)
 {
-	u32_t index;
+	uint32_t index;
 	size_t written;
 	int return_value;
 	size_t min_xfer;
@@ -169,7 +170,7 @@ void pipe_put_single(void)
 
 void pipe_get_single(void *p1, void *p2, void *p3)
 {
-	u32_t index;
+	uint32_t index;
 	size_t read;
 	int return_value;
 	size_t min_xfer;
@@ -210,7 +211,7 @@ void pipe_get_single(void *p1, void *p2, void *p3)
 /******************************************************************************/
 void pipe_put_multiple(void)
 {
-	u32_t index;
+	uint32_t index;
 	size_t written;
 	int return_value;
 	size_t min_xfer;
@@ -247,7 +248,7 @@ void pipe_put_multiple(void)
 
 void pipe_get_multiple(void *p1, void *p2, void *p3)
 {
-	u32_t index;
+	uint32_t index;
 	size_t read;
 	int return_value;
 	size_t min_xfer;
@@ -528,8 +529,8 @@ void pipe_get_on_empty_pipe(void)
 {
 	size_t read;
 	int return_value;
-	u32_t read_size;
-	u32_t size_array[] = { 1, PIPE_SIZE - 1, PIPE_SIZE, PIPE_SIZE + 1 };
+	uint32_t read_size;
+	uint32_t size_array[] = { 1, PIPE_SIZE - 1, PIPE_SIZE, PIPE_SIZE + 1 };
 
 	for (int i = 0; i < 4; i++) {
 		read_size = size_array[i];
@@ -568,7 +569,7 @@ void pipe_get_on_empty_pipe(void)
 /******************************************************************************/
 void pipe_put_forever_timeout(void)
 {
-	u32_t index;
+	uint32_t index;
 	size_t written;
 	int return_value;
 	size_t min_xfer;
@@ -602,7 +603,7 @@ void pipe_put_forever_timeout(void)
 
 void pipe_get_forever_timeout(void *p1, void *p2, void *p3)
 {
-	u32_t index;
+	uint32_t index;
 	size_t read;
 	int return_value;
 	size_t min_xfer;
@@ -635,12 +636,10 @@ void pipe_get_forever_timeout(void *p1, void *p2, void *p3)
 	k_sem_give(&sync_sem);
 }
 
-
-
 /******************************************************************************/
 void pipe_put_get_timeout(void)
 {
-	u32_t index;
+	uint32_t index;
 	size_t read;
 	int return_value;
 	size_t min_xfer;
@@ -685,10 +684,43 @@ void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *pEsf)
 }
 /******************************************************************************/
 /* Test case entry points */
+
 /**
- * @brief Verify pipe with 1 element insert
+ * @brief Verify pipe with 1 element insert.
+ *
  * @ingroup kernel_pipe_tests
- * @see k_pipe_put()
+ *
+ * @details
+ * Test Objective:
+ * - transfer sequences of bytes of data in whole.
+ *
+ * Testing techniques:
+ * - function and block box testing,Interface testing,
+ * Dynamic analysis and testing.
+ *
+ * Prerequisite Conditions:
+ * - CONFIG_TEST_USERSPACE.
+ *
+ * Input Specifications:
+ * - N/A
+ *
+ * Test Procedure:
+ * -# Define and initialize a pipe at compile time.
+ * -# Using a sub thread to get pipe data in whole,
+ * and check if the data is correct with expected.
+ * -# Using main thread to put data in whole,
+ * check if the return is correct with expected.
+ *
+ * Expected Test Result:
+ * - The pipe put/get whole data is correct.
+ *
+ * Pass/Fail Criteria:
+ * - Successful if check points in test procedure are all passed, otherwise failure.
+ *
+ * Assumptions and Constraints:
+ * - N/A
+ *
+ * @see k_pipe_put(), k_pipe_get()
  */
 void test_pipe_on_single_elements(void)
 {
@@ -710,6 +742,9 @@ void test_pipe_on_single_elements(void)
 
 /**
  * @brief Test when multiple items are present in the pipe
+ * @details transfer sequences of bytes of data in part.
+ * - Using a sub thread to get data part.
+ * - Using main thread to put data part by part
  * @ingroup kernel_pipe_tests
  * @see k_pipe_put()
  */
@@ -746,7 +781,40 @@ void test_pipe_forever_wait(void)
 
 /**
  * @brief Test pipes with timeout
+ *
  * @ingroup kernel_pipe_tests
+ *
+ * @details
+ * Test Objective:
+ *	- Check if the kernel support supplying a timeout parameter
+ * indicating the maximum amount of time a process will wait.
+ *
+ * Testing techniques:
+ * - function and block box testing,Interface testing,
+ * Dynamic analysis and testing.
+ *
+ * Prerequisite Conditions:
+ * - CONFIG_TEST_USERSPACE.
+ *
+ * Input Specifications:
+ * - N/A
+ *
+ * Test Procedure:
+ * -# Create a sub thread to get data from a pipe.
+ * -# In the sub thread, Set K_MSEC(10) as timeout for k_pipe_get().
+ * and check the data which get from pipe if correct.
+ * -# In main thread, use k_pipe_put to put data.
+ * and check the return of k_pipe_put.
+ *
+ * Expected Test Result:
+ * - The pipe can set timeout and works well.
+ *
+ * Pass/Fail Criteria:
+ * - Successful if check points in test procedure are all passed, otherwise failure.
+ *
+ * Assumptions and Constraints:
+ * - N/A
+ *
  * @see k_pipe_put()
  */
 void test_pipe_timeout(void)
@@ -873,4 +941,86 @@ void test_pipe_put_min_xfer(void)
 			 1 /* min_xfer */, K_FOREVER);
 	zassert_equal(res, 0, "did not write min_xfer");
 	zassert_true(bytes_written >= 1, "did not write min_xfer");
+}
+
+/**
+ * @brief Test defining and initializing pipes at run time
+ *
+ * @ingroup kernel_pipe_tests
+ *
+ * @details
+ * Test Objective:
+ * - Check if the kernel provided a mechanism for defining and
+ * initializing pipes at run time.
+ *
+ * Testing techniques:
+ * - function and block box testing,Interface testing,
+ * Dynamic analysis and testing.
+ *
+ * Prerequisite Conditions:
+ * - CONFIG_TEST_USERSPACE.
+ *
+ * Input Specifications:
+ * - N/A
+ *
+ * Test Procedure:
+ * -# Define and initialize a pipe at run time
+ * -# Using this pipe to transfer data.
+ * -# Check the pipe get/put operation.
+ *
+ * Expected Test Result:
+ * - Pipe can be defined and initialized at run time.
+ *
+ * Pass/Fail Criteria:
+ * - Successful if check points in test procedure are all passed, otherwise failure.
+ *
+ * Assumptions and Constraints:
+ * - N/A
+ *
+ * @see k_pipe_init()
+ */
+void test_pipe_define_at_runtime(void)
+{
+	unsigned char ring_buffer[PIPE_SIZE];
+	struct k_pipe pipe;
+	size_t written, read;
+
+	/*Define and initialize pipe at run time*/
+	k_pipe_init(&pipe, ring_buffer, sizeof(ring_buffer));
+
+	/* initialize the tx buffer */
+	for (int i = 0; i < sizeof(tx_buffer); i++) {
+		tx_buffer[i] = i;
+	}
+
+	/*Using test_pipe which define and initialize at run time*/
+	zassert_equal(k_pipe_put(&pipe, &tx_buffer,
+			PIPE_SIZE, &written,
+			PIPE_SIZE, K_NO_WAIT), RETURN_SUCCESS, NULL);
+
+	/* Returned without waiting; zero data bytes were written. */
+	zassert_equal(k_pipe_put(&pipe, &tx_buffer,
+			PIPE_SIZE, &written,
+			PIPE_SIZE, K_NO_WAIT), -EIO, NULL);
+
+	/* Waiting period timed out. */
+	zassert_equal(k_pipe_put(&pipe, &tx_buffer,
+			PIPE_SIZE, &written,
+			PIPE_SIZE, TIMEOUT_VAL), -EAGAIN, NULL);
+
+	zassert_equal(k_pipe_get(&pipe, &rx_buffer,
+			PIPE_SIZE, &read,
+			PIPE_SIZE, K_NO_WAIT), RETURN_SUCCESS, NULL);
+
+	zassert_true(rx_buffer_check(rx_buffer, read) == read,
+			"Bytes read are not match.");
+
+	/* Returned without waiting; zero data bytes were read. */
+	zassert_equal(k_pipe_get(&pipe, &rx_buffer,
+			PIPE_SIZE, &read,
+			PIPE_SIZE, K_NO_WAIT), -EIO, NULL);
+	/* Waiting period timed out. */
+	zassert_equal(k_pipe_get(&pipe, &rx_buffer,
+			PIPE_SIZE, &read,
+			PIPE_SIZE, TIMEOUT_VAL), -EAGAIN, NULL);
 }

@@ -4,18 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @addtogroup t_driver_dac
- * @{
- * @defgroup t_dac_basic test_dac_basic_operations
- * @}
- */
-
 #include <zephyr.h>
 #include <ztest.h>
 
 extern void test_dac_write_value(void);
-extern struct device *get_dac_device(void);
+extern const struct device *get_dac_device(void);
 
 void test_main(void)
 {

@@ -87,6 +87,11 @@
 	};
 };
 
+&sim {
+	pllfll-select = <KINETIS_SIM_PLLFLLSEL_MCGPLLCLK>;
+	er32k-select = <KINETIS_SIM_ER32KSEL_RTC>;
+};
+
 arduino_serial: &uart3 {
 	status = "okay";
 	current-speed = <115200>;
@@ -167,10 +172,7 @@ arduino_spi: &spi0 {
 };
 
 &flash0 {
-	/*
-	 * For more information, see:
-	 * http://docs.zephyrproject.org/latest/guides/dts/index.html#flash-partitions
-	 */
+
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
@@ -217,4 +219,12 @@ arduino_spi: &spi0 {
 &flexcan0 {
 	status = "okay";
 	bus-speed = <125000>;
+};
+
+&edma0 {
+	status = "okay";
+};
+
+&pit0 {
+	status = "okay";
 };

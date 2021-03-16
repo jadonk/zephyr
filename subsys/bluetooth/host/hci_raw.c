@@ -26,13 +26,14 @@
 #define H4_ACL 0x02
 #define H4_SCO 0x03
 #define H4_EVT 0x04
+#define H4_ISO 0x05
 
 static struct k_fifo *raw_rx;
 
 #if defined(CONFIG_BT_HCI_RAW_H4_ENABLE)
-static u8_t raw_mode = BT_HCI_RAW_MODE_H4;
+static uint8_t raw_mode = BT_HCI_RAW_MODE_H4;
 #else
-static u8_t raw_mode;
+static uint8_t raw_mode;
 #endif
 
 NET_BUF_POOL_FIXED_DEFINE(hci_rx_pool, CONFIG_BT_RX_BUF_COUNT,
@@ -41,6 +42,10 @@ NET_BUF_POOL_FIXED_DEFINE(hci_cmd_pool, CONFIG_BT_HCI_CMD_COUNT,
 			  BT_BUF_RX_SIZE, NULL);
 NET_BUF_POOL_FIXED_DEFINE(hci_acl_pool, BT_HCI_ACL_COUNT,
 			  BT_BUF_ACL_SIZE, NULL);
+#if defined(CONFIG_BT_ISO)
+NET_BUF_POOL_FIXED_DEFINE(hci_iso_pool, BT_ISO_TX_BUF_COUNT,
+			  BT_ISO_TX_MTU, NULL);
+#endif
 
 struct bt_dev_raw bt_dev;
 struct bt_hci_raw_cmd_ext *cmd_ext;
@@ -103,10 +108,15 @@ struct net_buf *bt_buf_get_tx(enum bt_buf_type type, k_timeout_t timeout,
 	case BT_BUF_ACL_OUT:
 		pool = &hci_acl_pool;
 		break;
+#if defined(CONFIG_BT_ISO)
+	case BT_BUF_ISO_OUT:
+		pool = &hci_iso_pool;
+		break;
+#endif
 	case BT_BUF_H4:
 		if (IS_ENABLED(CONFIG_BT_HCI_RAW_H4) &&
 		    raw_mode == BT_HCI_RAW_MODE_H4) {
-			switch (((u8_t *)data)[0]) {
+			switch (((uint8_t *)data)[0]) {
 			case H4_CMD:
 				type = BT_BUF_CMD;
 				pool = &hci_cmd_pool;
@@ -115,17 +125,22 @@ struct net_buf *bt_buf_get_tx(enum bt_buf_type type, k_timeout_t timeout,
 				type = BT_BUF_ACL_OUT;
 				pool = &hci_acl_pool;
 				break;
+#if defined(CONFIG_BT_ISO)
+			case H4_ISO:
+				type = BT_BUF_ISO_OUT;
+				pool = &hci_iso_pool;
+#endif
 			default:
 				LOG_ERR("Unknown H4 type %u", type);
 				return NULL;
 			}
 
 			/* Adjust data pointer to discard the header */
-			data = (u8_t *)data + 1;
+			data = (uint8_t *)data + 1;
 			size--;
 			break;
 		}
-	/* Fallthrough */
+		__fallthrough;
 	default:
 		BT_ERR("Invalid type: %u", type);
 		return NULL;
@@ -151,7 +166,7 @@ struct net_buf *bt_buf_get_cmd_complete(k_timeout_t timeout)
 	return bt_buf_get_rx(BT_BUF_EVT, timeout);
 }
 
-struct net_buf *bt_buf_get_evt(u8_t evt, bool discardable, k_timeout_t timeout)
+struct net_buf *bt_buf_get_evt(uint8_t evt, bool discardable, k_timeout_t timeout)
 {
 	return bt_buf_get_rx(BT_BUF_EVT, timeout);
 }
@@ -171,6 +186,12 @@ int bt_recv(struct net_buf *buf)
 		case BT_BUF_ACL_IN:
 			net_buf_push_u8(buf, H4_ACL);
 			break;
+		case BT_BUF_ISO_IN:
+			if (IS_ENABLED(CONFIG_BT_ISO)) {
+				net_buf_push_u8(buf, H4_ISO);
+				break;
+			}
+			__fallthrough;
 		default:
 			BT_ERR("Unknown type %u", bt_buf_get_type(buf));
 			return -EINVAL;
@@ -185,10 +206,21 @@ int bt_recv(struct net_buf *buf)
 
 int bt_recv_prio(struct net_buf *buf)
 {
+	if (bt_buf_get_type(buf) == BT_BUF_EVT) {
+		struct bt_hci_evt_hdr *hdr = (void *)buf->data;
+		uint8_t evt_flags = bt_hci_evt_get_flags(hdr->evt);
+
+		if ((evt_flags & BT_HCI_EVT_FLAG_RECV_PRIO) &&
+		    (evt_flags & BT_HCI_EVT_FLAG_RECV)) {
+			/* Avoid queuing the event twice */
+			return 0;
+		}
+	}
+
 	return bt_recv(buf);
 }
 
-static void bt_cmd_complete_ext(u16_t op, u8_t status)
+static void bt_cmd_complete_ext(uint16_t op, uint8_t status)
 {
 	struct net_buf *buf;
 	struct bt_hci_evt_cc_status *cc;
@@ -204,13 +236,13 @@ static void bt_cmd_complete_ext(u16_t op, u8_t status)
 	bt_recv(buf);
 }
 
-static u8_t bt_send_ext(struct net_buf *buf)
+static uint8_t bt_send_ext(struct net_buf *buf)
 {
 	struct bt_hci_cmd_hdr *hdr;
 	struct net_buf_simple_state state;
 	int i;
-	u16_t op;
-	u8_t status;
+	uint16_t op;
+	uint8_t status;
 
 	status = BT_HCI_ERR_SUCCESS;
 
@@ -265,7 +297,7 @@ int bt_send(struct net_buf *buf)
 
 	if (IS_ENABLED(CONFIG_BT_HCI_RAW_CMD_EXT) &&
 	    bt_buf_get_type(buf) == BT_BUF_CMD) {
-		u8_t status;
+		uint8_t status;
 
 		status = bt_send_ext(buf);
 		if (status) {
@@ -280,7 +312,7 @@ int bt_send(struct net_buf *buf)
 	return bt_dev.drv->send(buf);
 }
 
-int bt_hci_raw_set_mode(u8_t mode)
+int bt_hci_raw_set_mode(uint8_t mode)
 {
 	BT_DBG("mode %u", mode);
 
@@ -296,7 +328,7 @@ int bt_hci_raw_set_mode(u8_t mode)
 	return -EINVAL;
 }
 
-u8_t bt_hci_raw_get_mode(void)
+uint8_t bt_hci_raw_get_mode(void)
 {
 	if (IS_ENABLED(CONFIG_BT_HCI_RAW_H4)) {
 		return raw_mode;

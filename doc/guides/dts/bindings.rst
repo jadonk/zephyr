@@ -11,8 +11,9 @@ particular devicetree are useful to :ref:`device drivers <device_model_api>` or
 
 *Devicetree bindings* provide the other half of this information. Zephyr
 devicetree bindings are YAML files in a custom format (Zephyr does not use the
-dt-schema tools used by the Linux kernel). The build system uses bindings
-when generating code for :ref:`dt-from-c`.
+dt-schema tools used by the Linux kernel). With one exception in
+:ref:`dt-inferred-bindings` the build system uses bindings when generating
+code for :ref:`dt-from-c`.
 
 .. _dt-binding-compat:
 
@@ -74,80 +75,31 @@ Below is a template that shows the Zephyr bindings file syntax. It is stored in
 .. literalinclude:: ../../../dts/binding-template.yaml
    :language: yaml
 
-.. _legacy_binding_syntax:
+.. _dt-inferred-bindings:
 
-Legacy bindings syntax
-**********************
+Inferred bindings
+*****************
 
-The bindings syntax described above was introduced in the Zephyr 2.1 release.
-This section describes how to update bindings written in the legacy syntax,
-starting with this example written in the legacy syntax.
+For sample code and applications it can be inconvenient to define a devicetree
+binding when only a few simple properties are needed, such as the identify of
+a GPIO for an application task.  The devicetree syntax allows inference of a
+binding for properties based on the value observed.  This inference is
+supported only for the ``/zephyr,user`` node.  The properties referenced can
+be accessed through the standard devicetree macros,
+e.g. ``DT_PROP(DT_PATH(zephyr_user), bytes)``.
 
-.. code-block:: yaml
+.. code-block:: DTS
 
-   title: ...
-   description: ...
-
-   inherits:
-       !include foo.yaml
-
-   parent:
-       bus: spi
-
-   parent-bus: spi
-
-   properties:
-       compatible:
-           constraint: "company,device"
-           type: string-array
-
-       frequency:
-           type: int
-           category: optional
-
-   sub-node:
-       properties:
-           child-prop:
-               type: int
-               category: required
-
-   # Assume this is a binding for an interrupt controller
-   "#cells":
-       - irq
-       - priority
-       - flags
-
-This should now be written like this:
-
-.. code-block:: yaml
-
-   description: ...
-
-   compatible: "company,device"
-
-   include: foo.yaml
-
-   bus: spi
-
-   properties:
-       frequency:
-           type: int
-           required: false
-
-   child-binding:
-       description: ...
-
-       properties:
-           child-prop:
-               type: int
-               required: true
-
-   interrupt-cells:
-       - irq
-       - priority
-       - cells
-
-The legacy syntax is still supported for backwards compatibility, but generates
-deprecation warnings. Support for the legacy bindings syntax was originally
-scheduled to be dropped in the Zephyr 2.3 release, but will now be maintained
-until Zephyr 2.4.
+   / {
+	zephyr,user {
+		boolean;
+		bytes = [81 82 83];
+		number = <23>;
+		numbers = <1>, <2>, <3>;
+		string = "text";
+		strings = "a", "b", "c";
+		handle = <&gpio0>;
+		handles = <&gpio0>, <&gpio1>;
+		signal-gpios = <&gpio0 1 GPIO_ACTIVE_HIGH>;
+	};
+   };

@@ -7,7 +7,6 @@
 
 #include <stdbool.h>
 #include <sys/dlist.h>
-#include <sys/mempool_base.h>
 
 #include "hal/cntr.h"
 
@@ -16,31 +15,29 @@
 
 #include "ticker/ticker.h"
 
+#include "ll_sw/lll.h"
+
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_DEBUG_HCI_DRIVER)
 #define LOG_MODULE_NAME bt_ctlr_hal_ticker
 #include "common/log.h"
 #include "hal/debug.h"
 
-#if defined(CONFIG_BT_LL_SW_SPLIT)
-#include "ll_sw/lll.h"
 #define TICKER_MAYFLY_CALL_ID_ISR     TICKER_USER_ID_LLL
 #define TICKER_MAYFLY_CALL_ID_TRIGGER TICKER_USER_ID_ULL_HIGH
 #define TICKER_MAYFLY_CALL_ID_WORKER  TICKER_USER_ID_ULL_HIGH
 #define TICKER_MAYFLY_CALL_ID_JOB     TICKER_USER_ID_ULL_LOW
 #define TICKER_MAYFLY_CALL_ID_PROGRAM TICKER_USER_ID_THREAD
-static u8_t const caller_id_lut[] = {
+
+static uint8_t const caller_id_lut[] = {
 	TICKER_CALL_ID_ISR,
 	TICKER_CALL_ID_WORKER,
 	TICKER_CALL_ID_JOB,
 	TICKER_CALL_ID_PROGRAM
 };
-#else
-#error Unknown LL variant.
-#endif
 
-u8_t hal_ticker_instance0_caller_id_get(u8_t user_id)
+uint8_t hal_ticker_instance0_caller_id_get(uint8_t user_id)
 {
-	u8_t caller_id;
+	uint8_t caller_id;
 
 	LL_ASSERT(user_id < sizeof(caller_id_lut));
 
@@ -50,7 +47,7 @@ u8_t hal_ticker_instance0_caller_id_get(u8_t user_id)
 	return caller_id;
 }
 
-void hal_ticker_instance0_sched(u8_t caller_id, u8_t callee_id, u8_t chain,
+void hal_ticker_instance0_sched(uint8_t caller_id, uint8_t callee_id, uint8_t chain,
 				void *instance)
 {
 	/* return value not checked as we allow multiple calls to schedule
@@ -58,7 +55,6 @@ void hal_ticker_instance0_sched(u8_t caller_id, u8_t callee_id, u8_t chain,
 	 * schedule.
 	 */
 	switch (caller_id) {
-#if defined(CONFIG_BT_LL_SW_SPLIT)
 	case TICKER_CALL_ID_ISR:
 		switch (callee_id) {
 		case TICKER_CALL_ID_JOB:
@@ -82,7 +78,6 @@ void hal_ticker_instance0_sched(u8_t caller_id, u8_t callee_id, u8_t chain,
 			break;
 		}
 		break;
-#endif /* CONFIG_BT_LL_SW_SPLIT */
 
 	case TICKER_CALL_ID_TRIGGER:
 		switch (callee_id) {
@@ -198,7 +193,7 @@ void hal_ticker_instance0_sched(u8_t caller_id, u8_t callee_id, u8_t chain,
 	}
 }
 
-void hal_ticker_instance0_trigger_set(u32_t value)
+void hal_ticker_instance0_trigger_set(uint32_t value)
 {
 	cntr_cmp_set(0, value);
 }

@@ -19,19 +19,19 @@ LOG_MODULE_REGISTER(pwm_imx);
 				<<PWM_PWMCR_SWR_SHIFT))&PWM_PWMCR_SWR_MASK)
 
 #define DEV_CFG(dev) \
-	((const struct imx_pwm_config * const)(dev)->config_info)
+	((const struct imx_pwm_config * const)(dev)->config)
 #define DEV_DATA(dev) \
-	((struct imx_pwm_data * const)(dev)->driver_data)
+	((struct imx_pwm_data * const)(dev)->data)
 #define DEV_BASE(dev) \
 	((PWM_Type *)(DEV_CFG(dev))->base)
 
 struct imx_pwm_config {
 	PWM_Type *base;
-	u16_t prescaler;
+	uint16_t prescaler;
 };
 
 struct imx_pwm_data {
-	u32_t period_cycles;
+	uint32_t period_cycles;
 };
 
 
@@ -40,8 +40,8 @@ static bool imx_pwm_is_enabled(PWM_Type *base)
 	return PWM_PWMCR_REG(base) & PWM_PWMCR_EN_MASK;
 }
 
-static int imx_pwm_get_cycles_per_sec(struct device *dev, u32_t pwm,
-				       u64_t *cycles)
+static int imx_pwm_get_cycles_per_sec(const struct device *dev, uint32_t pwm,
+				       uint64_t *cycles)
 {
 	PWM_Type *base = DEV_BASE(dev);
 	const struct imx_pwm_config *config = DEV_CFG(dev);
@@ -51,8 +51,8 @@ static int imx_pwm_get_cycles_per_sec(struct device *dev, u32_t pwm,
 	return 0;
 }
 
-static int imx_pwm_pin_set(struct device *dev, u32_t pwm,
-			   u32_t period_cycles, u32_t pulse_cycles,
+static int imx_pwm_pin_set(const struct device *dev, uint32_t pwm,
+			   uint32_t period_cycles, uint32_t pulse_cycles,
 			   pwm_flags_t flags)
 {
 	PWM_Type *base = DEV_BASE(dev);
@@ -61,7 +61,7 @@ static int imx_pwm_pin_set(struct device *dev, u32_t pwm,
 	unsigned int period_ms;
 	bool enabled = imx_pwm_is_enabled(base);
 	int wait_count = 0, fifoav;
-	u32_t cr, sr;
+	uint32_t cr, sr;
 
 
 	if ((period_cycles == 0U) || (pulse_cycles > period_cycles)) {
@@ -143,7 +143,7 @@ static int imx_pwm_pin_set(struct device *dev, u32_t pwm,
 	return 0;
 }
 
-static int imx_pwm_init(struct device *dev)
+static int imx_pwm_init(const struct device *dev)
 {
 	struct imx_pwm_data *data = DEV_DATA(dev);
 	PWM_Type *base = DEV_BASE(dev);
@@ -166,8 +166,8 @@ static const struct pwm_driver_api imx_pwm_driver_api = {
 									\
 	static struct imx_pwm_data imx_pwm_data_##n;			\
 									\
-	DEVICE_AND_API_INIT(imx_pwm_##n, DT_INST_LABEL(n),		\
-			    &imx_pwm_init, &imx_pwm_data_##n,		\
+	DEVICE_DT_INST_DEFINE(n, &imx_pwm_init, device_pm_control_nop,	\
+			    &imx_pwm_data_##n,				\
 			    &imx_pwm_config_##n, POST_KERNEL,		\
 			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		\
 			    &imx_pwm_driver_api);

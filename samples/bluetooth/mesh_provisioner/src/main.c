@@ -11,31 +11,20 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/mesh.h>
 
-static const u16_t net_idx;
-static const u16_t app_idx;
-static u16_t self_addr = 1, node_addr;
-static const u8_t dev_uuid[16] = { 0xdd, 0xdd };
-static u8_t node_uuid[16];
+static const uint16_t net_idx;
+static const uint16_t app_idx;
+static uint16_t self_addr = 1, node_addr;
+static const uint8_t dev_uuid[16] = { 0xdd, 0xdd };
+static uint8_t node_uuid[16];
 
 K_SEM_DEFINE(sem_unprov_beacon, 0, 1);
 K_SEM_DEFINE(sem_node_added, 0, 1);
 
-static struct bt_mesh_cfg_srv cfg_srv = {
-	.relay = BT_MESH_RELAY_ENABLED,
-	.beacon = BT_MESH_BEACON_DISABLED,
-	.frnd = BT_MESH_FRIEND_NOT_SUPPORTED,
-	.default_ttl = 7,
-
-	/* 3 transmissions with 20ms interval */
-	.net_transmit = BT_MESH_TRANSMIT(2, 20),
-	.relay_retransmit = BT_MESH_TRANSMIT(3, 20),
-};
-
 static struct bt_mesh_cfg_cli cfg_cli = {
 };
 
-static void health_current_status(struct bt_mesh_health_cli *cli, u16_t addr,
-				  u8_t test_id, u16_t cid, u8_t *faults,
+static void health_current_status(struct bt_mesh_health_cli *cli, uint16_t addr,
+				  uint8_t test_id, uint16_t cid, uint8_t *faults,
 				  size_t fault_count)
 {
 	size_t i;
@@ -61,7 +50,7 @@ static struct bt_mesh_health_cli health_cli = {
 };
 
 static struct bt_mesh_model root_models[] = {
-	BT_MESH_MODEL_CFG_SRV(&cfg_srv),
+	BT_MESH_MODEL_CFG_SRV,
 	BT_MESH_MODEL_CFG_CLI(&cfg_cli),
 	BT_MESH_MODEL_HEALTH_CLI(&health_cli),
 };
@@ -135,7 +124,7 @@ static void configure_node(struct bt_mesh_cdb_node *node)
 {
 	struct bt_mesh_cdb_app_key *key;
 	struct bt_mesh_cfg_mod_pub pub;
-	u8_t status;
+	uint8_t status;
 	int err;
 
 	printk("Configuring node 0x%04x...\n", node->addr);
@@ -186,15 +175,15 @@ static void configure_node(struct bt_mesh_cdb_node *node)
 	printk("Configuration complete\n");
 }
 
-static void unprovisioned_beacon(u8_t uuid[16],
+static void unprovisioned_beacon(uint8_t uuid[16],
 				 bt_mesh_prov_oob_info_t oob_info,
-				 u32_t *uri_hash)
+				 uint32_t *uri_hash)
 {
 	memcpy(node_uuid, uuid, 16);
 	k_sem_give(&sem_unprov_beacon);
 }
 
-static void node_added(u16_t net_idx, u8_t uuid[16], u16_t addr, u8_t num_elem)
+static void node_added(uint16_t net_idx, uint8_t uuid[16], uint16_t addr, uint8_t num_elem)
 {
 	node_addr = addr;
 	k_sem_give(&sem_node_added);
@@ -208,7 +197,7 @@ static const struct bt_mesh_prov prov = {
 
 static int bt_ready(void)
 {
-	u8_t net_key[16], dev_key[16];
+	uint8_t net_key[16], dev_key[16];
 	int err;
 
 	err = bt_mesh_init(&prov, &comp);
@@ -253,7 +242,7 @@ static int bt_ready(void)
 	return 0;
 }
 
-static u8_t check_unconfigured(struct bt_mesh_cdb_node *node, void *data)
+static uint8_t check_unconfigured(struct bt_mesh_cdb_node *node, void *data)
 {
 	if (!atomic_test_bit(node->flags, BT_MESH_CDB_NODE_CONFIGURED)) {
 		if (node->addr == self_addr) {

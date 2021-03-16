@@ -47,7 +47,7 @@
 #include <kernel_internal.h>
 
 /* SSE control/status register default value (used by assembler code) */
-extern u32_t _sse_mxcsr_default_value;
+extern uint32_t _sse_mxcsr_default_value;
 
 /**
  *
@@ -190,7 +190,7 @@ void k_float_enable(struct k_thread *thread, unsigned int options)
 
 	/* Indicate thread requires floating point context saving */
 
-	thread->base.user_options |= (u8_t)options;
+	thread->base.user_options |= (uint8_t)options;
 
 	/*
 	 * The current thread might not allow FP instructions, so clear CR0[TS]
@@ -328,4 +328,5 @@ void _FpNotAvailableExcHandler(z_arch_esf_t *pEsf)
 
 	k_float_enable(_current, _FP_USER_MASK);
 }
-_EXCEPTION_CONNECT_NOCODE(_FpNotAvailableExcHandler, IV_DEVICE_NOT_AVAILABLE);
+_EXCEPTION_CONNECT_NOCODE(_FpNotAvailableExcHandler,
+		IV_DEVICE_NOT_AVAILABLE, 0);

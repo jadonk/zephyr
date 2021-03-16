@@ -6,6 +6,11 @@
 #ifndef ZEPHYR_INCLUDE_POSIX_TIME_H_
 #define ZEPHYR_INCLUDE_POSIX_TIME_H_
 
+/* Read standard header.  This may find <posix/time.h> since they
+ * refer to the same file when include/posix is in the search path.
+ */
+#include <time.h>
+
 #ifdef CONFIG_NEWLIB_LIBC
 /* Kludge to support outdated newlib version as used in SDK 0.10 for Xtensa */
 #include <newlib.h>
@@ -74,7 +79,7 @@ extern "C" {
 #define TIMER_ABSTIME 4
 #endif
 
-static inline s32_t _ts_to_ms(const struct timespec *to)
+static inline int32_t _ts_to_ms(const struct timespec *to)
 {
 	return (to->tv_sec * MSEC_PER_SEC) + (to->tv_nsec / NSEC_PER_MSEC);
 }
@@ -91,6 +96,7 @@ int timer_delete(timer_t timerid);
 int timer_gettime(timer_t timerid, struct itimerspec *its);
 int timer_settime(timer_t timerid, int flags, const struct itimerspec *value,
 		  struct itimerspec *ovalue);
+int nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
 
 #ifdef __cplusplus
 }
@@ -100,4 +106,9 @@ int timer_settime(timer_t timerid, int flags, const struct itimerspec *value,
 #include <syscalls/time.h>
 #endif /* CONFIG_ARCH_POSIX */
 
+#else /* ZEPHYR_INCLUDE_POSIX_TIME_H_ */
+/* Read the toolchain header when <posix/time.h> finds itself on the
+ * first attempt.
+ */
+#include_next <time.h>
 #endif /* ZEPHYR_INCLUDE_POSIX_TIME_H_ */

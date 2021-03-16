@@ -18,7 +18,7 @@
 
 static void test_arm_cfft_f64_cmplx_backend(
 	const arm_cfft_instance_f64 * inst, bool inverse,
-	const u64_t *input, const u64_t *ref, size_t length)
+	const uint64_t *input, const uint64_t *ref, size_t length)
 {
 	float64_t *output;
 
@@ -44,7 +44,7 @@ static void test_arm_cfft_f64_cmplx_backend(
 
 static void test_arm_cfft_f64_cmplx(
 	const arm_cfft_instance_f64 * inst,
-	const u64_t *input, const u64_t *ref, size_t length)
+	const uint64_t *input, const uint64_t *ref, size_t length)
 {
 	test_arm_cfft_f64_cmplx_backend(inst, false, input, ref, length);
 }
@@ -105,7 +105,7 @@ DEFINE_TEST_VARIANT4(arm_cfft_f64_cmplx, step_4096, &arm_cfft_sR_f64_len4096,
 
 static void test_arm_cifft_f64_cmplx(
 	const arm_cfft_instance_f64 * inst,
-	const u64_t *input, const u64_t *ref, size_t length)
+	const uint64_t *input, const uint64_t *ref, size_t length)
 {
 	test_arm_cfft_f64_cmplx_backend(inst, true, input, ref, length);
 }
@@ -167,42 +167,42 @@ DEFINE_TEST_VARIANT4(arm_cifft_f64_cmplx, step_4096, &arm_cfft_sR_f64_len4096,
 void test_transform_cf64(void)
 {
 	ztest_test_suite(transform_cf64,
-		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_16),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_16),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_32),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_32),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_64),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_64),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_128),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_128),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_256),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_256),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_512),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_512),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_1024),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_1024),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_2048),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_2048),
 		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_4096),
 		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_4096),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_step_16),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_step_16),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_step_32),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_step_32),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_step_64),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_step_64),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_step_128),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_step_128),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_step_256),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_step_256),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_step_512),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_step_512),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_step_1024),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_step_1024),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_2048),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_2048),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_1024),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_1024),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_512),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_512),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_256),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_256),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_128),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_128),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_64),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_64),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_32),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_32),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_noisy_16),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_noisy_16),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_step_4096),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_step_4096),
 		ztest_unit_test(test_arm_cfft_f64_cmplx_step_2048),
 		ztest_unit_test(test_arm_cifft_f64_cmplx_step_2048),
-		ztest_unit_test(test_arm_cfft_f64_cmplx_step_4096),
-		ztest_unit_test(test_arm_cifft_f64_cmplx_step_4096)
+		ztest_unit_test(test_arm_cfft_f64_cmplx_step_1024),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_step_1024),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_step_512),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_step_512),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_step_256),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_step_256),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_step_128),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_step_128),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_step_64),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_step_64),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_step_32),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_step_32),
+		ztest_unit_test(test_arm_cfft_f64_cmplx_step_16),
+		ztest_unit_test(test_arm_cifft_f64_cmplx_step_16)
 		);
 
 	ztest_run_test_suite(transform_cf64);

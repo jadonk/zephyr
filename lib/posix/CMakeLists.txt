@@ -24,9 +24,13 @@ zephyr_library_sources_ifdef(CONFIG_POSIX_MQUEUE mqueue.c)
 zephyr_library_sources_ifdef(CONFIG_POSIX_FS fs.c)
 zephyr_library_sources_ifdef(CONFIG_EVENTFD eventfd.c)
 
+if(NOT (CONFIG_BOARD_NATIVE_POSIX OR CONFIG_BOARD_NATIVE_POSIX_64BIT))
+zephyr_library_sources(nanosleep.c)
+endif()
+
 zephyr_library_include_directories(
   ${ZEPHYR_BASE}/kernel/include
-  ${ZEPHYR_BASE}/arch/${ARCH}/include
+  ${ARCH_DIR}/${ARCH}/include
 )
 
 zephyr_library_link_libraries(posix_subsys)

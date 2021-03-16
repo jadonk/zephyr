@@ -24,15 +24,22 @@ struct flash_gecko_data {
 	struct k_sem mutex;
 };
 
+
+static const struct flash_parameters flash_gecko_parameters = {
+	.write_block_size = DT_PROP(SOC_NV_FLASH_NODE, write_block_size),
+	.erase_value = 0xff,
+};
+
 #define DEV_NAME(dev) ((dev)->name)
 #define DEV_DATA(dev) \
-	((struct flash_gecko_data *const)(dev)->driver_data)
+	((struct flash_gecko_data *const)(dev)->data)
 
-static bool write_range_is_valid(off_t offset, u32_t size);
-static bool read_range_is_valid(off_t offset, u32_t size);
+static bool write_range_is_valid(off_t offset, uint32_t size);
+static bool read_range_is_valid(off_t offset, uint32_t size);
 static int erase_flash_block(off_t offset, size_t size);
 
-static int flash_gecko_read(struct device *dev, off_t offset, void *data,
+static int flash_gecko_read(const struct device *dev, off_t offset,
+			    void *data,
 			    size_t size)
 {
 	if (!read_range_is_valid(offset, size)) {
@@ -43,12 +50,12 @@ static int flash_gecko_read(struct device *dev, off_t offset, void *data,
 		return 0;
 	}
 
-	memcpy(data, (u8_t *)CONFIG_FLASH_BASE_ADDRESS + offset, size);
+	memcpy(data, (uint8_t *)CONFIG_FLASH_BASE_ADDRESS + offset, size);
 
 	return 0;
 }
 
-static int flash_gecko_write(struct device *dev, off_t offset,
+static int flash_gecko_write(const struct device *dev, off_t offset,
 			     const void *data, size_t size)
 {
 	struct flash_gecko_data *const dev_data = DEV_DATA(dev);
@@ -66,7 +73,7 @@ static int flash_gecko_write(struct device *dev, off_t offset,
 
 	k_sem_take(&dev_data->mutex, K_FOREVER);
 
-	address = (u8_t *)CONFIG_FLASH_BASE_ADDRESS + offset;
+	address = (uint8_t *)CONFIG_FLASH_BASE_ADDRESS + offset;
 	msc_ret = MSC_WriteWord(address, data, size);
 	if (msc_ret < 0) {
 		ret = -EIO;
@@ -77,7 +84,8 @@ static int flash_gecko_write(struct device *dev, off_t offset,
 	return ret;
 }
 
-static int flash_gecko_erase(struct device *dev, off_t offset, size_t size)
+static int flash_gecko_erase(const struct device *dev, off_t offset,
+			     size_t size)
 {
 	struct flash_gecko_data *const dev_data = DEV_DATA(dev);
 	int ret;
@@ -109,7 +117,7 @@ static int flash_gecko_erase(struct device *dev, off_t offset, size_t size)
 	return ret;
 }
 
-static int flash_gecko_write_protection(struct device *dev, bool enable)
+static int flash_gecko_write_protection(const struct device *dev, bool enable)
 {
 	struct flash_gecko_data *const dev_data = DEV_DATA(dev);
 
@@ -120,7 +128,11 @@ static int flash_gecko_write_protection(struct device *dev, bool enable)
 		MSC->LOCK = 0;
 	} else {
 		/* Unlock the MSC module. */
+	#if defined(MSC_LOCK_LOCKKEY_UNLOCK)
+		MSC->LOCK = MSC_LOCK_LOCKKEY_UNLOCK;
+	#else
 		MSC->LOCK = MSC_UNLOCK_CODE;
+	#endif
 	}
 
 	k_sem_give(&dev_data->mutex);
@@ -132,14 +144,14 @@ static int flash_gecko_write_protection(struct device *dev, bool enable)
  * - A flash address to write to must be aligned to words.
  * - Number of bytes to write must be divisible by 4.
  */
-static bool write_range_is_valid(off_t offset, u32_t size)
+static bool write_range_is_valid(off_t offset, uint32_t size)
 {
 	return read_range_is_valid(offset, size)
-		&& (offset % sizeof(u32_t) == 0)
+		&& (offset % sizeof(uint32_t) == 0)
 		&& (size % 4 == 0U);
 }
 
-static bool read_range_is_valid(off_t offset, u32_t size)
+static bool read_range_is_valid(off_t offset, uint32_t size)
 {
 	return (offset + size) <= (CONFIG_FLASH_SIZE * 1024);
 }
@@ -151,7 +163,7 @@ static int erase_flash_block(off_t offset, size_t size)
 	int ret = 0;
 
 	for (off_t tmp = offset; tmp < offset + size; tmp += FLASH_PAGE_SIZE) {
-		address = (u8_t *)CONFIG_FLASH_BASE_ADDRESS + tmp;
+		address = (uint8_t *)CONFIG_FLASH_BASE_ADDRESS + tmp;
 		msc_ret = MSC_ErasePage(address);
 		if (msc_ret < 0) {
 			ret = -EIO;
@@ -169,7 +181,7 @@ static const struct flash_pages_layout flash_gecko_0_pages_layout = {
 	.pages_size = DT_PROP(SOC_NV_FLASH_NODE, erase_block_size),
 };
 
-void flash_gecko_page_layout(struct device *dev,
+void flash_gecko_page_layout(const struct device *dev,
 			     const struct flash_pages_layout **layout,
 			     size_t *layout_size)
 {
@@ -178,7 +190,15 @@ void flash_gecko_page_layout(struct device *dev,
 }
 #endif /* CONFIG_FLASH_PAGE_LAYOUT */
 
-static int flash_gecko_init(struct device *dev)
+static const struct flash_parameters *
+flash_gecko_get_parameters(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return &flash_gecko_parameters;
+}
+
+static int flash_gecko_init(const struct device *dev)
 {
 	struct flash_gecko_data *const dev_data = DEV_DATA(dev);
 
@@ -199,10 +219,10 @@ static const struct flash_driver_api flash_gecko_driver_api = {
 	.write = flash_gecko_write,
 	.erase = flash_gecko_erase,
 	.write_protection = flash_gecko_write_protection,
+	.get_parameters = flash_gecko_get_parameters,
 #ifdef CONFIG_FLASH_PAGE_LAYOUT
 	.page_layout = flash_gecko_page_layout,
 #endif
-	.write_block_size = DT_PROP(SOC_NV_FLASH_NODE, write_block_size),
 };
 
 static struct flash_gecko_data flash_gecko_0_data;

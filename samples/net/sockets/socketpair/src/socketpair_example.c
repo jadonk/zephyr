@@ -44,10 +44,25 @@ static const char *const names[] = {
 	"Charlie",
 };
 
+#if defined(__ZEPHYR__) && !(defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
+	|| defined(CONFIG_BOARD_NATIVE_POSIX_64BIT) \
+	|| defined(CONFIG_SOC_SERIES_BSIM_NRFXX))
+
+#define STACK_SIZE (1024 + CONFIG_TEST_EXTRA_STACKSIZE)
+static pthread_attr_t attr[NUM_SOCKETPAIRS];
+K_THREAD_STACK_ARRAY_DEFINE(stack, NUM_SOCKETPAIRS, STACK_SIZE);
+
+#endif
+
 static void hello(int fd, const char *name)
 {
 	/* write(2) should be used after #25443 */
-	send(fd, name, strlen(name), 0);
+	int res = send(fd, name, strlen(name), 0);
+
+	if (res != strlen(name)) {
+		printf("%s(): send: expected: %d actual: %d errno: %d\n",
+			__func__, (int)strlen(name), res, errno);
+	}
 }
 
 static void *fun(void *arg)
@@ -102,11 +117,40 @@ int main(int argc, char *argv[])
 	struct ctx ctx[NUM_SOCKETPAIRS] = {};
 	struct pollfd fds[NUM_SOCKETPAIRS] = {};
 	void *unused;
+	pthread_attr_t *attrp = NULL;
 
 	for (i = 0; i < ARRAY_SIZE(ctx); ++i) {
 		ctx[i].name = (char *)names[i];
-		socketpair(AF_UNIX, SOCK_STREAM, 0, ctx[i].spair);
-		pthread_create(&ctx[i].thread, NULL, fun, &ctx[i]);
+		r = socketpair(AF_UNIX, SOCK_STREAM, 0, ctx[i].spair);
+		if (r != 0) {
+			printf("socketpair failed: %d\n", errno);
+			goto out;
+		}
+
+#if defined(__ZEPHYR__) && !(defined(CONFIG_BOARD_NATIVE_POSIX_32BIT) \
+	|| defined(CONFIG_BOARD_NATIVE_POSIX_64BIT) \
+	|| defined(CONFIG_SOC_SERIES_BSIM_NRFXX))
+		/* Zephyr requires a non-NULL attribute for pthread_create */
+		attrp = &attr[i];
+		r = pthread_attr_init(attrp);
+		if (r != 0) {
+			printf("pthread_attr_init() failed: %d", r);
+			goto out;
+		}
+
+		r = pthread_attr_setstack(attrp, &stack[i], STACK_SIZE);
+		if (r != 0) {
+			printf("pthread_attr_setstack() failed: %d", r);
+			goto out;
+		}
+#endif
+
+		r = pthread_create(&ctx[i].thread, attrp, fun, &ctx[i]);
+		if (r != 0) {
+			printf("pthread_create failed: %d\n", r);
+			goto out;
+		}
+
 		printf("%s: socketpair: %d <=> %d\n",
 			ctx[i].name, ctx[i].spair[0], ctx[i].spair[1]);
 	}
@@ -136,6 +180,10 @@ int main(int argc, char *argv[])
 
 			fd = fds[i].fd;
 			idx = fd_to_idx(fd, ctx, ARRAY_SIZE(ctx));
+			if (idx < 0) {
+				printf("failed to map fd %d to index\n", fd);
+				continue;
+			}
 
 			if ((fds[i].revents & POLLIN) != 0) {
 
@@ -153,7 +201,7 @@ int main(int argc, char *argv[])
 			if ((fds[i].revents & POLLHUP) != 0) {
 				printf("fd: %d: hung up\n", fd);
 				close(ctx[idx].spair[0]);
-				printf("main: closed fd %d\n",
+				printf("%s: closed fd %d\n", __func__,
 					ctx[idx].spair[0]);
 				pthread_join(ctx[idx].thread, &unused);
 				printf("joined %s\n", ctx[idx].name);
@@ -164,7 +212,10 @@ int main(int argc, char *argv[])
 
 	printf("finished!\n");
 
+out:
 #ifndef __ZEPHYR__
 	return 0;
+#else
+	return;
 #endif
 }

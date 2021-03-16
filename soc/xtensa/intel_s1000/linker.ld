@@ -201,7 +201,7 @@ SECTIONS
 
   .ResetVector.text : ALIGN(4)
   {
-    . = CONFIG_TEXT_SECTION_OFFSET;
+    . = CONFIG_ROM_START_OFFSET;
     _ResetVector_text_start = ABSOLUTE(.);
     KEEP (*(.ResetVector.text))
     _ResetVector_text_end = ABSOLUTE(.);
@@ -355,6 +355,7 @@ SECTIONS
     _etext = .;
   } >ram :ram_phdr
 #include <linker/common-rom.ld>
+#include <linker/thread-local-storage.ld>
 
   .noinit :  ALIGN(4)
   {

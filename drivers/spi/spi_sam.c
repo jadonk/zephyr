@@ -22,8 +22,8 @@ LOG_MODULE_REGISTER(spi_sam);
 /* Device constant configuration parameters */
 struct spi_sam_config {
 	Spi *regs;
-	u32_t periph_id;
-	u32_t num_pins;
+	uint32_t periph_id;
+	uint32_t num_pins;
 	struct soc_gpio_pin pins[];
 };
 
@@ -48,13 +48,13 @@ static int spi_slave_to_mr_pcs(int slave)
 	return pcs[slave];
 }
 
-static int spi_sam_configure(struct device *dev,
+static int spi_sam_configure(const struct device *dev,
 			     const struct spi_config *config)
 {
-	const struct spi_sam_config *cfg = dev->config_info;
-	struct spi_sam_data *data = dev->driver_data;
+	const struct spi_sam_config *cfg = dev->config;
+	struct spi_sam_data *data = dev->data;
 	Spi *regs = cfg->regs;
-	u32_t spi_mr = 0U, spi_csr = 0U;
+	uint32_t spi_mr = 0U, spi_csr = 0U;
 	int div;
 
 	if (spi_context_configured(&data->ctx, config)) {
@@ -94,7 +94,7 @@ static int spi_sam_configure(struct device *dev,
 
 	/* Use the requested or next highest possible frequency */
 	div = SOC_ATMEL_SAM_MCK_FREQ_HZ / config->frequency;
-	div = MAX(1, MIN(UINT8_MAX, div));
+	div = CLAMP(div, 1, UINT8_MAX);
 	spi_csr |= SPI_CSR_SCBR(div);
 
 	regs->SPI_CR = SPI_CR_SPIDIS; /* Disable SPI */
@@ -115,11 +115,11 @@ static bool spi_sam_transfer_ongoing(struct spi_sam_data *data)
 
 static void spi_sam_shift_master(Spi *regs, struct spi_sam_data *data)
 {
-	u8_t tx;
-	u8_t rx;
+	uint8_t tx;
+	uint8_t rx;
 
 	if (spi_context_tx_buf_on(&data->ctx)) {
-		tx = *(u8_t *)(data->ctx.tx_buf);
+		tx = *(uint8_t *)(data->ctx.tx_buf);
 	} else {
 		tx = 0U;
 	}
@@ -133,7 +133,7 @@ static void spi_sam_shift_master(Spi *regs, struct spi_sam_data *data)
 	while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
 	}
 
-	rx = (u8_t)regs->SPI_RDR;
+	rx = (uint8_t)regs->SPI_RDR;
 
 	if (spi_context_rx_buf_on(&data->ctx)) {
 		*data->ctx.rx_buf = rx;
@@ -155,9 +155,9 @@ static void spi_sam_finish(Spi *regs)
 /* Fast path that transmits a buf */
 static void spi_sam_fast_tx(Spi *regs, const struct spi_buf *tx_buf)
 {
-	const u8_t *p = tx_buf->buf;
-	const u8_t *pend = (u8_t *)tx_buf->buf + tx_buf->len;
-	u8_t ch;
+	const uint8_t *p = tx_buf->buf;
+	const uint8_t *pend = (uint8_t *)tx_buf->buf + tx_buf->len;
+	uint8_t ch;
 
 	while (p != pend) {
 		ch = *p++;
@@ -174,7 +174,7 @@ static void spi_sam_fast_tx(Spi *regs, const struct spi_buf *tx_buf)
 /* Fast path that reads into a buf */
 static void spi_sam_fast_rx(Spi *regs, const struct spi_buf *rx_buf)
 {
-	u8_t *rx = rx_buf->buf;
+	uint8_t *rx = rx_buf->buf;
 	int len = rx_buf->len;
 
 	if (len <= 0) {
@@ -199,14 +199,14 @@ static void spi_sam_fast_rx(Spi *regs, const struct spi_buf *rx_buf)
 		while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
 		}
 
-		*rx++ = (u8_t)regs->SPI_RDR;
+		*rx++ = (uint8_t)regs->SPI_RDR;
 	}
 
 	/* Read the final incoming byte */
 	while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
 	}
 
-	*rx = (u8_t)regs->SPI_RDR;
+	*rx = (uint8_t)regs->SPI_RDR;
 
 	spi_sam_finish(regs);
 }
@@ -216,9 +216,9 @@ static void spi_sam_fast_txrx(Spi *regs,
 			      const struct spi_buf *tx_buf,
 			      const struct spi_buf *rx_buf)
 {
-	const u8_t *tx = tx_buf->buf;
-	const u8_t *txend = (u8_t *)tx_buf->buf + tx_buf->len;
-	u8_t *rx = rx_buf->buf;
+	const uint8_t *tx = tx_buf->buf;
+	const uint8_t *txend = (uint8_t *)tx_buf->buf + tx_buf->len;
+	uint8_t *rx = rx_buf->buf;
 	size_t len = rx_buf->len;
 
 	if (len == 0) {
@@ -254,25 +254,25 @@ static void spi_sam_fast_txrx(Spi *regs,
 		while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
 		}
 
-		*rx++ = (u8_t)regs->SPI_RDR;
+		*rx++ = (uint8_t)regs->SPI_RDR;
 	}
 
 	/* Read the final incoming byte */
 	while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
 	}
 
-	*rx = (u8_t)regs->SPI_RDR;
+	*rx = (uint8_t)regs->SPI_RDR;
 
 	spi_sam_finish(regs);
 }
 
 /* Fast path where every overlapping tx and rx buffer is the same length */
-static void spi_sam_fast_transceive(struct device *dev,
+static void spi_sam_fast_transceive(const struct device *dev,
 				    const struct spi_config *config,
 				    const struct spi_buf_set *tx_bufs,
 				    const struct spi_buf_set *rx_bufs)
 {
-	const struct spi_sam_config *cfg = dev->config_info;
+	const struct spi_sam_config *cfg = dev->config;
 	size_t tx_count = 0;
 	size_t rx_count = 0;
 	Spi *regs = cfg->regs;
@@ -356,17 +356,17 @@ static bool spi_sam_is_regular(const struct spi_buf_set *tx_bufs,
 	return true;
 }
 
-static int spi_sam_transceive(struct device *dev,
+static int spi_sam_transceive(const struct device *dev,
 			      const struct spi_config *config,
 			      const struct spi_buf_set *tx_bufs,
 			      const struct spi_buf_set *rx_bufs)
 {
-	const struct spi_sam_config *cfg = dev->config_info;
-	struct spi_sam_data *data = dev->driver_data;
+	const struct spi_sam_config *cfg = dev->config;
+	struct spi_sam_data *data = dev->data;
 	Spi *regs = cfg->regs;
 	int err;
 
-	spi_context_lock(&data->ctx, false, NULL);
+	spi_context_lock(&data->ctx, false, NULL, config);
 
 	err = spi_sam_configure(dev, config);
 	if (err != 0) {
@@ -397,7 +397,7 @@ done:
 	return err;
 }
 
-static int spi_sam_transceive_sync(struct device *dev,
+static int spi_sam_transceive_sync(const struct device *dev,
 				    const struct spi_config *config,
 				    const struct spi_buf_set *tx_bufs,
 				    const struct spi_buf_set *rx_bufs)
@@ -406,7 +406,7 @@ static int spi_sam_transceive_sync(struct device *dev,
 }
 
 #ifdef CONFIG_SPI_ASYNC
-static int spi_sam_transceive_async(struct device *dev,
+static int spi_sam_transceive_async(const struct device *dev,
 				     const struct spi_config *config,
 				     const struct spi_buf_set *tx_bufs,
 				     const struct spi_buf_set *rx_bufs,
@@ -417,20 +417,20 @@ static int spi_sam_transceive_async(struct device *dev,
 }
 #endif /* CONFIG_SPI_ASYNC */
 
-static int spi_sam_release(struct device *dev,
+static int spi_sam_release(const struct device *dev,
 			   const struct spi_config *config)
 {
-	struct spi_sam_data *data = dev->driver_data;
+	struct spi_sam_data *data = dev->data;
 
 	spi_context_unlock_unconditionally(&data->ctx);
 
 	return 0;
 }
 
-static int spi_sam_init(struct device *dev)
+static int spi_sam_init(const struct device *dev)
 {
-	const struct spi_sam_config *cfg = dev->config_info;
-	struct spi_sam_data *data = dev->driver_data;
+	const struct spi_sam_config *cfg = dev->config;
+	struct spi_sam_data *data = dev->data;
 
 	soc_pmc_peripheral_enable(cfg->periph_id);
 
@@ -467,9 +467,8 @@ static const struct spi_driver_api spi_sam_driver_api = {
 		SPI_CONTEXT_INIT_LOCK(spi_sam_dev_data_##n, ctx),	\
 		SPI_CONTEXT_INIT_SYNC(spi_sam_dev_data_##n, ctx),	\
 	};								\
-	DEVICE_AND_API_INIT(spi_sam_##n,				\
-			    DT_INST_LABEL(n),				\
-			    &spi_sam_init, &spi_sam_dev_data_##n,	\
+	DEVICE_DT_INST_DEFINE(n, &spi_sam_init, device_pm_control_nop,	\
+			    &spi_sam_dev_data_##n,			\
 			    &spi_sam_config_##n, POST_KERNEL,		\
 			    CONFIG_SPI_INIT_PRIORITY, &spi_sam_driver_api);
 

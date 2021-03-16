@@ -4,7 +4,9 @@
 
 #include <mem.h>
 
-#define DT_SRAM_SIZE		DT_SIZE_K(4096)
+#ifndef DT_DRAM_SIZE
+#define DT_DRAM_SIZE		DT_SIZE_K(4096)
+#endif
 #define DT_FLASH_SIZE		DT_SIZE_K(4096)
 
 #include <ia32.dtsi>
@@ -25,7 +27,7 @@
 	};
 
 	chosen {
-		zephyr,sram = &sram0;
+		zephyr,sram = &dram0;
 		zephyr,flash = &flash0;
 		zephyr,console = &uart0;
 		zephyr,shell-uart = &uart0;
@@ -54,6 +56,7 @@
 
 		#address-cells = <1>;
 		#size-cells = <1>;
+		erase-value = <0xff>;
 
 		flash_sim0: flash_sim@0 {
 			compatible = "soc-nv-flash";
@@ -87,10 +90,7 @@
 };
 
 &flash_sim0 {
-	/*
-	 * For more information, see:
-	 * http://docs.zephyrproject.org/latest/guides/dts/index.html#flash-partitions
-	 */
+
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;

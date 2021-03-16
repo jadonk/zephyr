@@ -32,13 +32,10 @@
 #include <sys/atomic.h>
 #include <sys/printk.h>
 #ifdef CONFIG_UART_CONSOLE_MCUMGR
-#include "mgmt/serial.h"
-#endif
-#ifdef CONFIG_USB_UART_CONSOLE
-#include <usb/usb_device.h>
+#include "mgmt/mcumgr/serial.h"
 #endif
 
-static struct device *uart_console_dev;
+static const struct device *uart_console_dev;
 
 #ifdef CONFIG_UART_CONSOLE_DEBUG_SERVER_HOOKS
 
@@ -117,7 +114,7 @@ extern void __printk_hook_install(int (*fn)(int));
 #if defined(CONFIG_CONSOLE_HANDLER)
 static struct k_fifo *avail_queue;
 static struct k_fifo *lines_queue;
-static u8_t (*completion_cb)(char *line, u8_t len);
+static uint8_t (*completion_cb)(char *line, uint8_t len);
 
 /* Control characters */
 #define BS                 0x08
@@ -134,7 +131,8 @@ static u8_t (*completion_cb)(char *line, u8_t len);
 #define ANSI_HOME          'H'
 #define ANSI_DEL           '~'
 
-static int read_uart(struct device *uart, u8_t *buf, unsigned int size)
+static int read_uart(const struct device *uart, uint8_t *buf,
+		     unsigned int size)
 {
 	int rx;
 
@@ -169,7 +167,7 @@ static inline void cursor_restore(void)
 	printk("\x1b[u");
 }
 
-static void insert_char(char *pos, char c, u8_t end)
+static void insert_char(char *pos, char c, uint8_t end)
 {
 	char tmp;
 
@@ -197,7 +195,7 @@ static void insert_char(char *pos, char c, u8_t end)
 	cursor_restore();
 }
 
-static void del_char(char *pos, u8_t end)
+static void del_char(char *pos, uint8_t end)
 {
 	uart_poll_out(uart_console_dev, '\b');
 
@@ -236,9 +234,9 @@ enum {
 
 static atomic_t esc_state;
 static unsigned int ansi_val, ansi_val_2;
-static u8_t cur, end;
+static uint8_t cur, end;
 
-static void handle_ansi(u8_t byte, char *line)
+static void handle_ansi(uint8_t byte, char *line)
 {
 	if (atomic_test_and_clear_bit(&esc_state, ESC_ANSI_FIRST)) {
 		if (!isdigit(byte)) {
@@ -434,14 +432,15 @@ static bool handle_mcumgr(struct console_input *cmd, uint8_t byte)
 
 #endif /* CONFIG_UART_CONSOLE_MCUMGR */
 
-static void uart_console_isr(struct device *unused)
+static void uart_console_isr(const struct device *unused, void *user_data)
 {
 	ARG_UNUSED(unused);
+	ARG_UNUSED(user_data);
 
 	while (uart_irq_update(uart_console_dev) &&
 	       uart_irq_is_pending(uart_console_dev)) {
 		static struct console_input *cmd;
-		u8_t byte;
+		uint8_t byte;
 		int rx;
 
 		if (!uart_irq_rx_ready(uart_console_dev)) {
@@ -539,7 +538,7 @@ static void uart_console_isr(struct device *unused)
 
 static void console_input_init(void)
 {
-	u8_t c;
+	uint8_t c;
 
 	uart_irq_rx_disable(uart_console_dev);
 	uart_irq_tx_disable(uart_console_dev);
@@ -555,7 +554,7 @@ static void console_input_init(void)
 }
 
 void uart_register_input(struct k_fifo *avail, struct k_fifo *lines,
-			 u8_t (*completion)(char *str, u8_t len))
+			 uint8_t (*completion)(char *str, uint8_t len))
 {
 	avail_queue = avail;
 	lines_queue = lines;
@@ -592,35 +591,13 @@ static void uart_console_hook_install(void)
  *
  * @return 0 if successful, otherwise failed.
  */
-static int uart_console_init(struct device *arg)
+static int uart_console_init(const struct device *arg)
 {
 
 	ARG_UNUSED(arg);
 
+	/* Claim console device */
 	uart_console_dev = device_get_binding(CONFIG_UART_CONSOLE_ON_DEV_NAME);
-
-	__ASSERT_NO_MSG(uart_console_dev);
-
-#if defined(CONFIG_USB_UART_CONSOLE)
-	int ret;
-
-	ret = usb_enable(NULL);
-	if (ret != 0) {
-		return ret;
-	}
-
-#if defined(CONFIG_USB_UART_DTR_WAIT)
-	while (1) {
-		u32_t dtr = 0U;
-
-		uart_line_ctrl_get(uart_console_dev, UART_LINE_CTRL_DTR, &dtr);
-		if (dtr) {
-			break;
-		}
-	}
-	k_busy_wait(1000000);
-#endif
-#endif
 
 	uart_console_hook_install();
 

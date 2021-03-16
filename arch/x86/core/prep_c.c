@@ -8,8 +8,10 @@
 #include <kernel_internal.h>
 #include <arch/x86/acpi.h>
 #include <arch/x86/multiboot.h>
+#include <x86_mmu.h>
 
 extern FUNC_NORETURN void z_cstart(void);
+extern void x86_64_irq_init(void);
 
 /* Early global initialization functions, C domain. This runs only on the first
  * CPU for SMP systems.
@@ -24,24 +26,20 @@ FUNC_NORETURN void z_x86_prep_c(void *arg)
 	z_x86_early_serial_init();
 #endif
 
+#ifdef CONFIG_X86_64
+	x86_64_irq_init();
+#endif
+
 #ifdef CONFIG_MULTIBOOT_INFO
 	z_multiboot_init(info);
 #else
 	ARG_UNUSED(info);
 #endif
 
-#ifdef CONFIG_ACPI
-	z_acpi_init();
-#endif
-
-#ifdef CONFIG_X86_MMU
-	z_x86_paging_init();
-#endif
-
 #if CONFIG_X86_STACK_PROTECTION
-	z_x86_mmu_set_flags(&z_x86_kernel_ptables, z_interrupt_stacks[0],
-			    MMU_PAGE_SIZE, MMU_ENTRY_READ, Z_X86_MMU_RW,
-			    true);
+	for (int i = 0; i < CONFIG_MP_NUM_CPUS; i++) {
+		z_x86_set_stack_guard(z_interrupt_stacks[i]);
+	}
 #endif
 
 #if defined(CONFIG_SMP)

@@ -13,22 +13,22 @@
 
 struct pinmux_ports_t {
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_000_036), okay)
-	struct device *porta;
+	const struct device *porta;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_040_076), okay)
-	struct device *portb;
+	const struct device *portb;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_100_136), okay)
-	struct device *portc;
+	const struct device *portc;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_140_176), okay)
-	struct device *portd;
+	const struct device *portd;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_200_236), okay)
-	struct device *porte;
+	const struct device *porte;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_240_276), okay)
-	struct device *portf;
+	const struct device *portf;
 #endif
 };
 
@@ -98,38 +98,64 @@ static void i2c_pinmux(struct pinmux_ports_t *p, uint8_t port_sel)
 	}
 }
 
-static int board_pinmux_init(struct device *dev)
+static void configure_debug_interface(void)
+{
+	/* No debug support */
+	ECS_REGS->DEBUG_CTRL = 0;
+	ECS_REGS->ETM_CTRL = 0;
+
+#ifdef CONFIG_SOC_MEC1501_DEBUG_WITHOUT_TRACING
+	/* Release JTAG TDI and JTAG TDO pins so they can be
+	 * controlled by their respective PCR register (UART2).
+	 * For more details see table 44-1
+	 */
+	ECS_REGS->DEBUG_CTRL = (MCHP_ECS_DCTRL_DBG_EN |
+				MCHP_ECS_DCTRL_MODE_SWD);
+#elif defined(CONFIG_SOC_MEC1501_DEBUG_AND_TRACING)
+	#if defined(CONFIG_SOC_MEC1501_DEBUG_AND_ETM_TRACING)
+		ECS_REGS->ETM_CTRL = MCHP_ECS_ETM_CTRL_EN;
+		ECS_REGS->DEBUG_CTRL = (MCHP_ECS_DCTRL_DBG_EN |
+				MCHP_ECS_DCTRL_MODE_SWD);
+	#elif defined(CONFIG_SOC_MEC1501_DEBUG_AND_SWV_TRACING)
+		ECS_REGS->DEBUG_CTRL = (MCHP_ECS_DCTRL_DBG_EN |
+				MCHP_ECS_DCTRL_MODE_SWD_SWV);
+	#endif /* CONFIG_SOC_MEC1501_DEBUG_AND_TRACING */
+
+#endif /* CONFIG_SOC_MEC1501_DEBUG_WITHOUT_TRACING */
+}
+
+static int board_pinmux_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 	struct pinmux_ports_t pinmux_ports;
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_000_036), okay)
-	struct device *porta =
+	const struct device *porta =
 		device_get_binding(DT_LABEL(DT_NODELABEL(pinmux_000_036)));
 	pinmux_ports.porta = porta;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_040_076), okay)
-	struct device *portb =
+	const struct device *portb =
 		device_get_binding(DT_LABEL(DT_NODELABEL(pinmux_040_076)));
 	pinmux_ports.portb = portb;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_100_136), okay)
-	struct device *portc =
+	const struct device *portc =
 		device_get_binding(DT_LABEL(DT_NODELABEL(pinmux_100_136)));
 	pinmux_ports.portc = portc;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_140_176), okay)
-	struct device *portd =
+	const struct device *portd =
 		device_get_binding(DT_LABEL(DT_NODELABEL(pinmux_140_176)));
 	pinmux_ports.portd = portd;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_200_236), okay)
-	struct device *porte =
+	const struct device *porte =
 		device_get_binding(DT_LABEL(DT_NODELABEL(pinmux_200_236)));
 	pinmux_ports.porte = porte;
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_240_276), okay)
-	struct device *portf =
+	const struct device *portf =
 		device_get_binding(DT_LABEL(DT_NODELABEL(pinmux_240_276)));
 	pinmux_ports.portf = portf;
 #endif
@@ -141,21 +167,19 @@ static int board_pinmux_init(struct device *dev)
 #ifdef CONFIG_SOC_MEC1501_VTR3_1_8V
 	ECS_REGS->GPIO_BANK_PWR |= MCHP_ECS_VTR3_LVL_18;
 #endif
-	/* Release JTAG TDI and JTAG TDO pins so they can be
-	 * controlled by their respective PCR register (UART2).
-	 * For more details see table 44-1
-	 */
-	ECS_REGS->DEBUG_CTRL = (MCHP_ECS_DCTRL_DBG_EN |
-				MCHP_ECS_DCTRL_MODE_SWD);
+
+	configure_debug_interface();
 
 	/* Configure pins that are not GPIOS by default */
+#ifdef CONFIG_SOC_MEC1501_VCI_PINS_AS_GPIOS
 	pinmux_pin_set(porta, MCHP_GPIO_000, MCHP_GPIO_CTRL_MUX_F0);
 	pinmux_pin_set(portd, MCHP_GPIO_161, MCHP_GPIO_CTRL_MUX_F0);
 	pinmux_pin_set(portd, MCHP_GPIO_162, MCHP_GPIO_CTRL_MUX_F0);
 	pinmux_pin_set(portd, MCHP_GPIO_163, MCHP_GPIO_CTRL_MUX_F0);
-	pinmux_pin_set(portd, MCHP_GPIO_170, MCHP_GPIO_CTRL_MUX_F0);
 	pinmux_pin_set(portd, MCHP_GPIO_172, MCHP_GPIO_CTRL_MUX_F0);
 	pinmux_pin_set(portf, MCHP_GPIO_250, MCHP_GPIO_CTRL_MUX_F0);
+#endif
+	pinmux_pin_set(portd, MCHP_GPIO_170, MCHP_GPIO_CTRL_MUX_F0);
 
 	/* See table 2-4 from the data sheet for pin multiplexing*/
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(uart2), okay)
@@ -176,10 +200,12 @@ static int board_pinmux_init(struct device *dev)
 
 	/* ADC pin muxes, ADC00 - ADC07 */
 	/* Note, by default ETM is enabled ADC00-ADC03 are not available */
+#ifndef CONFIG_SOC_MEC1501_DEBUG_AND_ETM_TRACING
 	pinmux_pin_set(porte, MCHP_GPIO_200, MCHP_GPIO_CTRL_MUX_F1);
 	pinmux_pin_set(porte, MCHP_GPIO_201, MCHP_GPIO_CTRL_MUX_F1);
 	pinmux_pin_set(porte, MCHP_GPIO_202, MCHP_GPIO_CTRL_MUX_F1);
 	pinmux_pin_set(porte, MCHP_GPIO_203, MCHP_GPIO_CTRL_MUX_F1);
+#endif
 	pinmux_pin_set(porte, MCHP_GPIO_204, MCHP_GPIO_CTRL_MUX_F1);
 	pinmux_pin_set(porte, MCHP_GPIO_205, MCHP_GPIO_CTRL_MUX_F1);
 	pinmux_pin_set(porte, MCHP_GPIO_206, MCHP_GPIO_CTRL_MUX_F1);
@@ -249,47 +275,47 @@ static int board_pinmux_init(struct device *dev)
 #endif
 
 #ifdef CONFIG_PWM_XEC
-#if DT_NODE_HAS_STATUS(DT_INST(0, microchip_xec_pwm), okay)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(pwm0), okay)
 	mchp_pcr_periph_slp_ctrl(PCR_PWM0, MCHP_PCR_SLEEP_DIS);
 	pinmux_pin_set(portb, MCHP_GPIO_053, MCHP_GPIO_CTRL_MUX_F1);
 #endif
 
-#if DT_NODE_HAS_STATUS(DT_INST(1, microchip_xec_pwm), okay)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(pwm1), okay)
 	mchp_pcr_periph_slp_ctrl(PCR_PWM1, MCHP_PCR_SLEEP_DIS);
 	pinmux_pin_set(portb, MCHP_GPIO_054, MCHP_GPIO_CTRL_MUX_F1);
 #endif
 
-#if DT_NODE_HAS_STATUS(DT_INST(2, microchip_xec_pwm), okay)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(pwm2), okay)
 	mchp_pcr_periph_slp_ctrl(PCR_PWM2, MCHP_PCR_SLEEP_DIS);
 	pinmux_pin_set(portb, MCHP_GPIO_055, MCHP_GPIO_CTRL_MUX_F1);
 #endif
 
-#if DT_NODE_HAS_STATUS(DT_INST(3, microchip_xec_pwm), okay)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(pwm3), okay)
 	mchp_pcr_periph_slp_ctrl(PCR_PWM3, MCHP_PCR_SLEEP_DIS);
 	pinmux_pin_set(portb, MCHP_GPIO_056, MCHP_GPIO_CTRL_MUX_F1);
 #endif
 
-#if DT_NODE_HAS_STATUS(DT_INST(4, microchip_xec_pwm), okay)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(pwm4), okay)
 	mchp_pcr_periph_slp_ctrl(PCR_PWM4, MCHP_PCR_SLEEP_DIS);
 	pinmux_pin_set(porta, MCHP_GPIO_011, MCHP_GPIO_CTRL_MUX_F2);
 #endif
 
-#if DT_NODE_HAS_STATUS(DT_INST(5, microchip_xec_pwm), okay)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(pwm5), okay)
 	mchp_pcr_periph_slp_ctrl(PCR_PWM5, MCHP_PCR_SLEEP_DIS);
 	pinmux_pin_set(porta, MCHP_GPIO_002, MCHP_GPIO_CTRL_MUX_F1);
 #endif
 
-#if DT_NODE_HAS_STATUS(DT_INST(6, microchip_xec_pwm), okay)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(pwm6), okay)
 	mchp_pcr_periph_slp_ctrl(PCR_PWM6, MCHP_PCR_SLEEP_DIS);
 	pinmux_pin_set(porta, MCHP_GPIO_014, MCHP_GPIO_CTRL_MUX_F1);
 #endif
 
-#if DT_NODE_HAS_STATUS(DT_INST(7, microchip_xec_pwm), okay)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(pwm7), okay)
 	mchp_pcr_periph_slp_ctrl(PCR_PWM7, MCHP_PCR_SLEEP_DIS);
 	pinmux_pin_set(porta, MCHP_GPIO_015, MCHP_GPIO_CTRL_MUX_F1);
 #endif
 
-#if DT_NODE_HAS_STATUS(DT_INST(8, microchip_xec_pwm), okay)
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(pwm8), okay)
 	mchp_pcr_periph_slp_ctrl(PCR_PWM8, MCHP_PCR_SLEEP_DIS);
 	pinmux_pin_set(porta, MCHP_GPIO_035, MCHP_GPIO_CTRL_MUX_F1);
 #endif
@@ -412,7 +438,7 @@ static int board_pinmux_init(struct device *dev)
 #endif /* DT_NODE_HAS_STATUS(DT_INST(0, microchip_xec_qmspi), okay) */
 #endif /* CONFIG_SPI_XEC_QMSPI */
 
-#ifdef CONFIG_SYS_PM_DEBUG
+#ifdef CONFIG_PM_DEBUG
 	/*
 	 * Deep sleep testing: Enable TEST_CLK_OUT on GPIO_060 function 2.
 	 * TEST_CLK_OUT is the PLL 48MHz conditioned output.

@@ -22,7 +22,7 @@
 
 static bool CPU_will_be_awaken_from_WFE;
 
-typedef void (*normal_irq_f_ptr)(void *);
+typedef void (*normal_irq_f_ptr)(const void *);
 typedef int (*direct_irq_f_ptr)(void);
 
 static struct _isr_list irq_vector_table[NRF_HW_NBR_IRQs];
@@ -98,7 +98,7 @@ static inline void vector_to_irq(int irq_nbr, int *may_swap)
 			*may_swap |= ((direct_irq_f_ptr)
 					irq_vector_table[irq_nbr].func)();
 		} else {
-#ifdef CONFIG_SYS_POWER_MANAGEMENT
+#ifdef CONFIG_PM
 			posix_irq_check_idle_exit();
 #endif
 			((normal_irq_f_ptr)irq_vector_table[irq_nbr].func)
@@ -122,7 +122,7 @@ static inline void vector_to_irq(int irq_nbr, int *may_swap)
  */
 void posix_irq_handler(void)
 {
-	u64_t irq_lock;
+	uint64_t irq_lock;
 	int irq_nbr;
 	static int may_swap;
 
@@ -288,8 +288,8 @@ int posix_get_current_irq(void)
  * @param isr_param_p ISR parameter
  * @param flags_p IRQ options
  */
-void posix_isr_declare(unsigned int irq_p, int flags, void isr_p(void *),
-		void *isr_param_p)
+void posix_isr_declare(unsigned int irq_p, int flags, void isr_p(const void *),
+		       const void *isr_param_p)
 {
 	irq_vector_table[irq_p].irq   = irq_p;
 	irq_vector_table[irq_p].func  = isr_p;
@@ -337,13 +337,13 @@ void posix_sw_clear_pending_IRQ(unsigned int IRQn)
 /**
  * Storage for functions offloaded to IRQ
  */
-static void (*off_routine)(void *);
-static void *off_parameter;
+static void (*off_routine)(const void *);
+static const void *off_parameter;
 
 /**
  * IRQ handler for the SW interrupt assigned to irq_offload()
  */
-static void offload_sw_irq_handler(void *a)
+static void offload_sw_irq_handler(const void *a)
 {
 	ARG_UNUSED(a);
 	off_routine(off_parameter);
@@ -354,7 +354,7 @@ static void offload_sw_irq_handler(void *a)
  *
  * Raise the SW IRQ assigned to handled this
  */
-void posix_irq_offload(void (*routine)(void *), void *parameter)
+void posix_irq_offload(void (*routine)(const void *), const void *parameter)
 {
 	off_routine = routine;
 	off_parameter = parameter;
@@ -364,29 +364,6 @@ void posix_irq_offload(void (*routine)(void *), void *parameter)
 	posix_irq_disable(OFFLOAD_SW_IRQ);
 }
 #endif
-
-/**
- * Replacement for ARMs NVIC_SetPendingIRQ()
- *
- * Sets the interrupt IRQn as pending
- * Note:
- * This will interrupt immediately if the interrupt
- * is not masked and irqs are not locked, and this interrupt is higher
- * priority than a possibly currently running interrupt
- */
-void NVIC_SetPendingIRQ(IRQn_Type IRQn)
-{
-	hw_irq_ctrl_raise_im_from_sw(IRQn);
-}
-
-/**
- *  Replacement for ARMs NVIC_ClearPendingIRQ()
- *  Clear pending interrupt IRQn
- */
-void NVIC_ClearPendingIRQ(IRQn_Type IRQn)
-{
-	hw_irq_ctrl_clear_irq(IRQn);
-}
 
 /*
  * Very simple model of the WFE and SEV ARM instructions
@@ -402,6 +379,11 @@ void __WFE(void)
 		CPU_will_be_awaken_from_WFE = false;
 	}
 	CPU_event_set_flag = false;
+}
+
+void __WFI(void)
+{
+	__WFE();
 }
 
 void __SEV(void)

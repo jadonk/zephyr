@@ -36,7 +36,7 @@ extern "C" {
  *
  * @param usec_to_wait Wait period, in microseconds
  */
-void arch_busy_wait(u32_t usec_to_wait);
+void arch_busy_wait(uint32_t usec_to_wait);
 #endif
 
 /** @} */
@@ -58,20 +58,24 @@ void arch_busy_wait(u32_t usec_to_wait);
  * be called with the true bounds of the available stack buffer within the
  * thread's stack object.
  *
+ * The provided stack pointer is guaranteed to be properly aligned with respect
+ * to the CPU and ABI requirements. There may be space reserved between the
+ * stack pointer and the bounds of the stack buffer for initial stack pointer
+ * randomization and thread-local storage.
+ *
+ * Fields in thread->base will be initialized when this is called.
+ *
  * @param thread Pointer to uninitialized struct k_thread
- * @param pStack Pointer to the stack space.
- * @param stackSize Stack size in bytes.
- * @param entry Thread entry function.
- * @param p1 1st entry point parameter.
- * @param p2 2nd entry point parameter.
- * @param p3 3rd entry point parameter.
- * @param prio Thread priority.
- * @param options Thread options.
+ * @param stack Pointer to the stack object
+ * @param stack_ptr Aligned initial stack pointer
+ * @param entry Thread entry function
+ * @param p1 1st entry point parameter
+ * @param p2 2nd entry point parameter
+ * @param p3 3rd entry point parameter
  */
-void arch_new_thread(struct k_thread *thread, k_thread_stack_t *pStack,
-		       size_t stackSize, k_thread_entry_t entry,
-		       void *p1, void *p2, void *p3,
-		       int prio, unsigned int options);
+void arch_new_thread(struct k_thread *thread, k_thread_stack_t *stack,
+		     char *stack_ptr, k_thread_entry_t entry,
+		     void *p1, void *p2, void *p3);
 
 #ifdef CONFIG_USE_SWITCH
 /**
@@ -155,14 +159,11 @@ arch_thread_return_value_set(struct k_thread *thread, unsigned int value);
  * in early boot context to "switch out" of isn't workable.
  *
  * @param main_thread main thread object
- * @param main_stack main thread's stack object
- * @param main_stack_size Size of the stack object's buffer
+ * @param stack_ptr Initial stack pointer
  * @param _main Entry point for application main function.
  */
-void arch_switch_to_main_thread(struct k_thread *main_thread,
-				  k_thread_stack_t *main_stack,
-				  size_t main_stack_size,
-				  k_thread_entry_t _main);
+void arch_switch_to_main_thread(struct k_thread *main_thread, char *stack_ptr,
+				k_thread_entry_t _main);
 #endif /* CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN */
 
 #if defined(CONFIG_FPU) && defined(CONFIG_FPU_SHARING)
@@ -213,10 +214,102 @@ static inline bool arch_is_in_isr(void);
 /** @} */
 
 /**
+ * @defgroup arch-mmu Architecture-specific memory-mapping APIs
+ * @ingroup arch-interface
+ * @{
+ */
+
+#ifdef CONFIG_MMU
+/**
+ * Map physical memory into the virtual address space
+ *
+ * This is a low-level interface to mapping pages into the address space.
+ * Behavior when providing unaligned addresses/sizes is undefined, these
+ * are assumed to be aligned to CONFIG_MMU_PAGE_SIZE.
+ *
+ * The core kernel handles all management of the virtual address space;
+ * by the time we invoke this function, we know exactly where this mapping
+ * will be established. If the page tables already had mappings installed
+ * for the virtual memory region, these will be overwritten.
+ *
+ * If the target architecture supports multiple page sizes, currently
+ * only the smallest page size will be used.
+ *
+ * The memory range itself is never accessed by this operation.
+ *
+ * This API must be safe to call in ISRs or exception handlers. Calls
+ * to this API are assumed to be serialized, and indeed all usage will
+ * originate from kernel/mm.c which handles virtual memory management.
+ *
+ * This API is part of infrastructure still under development and may
+ * change.
+ *
+ * @see z_mem_map()
+ *
+ * @param dest Page-aligned Destination virtual address to map
+ * @param addr Page-aligned Source physical address to map
+ * @param size Page-aligned size of the mapped memory region in bytes
+ * @param flags Caching, access and control flags, see K_MAP_* macros
+ * @retval 0 Success
+ * @retval -ENOTSUP Unsupported cache mode with no suitable fallback, or
+ *	   unsupported flags
+ * @retval -ENOMEM Memory for additional paging structures unavailable
+ */
+int arch_mem_map(void *dest, uintptr_t addr, size_t size, uint32_t flags);
+
+/**
+ * Remove mappings for a provided virtual address range
+ *
+ * This is a low-level interface for un-mapping pages from the address space.
+ * When this completes, the relevant page table entries will be updated as
+ * if no mapping was ever made for that memory range. No previous context
+ * needs to be preserved. This function must update mappings in all active
+ * page tables.
+ *
+ * Behavior when providing unaligned addresses/sizes is undefined, these
+ * are assumed to be aligned to CONFIG_MMU_PAGE_SIZE.
+ *
+ * Behavior when providing an address range that is not already mapped is
+ * undefined.
+ *
+ * This function should never require memory allocations for paging structures,
+ * and it is not necessary to free any paging structures. Empty page tables
+ * due to all contained entries being un-mapped may remain in place.
+ *
+ * Implementations must invalidate TLBs as necessary.
+ *
+ * This API is part of infrastructure still under development and may change.
+ *
+ * @param addr Page-aligned base virtual address to un-map
+ * @param size Page-aligned region size
+ */
+void arch_mem_unmap(void *addr, size_t size);
+#endif /* CONFIG_MMU */
+/** @} */
+
+/**
  * @defgroup arch-misc Miscellaneous architecture APIs
  * @ingroup arch-interface
  * @{
  */
+
+/**
+ * Early boot console output hook
+ *
+ * Definition of this function is optional. If implemented, any invocation
+ * of printk() (or logging calls with CONFIG_LOG_MINIMAL which are backed by
+ * printk) will default to sending characters to this function. It is
+ * useful for early boot debugging before main serial or console drivers
+ * come up.
+ *
+ * This can be overridden at runtime with __printk_hook_install().
+ *
+ * The default __weak implementation of this does nothing.
+ *
+ * @param c Character to print
+ * @return The character printed
+ */
+int arch_printk_char_out(int c);
 
 /**
  * Architecture-specific kernel initialization hook
@@ -231,6 +324,48 @@ static inline void arch_kernel_init(void);
 
 /** Do nothing and return. Yawn. */
 static inline void arch_nop(void);
+
+/** @} */
+
+/**
+ * @defgroup arch-coredump Architecture-specific core dump APIs
+ * @ingroup arch-interface
+ * @{
+ */
+
+/**
+ * @brief Architecture-specific handling during coredump
+ *
+ * This dumps architecture-specific information during coredump.
+ *
+ * @param esf Exception Stack Frame (arch-specific)
+ */
+void arch_coredump_info_dump(const z_arch_esf_t *esf);
+
+/**
+ * @brief Get the target code specified by the architecture.
+ */
+uint16_t arch_coredump_tgt_code_get(void);
+
+/** @} */
+
+/**
+ * @defgroup arch-tls Architecture-specific Thread Local Storage APIs
+ * @ingroup arch-interface
+ * @{
+ */
+
+/**
+ * @brief Setup Architecture-specific TLS area in stack
+ *
+ * This sets up the stack area for thread local storage.
+ * The structure inside in area is architecture specific.
+ *
+ * @param new_thread New thread object
+ * @param stack_ptr Stack pointer
+ * @return Number of bytes taken by the TLS area
+ */
+size_t arch_tls_stack_setup(struct k_thread *new_thread, char *stack_ptr);
 
 /** @} */
 

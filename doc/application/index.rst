@@ -251,7 +251,8 @@ should know about.
    3 ways (in order of precedence):
 
    * As a parameter to the ``west build`` or ``cmake`` invocation via the
-     ``-D`` command-line switch
+     ``-D`` command-line switch. If you have multiple overlay files, you should
+     use quotations, ``"file1.overlay;file2.overlay"``
    * As :ref:`env_vars`.
    * As a ``set(<VARIABLE> <VALUE>)`` statement in your :file:`CMakeLists.txt`
 
@@ -265,15 +266,20 @@ should know about.
   built-in boards, and :ref:`board_porting_guide` for information on
   adding board support.
 
-* :makevar:`CONF_FILE`: Indicates the name of one or more configuration
+* :makevar:`CONF_FILE`: Indicates the name of one or more Kconfig configuration
   fragment files. Multiple filenames can be separated with either spaces or
   semicolons. Each file includes Kconfig configuration values that override
   the default configuration values.
 
   See :ref:`initial-conf` for more information.
 
+* :makevar:`OVERLAY_CONFIG`: Additional Kconfig configuration fragment files.
+  Multiple filenames can be separated with either spaces or semicolons. This
+  can be useful in order to leave :makevar:`CONF_FILE` at its default value,
+  but "mix in" some additional configuration options.
+
 * :makevar:`DTC_OVERLAY_FILE`: One or more devicetree overlay files to use.
-  Multiple files can be separated with spaces or semicolons.
+  Multiple files can be separated with semicolons.
   See :ref:`set-devicetree-overlays` for examples and :ref:`devicetree-intro`
   for information about devicetree and Zephyr.
 
@@ -371,6 +377,8 @@ Basics
    in your :file:`CMakeLists.txt` using ``set()`` statements.
    Additionally, ``west`` allows you to :ref:`set a default board
    <west-building-config>`.
+
+.. _build-directory-contents:
 
 Build Directory Contents
 ========================
@@ -584,11 +592,11 @@ again.
 .. _application_debugging:
 .. _custom_board_definition:
 
-Custom Board, DeviceTree and SOC Definitions
+Custom Board, Devicetree and SOC Definitions
 ********************************************
 
 In cases where the board or platform you are developing for is not yet
-supported by Zephyr, you can add board, DeviceTree and SOC definitions
+supported by Zephyr, you can add board, Devicetree and SOC definitions
 to your application without having to add them to the Zephyr tree.
 
 The structure needed to support out-of-tree board and SOC development
@@ -667,8 +675,15 @@ This will use your custom board configuration and will generate the
 Zephyr binary into your application directory.
 
 You can also define the ``BOARD_ROOT`` variable in the application
-:file:`CMakeLists.txt` file.
+:file:`CMakeLists.txt` file. Make sure to do so **before** pulling in the Zephyr
+boilerplate with ``find_package(Zephyr ...)``.
 
+.. note::
+
+   When specifying ``BOARD_ROOT`` in a CMakeLists.txt, then an absolute path must
+   be provided, for example ``list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/<extra-board-root>``.
+   When using ``-DBOARD_ROOT=<board-root>`` both absolute and relative paths can
+   be used. Relative paths are treated relatively to the application directory.
 
 SOC Definitions
 ===============
@@ -686,27 +701,43 @@ the Zephyr tree, for example:
 
 
 
-The paths to any Kconfig files inside the structure needs to prefixed with
-$(SOC_DIR) to make Kconfig aware of the location of the Kconfig files related to
-the custom SOC.
+The file :zephyr_file:`soc/Kconfig` will create the top-level
+``SoC/CPU/Configuration Selection`` menu in Kconfig.
 
-In the ``soc`` directory you will need a top-level Kconfig file pointing to the
-custom SOC definitions:
+Out of tree SoC definitions can be added to this menu using the ``SOC_ROOT``
+CMake variable. This variable contains a semicolon-separated list of directories
+which contain SoC support files.
 
+Following the structure above, the following files can be added to load
+more SoCs into the menu.
 
 .. code-block:: none
 
-   choice
-   	prompt "SoC/CPU/Configuration selection"
+        soc
+        └── arm
+            └── st_stm32
+                    ├── Kconfig
+                    ├── Kconfig.soc
+                    └── Kconfig.defconfig
 
-   source "$(SOC_DIR)/$(ARCH)/*/Kconfig.soc"
+The Kconfig files above may describe the SoC or load additional SoC Kconfig files.
 
-   endchoice
+An example of loading ``stm31l0`` specific Kconfig files in this structure:
 
-   menu "Hardware Configuration"
-   osource "$(SOC_DIR)/$(ARCH)/*/Kconfig"
+.. code-block:: none
 
-   endmenu
+        soc
+        └── arm
+            └── st_stm32
+                    ├── Kconfig.soc
+                    └── stm32l0
+                        └── Kconfig.series
+
+can be done with the following content in ``st_stm32/Kconfig.soc``:
+
+.. code-block:: none
+
+   rsource "*/Kconfig.series"
 
 Once the SOC structure is in place, you can build your application
 targeting this platform by specifying the location of your custom platform
@@ -723,15 +754,26 @@ build system:
 This will use your custom platform configurations and will generate the
 Zephyr binary into your application directory.
 
-You can also define the ``SOC_ROOT`` variable in the application
-:file:`CMakeLists.txt` file.
+See :ref:`modules_build_settings` for information on setting SOC_ROOT in a module's
+:file:`zephyr/module.yml` file.
+
+Or you can define the ``SOC_ROOT`` variable in the application
+:file:`CMakeLists.txt` file. Make sure to do so **before** pulling in the
+Zephyr boilerplate with ``find_package(Zephyr ...)``.
+
+.. note::
+
+   When specifying ``SOC_ROOT`` in a CMakeLists.txt, then an absolute path must
+   be provided, for example ``list(APPEND SOC_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/<extra-soc-root>``.
+   When using ``-DSOC_ROOT=<soc-root>`` both absolute and relative paths can be
+   used. Relative paths are treated relatively to the application directory.
 
 .. _dts_root:
 
-DeviceTree Definitions
+Devicetree Definitions
 ======================
 
-DeviceTree directory trees are found in ``APPLICATION_SOURCE_DIR``,
+Devicetree directory trees are found in ``APPLICATION_SOURCE_DIR``,
 ``BOARD_DIR``, and ``ZEPHYR_BASE``, but additional trees, or DTS_ROOTs,
 can be added by creating this directory tree::
 
@@ -755,9 +797,31 @@ its location through the ``DTS_ROOT`` CMake Cache variable:
    :goals: build
    :compact:
 
-You can also define the variable in the application
-:file:`CMakeLists.txt` file.
+You can also define the variable in the application :file:`CMakeLists.txt`
+file. Make sure to do so **before** pulling in the Zephyr boilerplate with
+``find_package(Zephyr ...)``.
 
+.. note::
+
+   When specifying ``DTS_ROOT`` in a CMakeLists.txt, then an absolute path must
+   be provided, for example ``list(APPEND DTS_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/<extra-dts-root>``.
+   When using ``-DDTS_ROOT=<dts-root>`` both absolute and relative paths can be
+   used. Relative paths are treated relatively to the application directory.
+
+Devicetree source are passed through the C preprocessor, so you can
+include files that can be located in a ``DTS_ROOT`` directory.  By
+convention devicetree include files have a ``.dtsi`` extension.
+
+You can also use the preprocessor to control the content of a devicetree
+file, by specifying directives through the ``DTS_EXTRA_CPPFLAGS`` CMake
+Cache variable:
+
+.. zephyr-app-commands::
+   :tool: all
+   :board: <board name>
+   :gen-args: -DDTS_EXTRA_CPPFLAGS=-DTEST_ENABLE_FEATURE
+   :goals: build
+   :compact:
 
 Application Debugging
 *********************

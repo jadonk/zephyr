@@ -65,11 +65,11 @@
  */
 #define SPI_MAX_MSG_LEN		255 /* As defined by X-NUCLEO-IDB04A1 BSP */
 
-static u8_t rxmsg[SPI_MAX_MSG_LEN];
-static u8_t txmsg[SPI_MAX_MSG_LEN];
+static uint8_t rxmsg[SPI_MAX_MSG_LEN];
+static uint8_t txmsg[SPI_MAX_MSG_LEN];
 
-static struct device		*irq_dev;
-static struct device		*rst_dev;
+static const struct device *irq_dev;
+static const struct device *rst_dev;
 
 static struct gpio_callback	gpio_cb;
 
@@ -77,15 +77,15 @@ static K_SEM_DEFINE(sem_initialised, 0, 1);
 static K_SEM_DEFINE(sem_request, 0, 1);
 static K_SEM_DEFINE(sem_busy, 1, 1);
 
-static K_THREAD_STACK_DEFINE(spi_rx_stack, 256);
+static K_KERNEL_STACK_DEFINE(spi_rx_stack, 256);
 static struct k_thread spi_rx_thread_data;
 
 #if defined(CONFIG_BT_DEBUG_HCI_DRIVER)
 #include <sys/printk.h>
-static inline void spi_dump_message(const u8_t *pre, u8_t *buf,
-				    u8_t size)
+static inline void spi_dump_message(const uint8_t *pre, uint8_t *buf,
+				    uint8_t size)
 {
-	u8_t i, c;
+	uint8_t i, c;
 
 	printk("%s (%d): ", pre, size);
 	for (i = 0U; i < size; i++) {
@@ -101,16 +101,16 @@ static inline void spi_dump_message(const u8_t *pre, u8_t *buf,
 }
 #else
 static inline
-void spi_dump_message(const u8_t *pre, u8_t *buf, u8_t size) {}
+void spi_dump_message(const uint8_t *pre, uint8_t *buf, uint8_t size) {}
 #endif
 
 #if defined(CONFIG_BT_SPI_BLUENRG)
-static struct device *cs_dev;
+static const struct device *cs_dev;
 /* Define a limit when reading IRQ high */
 /* It can be required to be increased for */
 /* some particular cases. */
 #define IRQ_HIGH_MAX_READ 3
-static u8_t attempts;
+static uint8_t attempts;
 #endif /* CONFIG_BT_SPI_BLUENRG */
 
 #if defined(CONFIG_BT_BLUENRG_ACI)
@@ -119,14 +119,14 @@ static u8_t attempts;
 #define BLUENRG_ACI_LL_MODE                 0x01
 
 struct bluenrg_aci_cmd_ll_param {
-    u8_t cmd;
-    u8_t length;
-    u8_t value;
+    uint8_t cmd;
+    uint8_t length;
+    uint8_t value;
 };
 static int bt_spi_send_aci_config_data_controller_mode(void);
 #endif /* CONFIG_BT_BLUENRG_ACI */
 
-static struct device *spi_dev;
+static const struct device *spi_dev;
 
 static struct spi_config spi_conf = {
 	.frequency = DT_INST_PROP(0, spi_max_frequency),
@@ -146,8 +146,8 @@ static const struct spi_buf_set spi_rx = {
 	.count = 1
 };
 
-static inline int bt_spi_transceive(void *tx, u32_t tx_len,
-				    void *rx, u32_t rx_len)
+static inline int bt_spi_transceive(void *tx, uint32_t tx_len,
+				    void *rx, uint32_t rx_len)
 {
 	spi_tx_buf.buf = tx;
 	spi_tx_buf.len = (size_t)tx_len;
@@ -156,25 +156,26 @@ static inline int bt_spi_transceive(void *tx, u32_t tx_len,
 	return spi_transceive(spi_dev, &spi_conf, &spi_tx, &spi_rx);
 }
 
-static inline u16_t bt_spi_get_cmd(u8_t *txmsg)
+static inline uint16_t bt_spi_get_cmd(uint8_t *txmsg)
 {
 	return (txmsg[CMD_OCF] << 8) | txmsg[CMD_OGF];
 }
 
-static inline u16_t bt_spi_get_evt(u8_t *rxmsg)
+static inline uint16_t bt_spi_get_evt(uint8_t *rxmsg)
 {
 	return (rxmsg[EVT_VENDOR_CODE_MSB] << 8) | rxmsg[EVT_VENDOR_CODE_LSB];
 }
 
-static void bt_spi_isr(struct device *unused1, struct gpio_callback *unused2,
-		       u32_t unused3)
+static void bt_spi_isr(const struct device *unused1,
+		       struct gpio_callback *unused2,
+		       uint32_t unused3)
 {
 	BT_DBG("");
 
 	k_sem_give(&sem_request);
 }
 
-static void bt_spi_handle_vendor_evt(u8_t *rxmsg)
+static void bt_spi_handle_vendor_evt(uint8_t *rxmsg)
 {
 	switch (bt_spi_get_evt(rxmsg)) {
 	case EVT_BLUE_INITIALIZED:
@@ -258,7 +259,8 @@ static int configure_cs(void)
 #ifdef GPIO_CS_PIN
 	static struct spi_cs_control spi_conf_cs;
 
-	spi_conf_cs.gpio_pin = GPIO_CS_PIN,
+	spi_conf_cs.gpio_pin = GPIO_CS_PIN;
+	spi_conf_cs.gpio_dt_flags = GPIO_CS_FLAGS;
 	spi_conf_cs.gpio_dev = device_get_binding(
 		DT_INST_SPI_DEV_CS_GPIOS_LABEL(0));
 	if (!spi_conf_cs.gpio_dev) {
@@ -306,10 +308,10 @@ static int bt_spi_send_aci_config_data_controller_mode(void)
 static void bt_spi_rx_thread(void)
 {
 	struct net_buf *buf;
-	u8_t header_master[5] = { SPI_READ, 0x00, 0x00, 0x00, 0x00 };
-	u8_t header_slave[5];
+	uint8_t header_master[5] = { SPI_READ, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t header_slave[5];
 	struct bt_hci_acl_hdr acl_hdr;
-	u8_t size = 0U;
+	uint8_t size = 0U;
 	int ret;
 
 	(void)memset(&txmsg, 0xFF, SPI_MAX_MSG_LEN);
@@ -385,12 +387,8 @@ static void bt_spi_rx_thread(void)
 				continue;
 			}
 
-			if (rxmsg[PACKET_TYPE] == HCI_EVT &&
-			    bt_hci_evt_is_prio(rxmsg[EVT_HEADER_EVENT])) {
-				bt_recv_prio(buf);
-			} else {
-				bt_recv(buf);
-			}
+			bt_recv(buf);
+
 		/* On BlueNRG-MS, host is expected to read */
 		/* as long as IRQ pin is high */
 		} while (irq_pin_high());
@@ -399,7 +397,7 @@ static void bt_spi_rx_thread(void)
 
 static int bt_spi_send(struct net_buf *buf)
 {
-	u8_t header[5] = { SPI_WRITE, 0x00,  0x00,  0x00,  0x00 };
+	uint8_t header[5] = { SPI_WRITE, 0x00,  0x00,  0x00,  0x00 };
 	int pending;
 	int ret;
 
@@ -507,9 +505,9 @@ static int bt_spi_open(void)
 
 	/* Start RX thread */
 	k_thread_create(&spi_rx_thread_data, spi_rx_stack,
-			K_THREAD_STACK_SIZEOF(spi_rx_stack),
+			K_KERNEL_STACK_SIZEOF(spi_rx_stack),
 			(k_thread_entry_t)bt_spi_rx_thread, NULL, NULL, NULL,
-			K_PRIO_COOP(CONFIG_BT_RX_PRIO - 1),
+			K_PRIO_COOP(CONFIG_BT_DRIVER_RX_HIGH_PRIO),
 			0, K_NO_WAIT);
 
 	/* Take BLE out of reset */
@@ -531,7 +529,7 @@ static const struct bt_hci_driver drv = {
 	.send		= bt_spi_send,
 };
 
-static int bt_spi_init(struct device *unused)
+static int bt_spi_init(const struct device *unused)
 {
 	ARG_UNUSED(unused);
 
@@ -570,4 +568,4 @@ static int bt_spi_init(struct device *unused)
 	return 0;
 }
 
-SYS_INIT(bt_spi_init, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE);
+SYS_INIT(bt_spi_init, POST_KERNEL, CONFIG_BT_SPI_INIT_PRIORITY);

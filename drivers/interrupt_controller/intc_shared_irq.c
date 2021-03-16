@@ -24,12 +24,12 @@
  *  @param isr_func Pointer to the ISR function for the device.
  *  @param isr_dev Pointer to the device that will service the interrupt.
  */
-static int isr_register(struct device *dev, isr_t isr_func,
-				 struct device *isr_dev)
+static int isr_register(const struct device *dev, isr_t isr_func,
+				 const struct device *isr_dev)
 {
-	struct shared_irq_runtime *clients = dev->driver_data;
-	const struct shared_irq_config *config = dev->config_info;
-	u32_t i;
+	struct shared_irq_runtime *clients = dev->data;
+	const struct shared_irq_config *config = dev->config;
+	uint32_t i;
 
 	for (i = 0U; i < config->client_count; i++) {
 		if (!clients->client[i].isr_dev) {
@@ -46,11 +46,12 @@ static int isr_register(struct device *dev, isr_t isr_func,
  *  @param dev Pointer to device structure for SHARED_IRQ driver instance.
  *  @param isr_dev Pointer to the device that will service the interrupt.
  */
-static inline int enable(struct device *dev, struct device *isr_dev)
+static inline int enable(const struct device *dev,
+			 const struct device *isr_dev)
 {
-	struct shared_irq_runtime *clients = dev->driver_data;
-	const struct shared_irq_config *config = dev->config_info;
-	u32_t i;
+	struct shared_irq_runtime *clients = dev->data;
+	const struct shared_irq_config *config = dev->config;
+	uint32_t i;
 
 	for (i = 0U; i < config->client_count; i++) {
 		if (clients->client[i].isr_dev == isr_dev) {
@@ -64,7 +65,7 @@ static inline int enable(struct device *dev, struct device *isr_dev)
 
 static int last_enabled_isr(struct shared_irq_runtime *clients, int count)
 {
-	u32_t i;
+	uint32_t i;
 
 	for (i = 0U; i < count; i++) {
 		if (clients->client[i].enabled) {
@@ -78,11 +79,12 @@ static int last_enabled_isr(struct shared_irq_runtime *clients, int count)
  *  @param dev Pointer to device structure for SHARED_IRQ driver instance.
  *  @param isr_dev Pointer to the device that will service the interrupt.
  */
-static inline int disable(struct device *dev, struct device *isr_dev)
+static inline int disable(const struct device *dev,
+			  const struct device *isr_dev)
 {
-	struct shared_irq_runtime *clients = dev->driver_data;
-	const struct shared_irq_config *config = dev->config_info;
-	u32_t i;
+	struct shared_irq_runtime *clients = dev->data;
+	const struct shared_irq_config *config = dev->config;
+	uint32_t i;
 
 	for (i = 0U; i < config->client_count; i++) {
 		if (clients->client[i].isr_dev == isr_dev) {
@@ -96,11 +98,11 @@ static inline int disable(struct device *dev, struct device *isr_dev)
 	return -EIO;
 }
 
-void shared_irq_isr(struct device *dev)
+void shared_irq_isr(const struct device *dev)
 {
-	struct shared_irq_runtime *clients = dev->driver_data;
-	const struct shared_irq_config *config = dev->config_info;
-	u32_t i;
+	struct shared_irq_runtime *clients = dev->data;
+	const struct shared_irq_config *config = dev->config;
+	uint32_t i;
 
 	for (i = 0U; i < config->client_count; i++) {
 		if (clients->client[i].isr_dev) {
@@ -116,9 +118,9 @@ static const struct shared_irq_driver_api api_funcs = {
 };
 
 
-int shared_irq_initialize(struct device *dev)
+int shared_irq_initialize(const struct device *dev)
 {
-	const struct shared_irq_config *config = dev->config_info;
+	const struct shared_irq_config *config = dev->config;
 	config->config();
 	return 0;
 }

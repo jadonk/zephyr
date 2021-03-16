@@ -110,7 +110,7 @@ static const unsigned char icmpv4_echo_req_opt_bad[] = {
 #define TEST_ICMPV4_ECHO_REQ  1
 #define TEST_ICMPV4_ECHO_REQ_OPTS 2
 
-static u8_t current = TEST_ICMPV4_UNKNOWN;
+static uint8_t current = TEST_ICMPV4_UNKNOWN;
 static struct in_addr my_addr  = { { { 192, 0, 2, 1 } } };
 static struct net_if *iface;
 
@@ -133,22 +133,22 @@ static struct net_icmpv4_handler echo_rep_handler = {
 };
 
 struct net_icmpv4_context {
-	u8_t mac_addr[sizeof(struct net_eth_addr)];
+	uint8_t mac_addr[sizeof(struct net_eth_addr)];
 	struct net_linkaddr ll_addr;
 };
 
-static int net_icmpv4_dev_init(struct device *dev)
+static int net_icmpv4_dev_init(const struct device *dev)
 {
-	struct net_icmpv4_context *net_icmpv4_context = dev->driver_data;
+	struct net_icmpv4_context *net_icmpv4_context = dev->data;
 
 	net_icmpv4_context = net_icmpv4_context;
 
 	return 0;
 }
 
-static u8_t *net_icmpv4_get_mac(struct device *dev)
+static uint8_t *net_icmpv4_get_mac(const struct device *dev)
 {
-	struct net_icmpv4_context *context = dev->driver_data;
+	struct net_icmpv4_context *context = dev->data;
 
 	if (context->mac_addr[2] == 0x00) {
 		/* 00-00-5E-00-53-xx Documentation RFC 7042 */
@@ -165,7 +165,7 @@ static u8_t *net_icmpv4_get_mac(struct device *dev)
 
 static void net_icmpv4_iface_init(struct net_if *iface)
 {
-	u8_t *mac = net_icmpv4_get_mac(net_if_get_device(iface));
+	uint8_t *mac = net_icmpv4_get_mac(net_if_get_device(iface));
 
 	net_if_set_link_addr(iface, mac, 6, NET_LINK_ETHERNET);
 }
@@ -173,9 +173,9 @@ static void net_icmpv4_iface_init(struct net_if *iface)
 static int verify_echo_reply(struct net_pkt *pkt)
 {
 	struct net_icmp_hdr icmp_hdr;
-	u8_t buf[60];
+	uint8_t buf[60];
 	int ret;
-	u8_t payload_len;
+	uint8_t payload_len;
 
 	net_pkt_set_overwrite(pkt, true);
 	net_pkt_cursor_init(pkt);
@@ -224,11 +224,11 @@ static int verify_echo_reply(struct net_pkt *pkt)
 static int verify_echo_reply_with_opts(struct net_pkt *pkt)
 {
 	struct net_icmp_hdr icmp_hdr;
-	u8_t buf[60];
+	uint8_t buf[60];
 	int ret;
-	u8_t vhl;
-	u8_t opts_len;
-	u8_t payload_len;
+	uint8_t vhl;
+	uint8_t opts_len;
+	uint8_t payload_len;
 
 	net_pkt_set_overwrite(pkt, true);
 	net_pkt_cursor_init(pkt);
@@ -286,7 +286,7 @@ static int verify_echo_reply_with_opts(struct net_pkt *pkt)
 	return 0;
 }
 
-static int tester_send(struct device *dev, struct net_pkt *pkt)
+static int tester_send(const struct device *dev, struct net_pkt *pkt)
 {
 	if (current == TEST_ICMPV4_ECHO_REQ) {
 		return verify_echo_reply(pkt);

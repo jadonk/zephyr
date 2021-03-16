@@ -5,7 +5,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <assert.h>
 #include <stddef.h>
 #include <errno.h>
 #include <string.h>
@@ -41,19 +40,19 @@
  * Raw (on-flash) representation of the v1 image header.
  */
 struct mcuboot_v1_raw_header {
-	u32_t header_magic;
-	u32_t image_load_address;
-	u16_t header_size;
-	u16_t pad;
-	u32_t image_size;
-	u32_t image_flags;
+	uint32_t header_magic;
+	uint32_t image_load_address;
+	uint16_t header_size;
+	uint16_t pad;
+	uint32_t image_size;
+	uint32_t image_flags;
 	struct {
-		u8_t major;
-		u8_t minor;
-		u16_t revision;
-		u32_t build_num;
+		uint8_t major;
+		uint8_t minor;
+		uint16_t revision;
+		uint32_t build_num;
 	} version;
-	u32_t pad2;
+	uint32_t pad2;
 } __packed;
 
 /*
@@ -78,7 +77,9 @@ struct mcuboot_v1_raw_header {
 #define FLASH_AREA_IMAGE_SECONDARY FLASH_AREA_ID(image_1_nonsecure)
 #else
 #define FLASH_AREA_IMAGE_PRIMARY FLASH_AREA_ID(image_0)
+#if FLASH_AREA_LABEL_EXISTS(image_1)
 #define FLASH_AREA_IMAGE_SECONDARY FLASH_AREA_ID(image_1)
+#endif
 #endif /* CONFIG_TRUSTED_EXECUTION_NONSECURE */
 
 #if FLASH_AREA_LABEL_EXISTS(image_scratch)
@@ -97,7 +98,8 @@ struct mcuboot_v1_raw_header {
 				  BOOT_MAX_ALIGN)
 #define MAGIC_OFFS(bank_area) ((bank_area)->fa_size - BOOT_MAGIC_SZ)
 
-static const u32_t boot_img_magic[4] = {
+#if defined(CONFIG_BOOTLOADER_MCUBOOT) || defined(CONFIG_ZTEST)
+static const uint32_t boot_img_magic[4] = {
 	0xf395c277,
 	0x7fefd260,
 	0x0f505235,
@@ -105,26 +107,28 @@ static const u32_t boot_img_magic[4] = {
 };
 
 #define BOOT_MAGIC_ARR_SZ ARRAY_SIZE(boot_img_magic)
+#endif
 
 struct boot_swap_table {
 	/** For each field, a value of 0 means "any". */
-	u8_t magic_primary_slot;
-	u8_t magic_secondary_slot;
-	u8_t image_ok_primary_slot;
-	u8_t image_ok_secondary_slot;
-	u8_t copy_done_primary_slot;
+	uint8_t magic_primary_slot;
+	uint8_t magic_secondary_slot;
+	uint8_t image_ok_primary_slot;
+	uint8_t image_ok_secondary_slot;
+	uint8_t copy_done_primary_slot;
 
-	u8_t swap_type;
+	uint8_t swap_type;
 };
 
 /** Represents the management state of a single image slot. */
 struct boot_swap_state {
-	u8_t magic;     /* One of the BOOT_MAGIC_[...] values. */
-	u8_t swap_type; /* One of the BOOT_SWAP_TYPE_[...] values. */
-	u8_t copy_done; /* One of the BOOT_FLAG_[...] values. */
-	u8_t image_ok;  /* One of the BOOT_FLAG_[...] values. */
+	uint8_t magic;     /* One of the BOOT_MAGIC_[...] values. */
+	uint8_t swap_type; /* One of the BOOT_SWAP_TYPE_[...] values. */
+	uint8_t copy_done; /* One of the BOOT_FLAG_[...] values. */
+	uint8_t image_ok;  /* One of the BOOT_FLAG_[...] values. */
 };
 
+#ifdef FLASH_AREA_IMAGE_SECONDARY
 /**
  * This set of tables maps image trailer contents to swap operation type.
  * When searching for a match, these tables must be iterated sequentially.
@@ -187,8 +191,10 @@ static const struct boot_swap_table boot_swap_tables[] = {
 	},
 };
 #define BOOT_SWAP_TABLES_COUNT (ARRAY_SIZE(boot_swap_tables))
+#endif
 
-static int boot_magic_decode(const u32_t *magic)
+#if defined(CONFIG_BOOTLOADER_MCUBOOT) || defined(CONFIG_ZTEST)
+static int boot_magic_decode(const uint32_t *magic)
 {
 	if (memcmp(magic, boot_img_magic, BOOT_MAGIC_SZ) == 0) {
 		return BOOT_MAGIC_GOOD;
@@ -197,7 +203,7 @@ static int boot_magic_decode(const u32_t *magic)
 	return BOOT_MAGIC_BAD;
 }
 
-static int boot_flag_decode(u8_t flag)
+static int boot_flag_decode(uint8_t flag)
 {
 	if (flag != BOOT_FLAG_SET) {
 		return BOOT_FLAG_BAD;
@@ -205,23 +211,15 @@ static int boot_flag_decode(u8_t flag)
 
 	return BOOT_FLAG_SET;
 }
+#endif
 
-/* TODO: this function should be moved to flash_area api in future */
-uint8_t flash_area_erased_val(const struct flash_area *fa)
-{
-	#define ERASED_VAL 0xff
-
-	(void)fa;
-	return ERASED_VAL;
-}
-
-/* TODO: this function should be moved to flash_area api in future */
+#if defined(CONFIG_BOOTLOADER_MCUBOOT) || defined(CONFIG_ZTEST)
 int flash_area_read_is_empty(const struct flash_area *fa, uint32_t off,
 	void *dst, uint32_t len)
 {
-	const u8_t erase_val = flash_area_erased_val(fa);
-	u8_t *u8dst;
-	u8_t i;
+	const uint8_t erase_val = flash_area_erased_val(fa);
+	uint8_t *u8dst;
+	uint8_t i;
 	int rc;
 
 	rc = flash_area_read(fa, off, dst, len);
@@ -237,8 +235,9 @@ int flash_area_read_is_empty(const struct flash_area *fa, uint32_t off,
 
 	return 1;
 }
+#endif
 
-static int erased_flag_val(u8_t bank_id)
+static int erased_flag_val(uint8_t bank_id)
 {
 	const struct flash_area *fa;
 	int rc;
@@ -250,6 +249,10 @@ static int erased_flag_val(u8_t bank_id)
 	return flash_area_erased_val(fa);
 }
 
+#if !defined(CONFIG_BOOTLOADER_MCUBOOT) && !defined(CONFIG_ZTEST)
+/* Provided by MCUBoot */
+int boot_magic_compatible_check(uint8_t tbl_val, uint8_t val);
+#else
 /**
  * Determines if a status source table is satisfied by the specified magic
  * code.
@@ -261,7 +264,7 @@ static int erased_flag_val(u8_t bank_id)
  * @return                      1 if the two values are compatible;
  *                              0 otherwise.
  */
-int boot_magic_compatible_check(u8_t tbl_val, u8_t val)
+int boot_magic_compatible_check(uint8_t tbl_val, uint8_t val)
 {
 	switch (tbl_val) {
 	case BOOT_MAGIC_ANY:
@@ -274,8 +277,8 @@ int boot_magic_compatible_check(u8_t tbl_val, u8_t val)
 		return tbl_val == val;
 	}
 }
-
-static int boot_flag_offs(int flag, const struct flash_area *fa, u32_t *offs)
+#endif
+static int boot_flag_offs(int flag, const struct flash_area *fa, uint32_t *offs)
 {
 	switch (flag) {
 	case BOOT_FLAG_COPY_DONE:
@@ -289,16 +292,16 @@ static int boot_flag_offs(int flag, const struct flash_area *fa, u32_t *offs)
 	}
 }
 
-static int boot_write_trailer_byte(const struct flash_area *fa, u32_t off,
-				   u8_t val)
+static int boot_write_trailer_byte(const struct flash_area *fa, uint32_t off,
+				   uint8_t val)
 {
-	u8_t buf[BOOT_MAX_ALIGN];
-	u8_t align;
-	u8_t erased_val;
+	uint8_t buf[BOOT_MAX_ALIGN];
+	uint8_t align;
+	uint8_t erased_val;
 	int rc;
 
 	align = flash_area_align(fa);
-	assert(align <= BOOT_MAX_ALIGN);
+	__ASSERT_NO_MSG(align <= BOOT_MAX_ALIGN);
 	erased_val = flash_area_erased_val(fa);
 	memset(buf, erased_val, BOOT_MAX_ALIGN);
 	buf[0] = val;
@@ -311,10 +314,10 @@ static int boot_write_trailer_byte(const struct flash_area *fa, u32_t off,
 	return 0;
 }
 
-static int boot_flag_write(int flag, u8_t bank_id)
+static int boot_flag_write(int flag, uint8_t bank_id)
 {
 	const struct flash_area *fa;
-	u32_t offs;
+	uint32_t offs;
 	int rc;
 
 	rc = flash_area_open(bank_id, &fa);
@@ -334,12 +337,12 @@ static int boot_flag_write(int flag, u8_t bank_id)
 	return rc;
 }
 
-static int boot_flag_read(int flag, u8_t bank_id)
+static int boot_flag_read(int flag, uint8_t bank_id)
 {
 	const struct flash_area *fa;
-	u32_t offs;
+	uint32_t offs;
 	int rc;
-	u8_t flag_val;
+	uint8_t flag_val;
 
 	rc = flash_area_open(bank_id, &fa);
 	if (rc) {
@@ -360,20 +363,21 @@ static int boot_flag_read(int flag, u8_t bank_id)
 	return flag_val;
 }
 
-static int boot_image_ok_read(u8_t bank_id)
+static int boot_image_ok_read(uint8_t bank_id)
 {
 	return boot_flag_read(BOOT_FLAG_IMAGE_OK, bank_id);
 }
 
-static int boot_image_ok_write(u8_t bank_id)
+static int boot_image_ok_write(uint8_t bank_id)
 {
 	return boot_flag_write(BOOT_FLAG_IMAGE_OK, bank_id);
 }
 
-static int boot_magic_write(u8_t bank_id)
+#ifdef FLASH_AREA_IMAGE_SECONDARY
+static int boot_magic_write(uint8_t bank_id)
 {
 	const struct flash_area *fa;
-	u32_t offs;
+	uint32_t offs;
 	int rc;
 
 	rc = flash_area_open(bank_id, &fa);
@@ -390,10 +394,10 @@ static int boot_magic_write(u8_t bank_id)
 }
 
 #ifdef CONFIG_MCUBOOT_TRAILER_SWAP_TYPE
-static int boot_swap_type_write(u8_t bank_id, u8_t swap_type)
+static int boot_swap_type_write(uint8_t bank_id, uint8_t swap_type)
 {
 	const struct flash_area *fa;
-	u32_t offs;
+	uint32_t offs;
 	int rc;
 
 	rc = flash_area_open(bank_id, &fa);
@@ -408,9 +412,10 @@ static int boot_swap_type_write(u8_t bank_id, u8_t swap_type)
 
 	return rc;
 }
-#endif
+#endif /* CONFIG_MCUBOOT_TRAILER_SWAP_TYPE */
+#endif /* FLASH_AREA_IMAGE_SECONDARY */
 
-static int boot_read_v1_header(u8_t area_id,
+static int boot_read_v1_header(uint8_t area_id,
 			       struct mcuboot_v1_raw_header *v1_raw)
 {
 	const struct flash_area *fa;
@@ -446,7 +451,7 @@ static int boot_read_v1_header(u8_t area_id,
 	 *
 	 * Larger values in header_size than BOOT_HEADER_SIZE_V1 are
 	 * possible, e.g. if Zephyr was linked with
-	 * CONFIG_TEXT_SECTION_OFFSET > BOOT_HEADER_SIZE_V1.
+	 * CONFIG_ROM_START_OFFSET > BOOT_HEADER_SIZE_V1.
 	 */
 	if ((v1_raw->header_magic != BOOT_HEADER_MAGIC_V1) ||
 	    (v1_raw->header_size < BOOT_HEADER_SIZE_V1)) {
@@ -456,14 +461,14 @@ static int boot_read_v1_header(u8_t area_id,
 	return 0;
 }
 
-int boot_read_bank_header(u8_t area_id,
+int boot_read_bank_header(uint8_t area_id,
 			  struct mcuboot_img_header *header,
 			  size_t header_size)
 {
 	int rc;
 	struct mcuboot_v1_raw_header v1_raw;
 	struct mcuboot_img_sem_ver *sem_ver;
-	size_t v1_min_size = (sizeof(u32_t) +
+	size_t v1_min_size = (sizeof(uint32_t) +
 			      sizeof(struct mcuboot_img_header_v1));
 
 	/*
@@ -497,11 +502,12 @@ int boot_read_bank_header(u8_t area_id,
 	return 0;
 }
 
+#if defined(CONFIG_BOOTLOADER_MCUBOOT) || defined(CONFIG_ZTEST)
 static int boot_read_swap_state(const struct flash_area *fa,
 				struct boot_swap_state *state)
 {
-	u32_t magic[BOOT_MAGIC_ARR_SZ];
-	u32_t off;
+	uint32_t magic[BOOT_MAGIC_ARR_SZ];
+	uint32_t off;
 	int rc;
 
 	off = MAGIC_OFFS(fa);
@@ -571,7 +577,13 @@ static int boot_read_swap_state(const struct flash_area *fa,
 
 	return 0;
 }
+#endif
 
+#if !defined(CONFIG_BOOTLOADER_MCUBOOT) && !defined(CONFIG_ZTEST)
+/* provided by MCUBoot */
+int
+boot_read_swap_state_by_id(int flash_area_id, struct boot_swap_state *state);
+#else
 /**
  * Reads the image trailer from the scratch area.
  */
@@ -586,7 +598,9 @@ boot_read_swap_state_by_id(int flash_area_id, struct boot_swap_state *state)
 	case FLASH_AREA_IMAGE_SCRATCH:
 #endif
 	case FLASH_AREA_IMAGE_PRIMARY:
+#ifdef FLASH_AREA_IMAGE_SECONDARY
 	case FLASH_AREA_IMAGE_SECONDARY:
+#endif
 		rc = flash_area_open(flash_area_id, &fap);
 		if (rc != 0) {
 			return -EIO;
@@ -600,10 +614,11 @@ boot_read_swap_state_by_id(int flash_area_id, struct boot_swap_state *state)
 	flash_area_close(fap);
 	return rc;
 }
-
+#endif
 /* equivalent of boot_swap_type() in mcuboot bootutil_misc.c */
 int mcuboot_swap_type(void)
 {
+#ifdef FLASH_AREA_IMAGE_SECONDARY
 	const struct boot_swap_table *table;
 	struct boot_swap_state primary_slot;
 	struct boot_swap_state secondary_slot;
@@ -640,20 +655,21 @@ int mcuboot_swap_type(void)
 		    (table->copy_done_primary_slot == BOOT_FLAG_ANY  ||
 		     table->copy_done_primary_slot == primary_slot.copy_done)) {
 
-			assert(table->swap_type == BOOT_SWAP_TYPE_TEST ||
-			       table->swap_type == BOOT_SWAP_TYPE_PERM ||
-			       table->swap_type == BOOT_SWAP_TYPE_REVERT);
+			__ASSERT_NO_MSG(table->swap_type == BOOT_SWAP_TYPE_TEST ||
+					table->swap_type == BOOT_SWAP_TYPE_PERM ||
+					table->swap_type == BOOT_SWAP_TYPE_REVERT);
 			return table->swap_type;
 		}
 	}
-
+#endif
 	return BOOT_SWAP_TYPE_NONE;
 }
 
 int boot_request_upgrade(int permanent)
 {
+#ifdef FLASH_AREA_IMAGE_SECONDARY
 #ifdef CONFIG_MCUBOOT_TRAILER_SWAP_TYPE
-	u8_t swap_type;
+	uint8_t swap_type;
 #endif
 	int rc;
 
@@ -681,6 +697,10 @@ int boot_request_upgrade(int permanent)
 #endif
 op_end:
 	return rc;
+#else
+	return 0;
+#endif /* FLASH_AREA_IMAGE_SECONDARY */
+
 }
 
 bool boot_is_img_confirmed(void)
@@ -703,7 +723,7 @@ int boot_write_img_confirmed(void)
 	return rc;
 }
 
-int boot_erase_img_bank(u8_t area_id)
+int boot_erase_img_bank(uint8_t area_id)
 {
 	const struct flash_area *fa;
 	int rc;

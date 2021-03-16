@@ -77,10 +77,10 @@ CTF Top-Layer Example
 The CTF_EVENT macro will serialize each argument to a field::
 
   /* Example for illustration */
-  static inline void ctf_top_foo(u32_t thread_id, ctf_bounded_string_t name)
+  static inline void ctf_top_foo(uint32_t thread_id, ctf_bounded_string_t name)
   {
     CTF_EVENT(
-      CTF_LITERAL(u8_t, 42),
+      CTF_LITERAL(uint8_t, 42),
       thread_id,
       name,
       "hello, I was emitted from function: ",
@@ -111,7 +111,11 @@ supported in Zephyr).
 To enable tracing support with `SEGGER SystemView`_ add the configuration option
 :option:`CONFIG_SEGGER_SYSTEMVIEW` to your project configuration file and set
 it to *y*. For example, this can be added to the
-:ref:`synchronization_sample` to visualize fast switching between threads::
+:ref:`synchronization_sample` to visualize fast switching between threads.
+SystemView can also be used for post-mortem tracing, which can be enabled with
+`CONFIG_SEGGER_SYSVIEW_POST_MORTEM_MODE`. In this mode, a debugger can
+be attached after the system has crashed using ``west attach`` after which the
+latest data from the internal RAM buffer can be loaded into SystemView::
 
     CONFIG_STDOUT_CONSOLE=y
     # enable to use thread names
@@ -119,6 +123,8 @@ it to *y*. For example, this can be added to the
     CONFIG_SEGGER_SYSTEMVIEW=y
     CONFIG_USE_SEGGER_RTT=y
     CONFIG_TRACING=y
+    # enable for post-mortem tracing
+    CONFIG_SEGGER_SYSVIEW_POST_MORTEM_MODE=n
 
 
 .. figure:: segger_systemview.png

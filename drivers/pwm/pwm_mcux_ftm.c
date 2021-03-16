@@ -25,22 +25,22 @@ struct mcux_ftm_config {
 	clock_control_subsys_t clock_subsys;
 	ftm_clock_source_t ftm_clock_source;
 	ftm_clock_prescale_t prescale;
-	u8_t channel_count;
+	uint8_t channel_count;
 	ftm_pwm_mode_t mode;
 };
 
 struct mcux_ftm_data {
-	u32_t clock_freq;
-	u32_t period_cycles;
+	uint32_t clock_freq;
+	uint32_t period_cycles;
 	ftm_chnl_pwm_config_param_t channel[MAX_CHANNELS];
 };
 
-static int mcux_ftm_pin_set(struct device *dev, u32_t pwm,
-			    u32_t period_cycles, u32_t pulse_cycles,
+static int mcux_ftm_pin_set(const struct device *dev, uint32_t pwm,
+			    uint32_t period_cycles, uint32_t pulse_cycles,
 			    pwm_flags_t flags)
 {
-	const struct mcux_ftm_config *config = dev->config_info;
-	struct mcux_ftm_data *data = dev->driver_data;
+	const struct mcux_ftm_config *config = dev->config;
+	struct mcux_ftm_data *data = dev->data;
 	status_t status;
 
 	if ((period_cycles == 0U) || (pulse_cycles > period_cycles)) {
@@ -95,23 +95,23 @@ static int mcux_ftm_pin_set(struct device *dev, u32_t pwm,
 	return 0;
 }
 
-static int mcux_ftm_get_cycles_per_sec(struct device *dev, u32_t pwm,
-				       u64_t *cycles)
+static int mcux_ftm_get_cycles_per_sec(const struct device *dev, uint32_t pwm,
+				       uint64_t *cycles)
 {
-	const struct mcux_ftm_config *config = dev->config_info;
-	struct mcux_ftm_data *data = dev->driver_data;
+	const struct mcux_ftm_config *config = dev->config;
+	struct mcux_ftm_data *data = dev->data;
 
 	*cycles = data->clock_freq >> config->prescale;
 
 	return 0;
 }
 
-static int mcux_ftm_init(struct device *dev)
+static int mcux_ftm_init(const struct device *dev)
 {
-	const struct mcux_ftm_config *config = dev->config_info;
-	struct mcux_ftm_data *data = dev->driver_data;
+	const struct mcux_ftm_config *config = dev->config;
+	struct mcux_ftm_data *data = dev->data;
 	ftm_chnl_pwm_config_param_t *channel = data->channel;
-	struct device *clock_dev;
+	const struct device *clock_dev;
 	ftm_config_t ftm_config;
 	int i;
 
@@ -168,8 +168,8 @@ static const struct pwm_driver_api mcux_ftm_driver_api = {
 		.mode = kFTM_EdgeAlignedPwm, \
 	}; \
 	static struct mcux_ftm_data mcux_ftm_data_##n; \
-	DEVICE_AND_API_INIT(mcux_ftm_##n, DT_INST_LABEL(n), \
-			    &mcux_ftm_init, &mcux_ftm_data_##n, \
+	DEVICE_DT_INST_DEFINE(n, &mcux_ftm_init, \
+			    device_pm_control_nop, &mcux_ftm_data_##n, \
 			    &mcux_ftm_config_##n, \
 			    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE, \
 			    &mcux_ftm_driver_api);

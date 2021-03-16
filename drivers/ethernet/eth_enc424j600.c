@@ -23,10 +23,10 @@
 
 LOG_MODULE_REGISTER(ethdrv, CONFIG_ETHERNET_LOG_LEVEL);
 
-static void enc424j600_write_sbc(struct device *dev, u8_t cmd)
+static void enc424j600_write_sbc(const struct device *dev, uint8_t cmd)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u8_t buf[2] = { cmd, 0xFF };
+	struct enc424j600_runtime *context = dev->data;
+	uint8_t buf[2] = { cmd, 0xFF };
 	const struct spi_buf tx_buf = {
 		.buf = buf,
 		.len = 1,
@@ -39,11 +39,11 @@ static void enc424j600_write_sbc(struct device *dev, u8_t cmd)
 	spi_write(context->spi, &context->spi_cfg, &tx);
 }
 
-static void enc424j600_write_sfru(struct device *dev, u8_t addr,
-				      u16_t value)
+static void enc424j600_write_sfru(const struct device *dev, uint8_t addr,
+				      uint16_t value)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u8_t buf[4];
+	struct enc424j600_runtime *context = dev->data;
+	uint8_t buf[4];
 	const struct spi_buf tx_buf = {
 		.buf = buf,
 		.len = sizeof(buf)
@@ -61,11 +61,11 @@ static void enc424j600_write_sfru(struct device *dev, u8_t addr,
 	spi_write(context->spi, &context->spi_cfg, &tx);
 }
 
-static void enc424j600_read_sfru(struct device *dev, u8_t addr,
-				     u16_t *value)
+static void enc424j600_read_sfru(const struct device *dev, uint8_t addr,
+				     uint16_t *value)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u8_t buf[4];
+	struct enc424j600_runtime *context = dev->data;
+	uint8_t buf[4];
 	const struct spi_buf tx_buf = {
 		.buf = buf,
 		.len = 2
@@ -87,18 +87,18 @@ static void enc424j600_read_sfru(struct device *dev, u8_t addr,
 	buf[1] = addr;
 
 	if (!spi_transceive(context->spi, &context->spi_cfg, &tx, &rx)) {
-		*value = ((u16_t)buf[3] << 8 | buf[2]);
+		*value = ((uint16_t)buf[3] << 8 | buf[2]);
 	} else {
 		LOG_DBG("Failure while reading register 0x%02x", addr);
 		*value = 0U;
 	}
 }
 
-static void enc424j600_modify_sfru(struct device *dev, u8_t opcode,
-				   u16_t addr, u16_t value)
+static void enc424j600_modify_sfru(const struct device *dev, uint8_t opcode,
+				   uint16_t addr, uint16_t value)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u8_t buf[4];
+	struct enc424j600_runtime *context = dev->data;
+	uint8_t buf[4];
 	const struct spi_buf tx_buf = {
 		.buf = buf,
 		.len = sizeof(buf)
@@ -123,9 +123,10 @@ static void enc424j600_modify_sfru(struct device *dev, u8_t opcode,
 	enc424j600_modify_sfru(dev, ENC424J600_NBC_BFCU, addr, value)
 
 
-static void enc424j600_write_phy(struct device *dev, u16_t addr, u16_t data)
+static void enc424j600_write_phy(const struct device *dev, uint16_t addr,
+				 uint16_t data)
 {
-	u16_t mistat;
+	uint16_t mistat;
 
 	enc424j600_write_sfru(dev, ENC424J600_SFR2_MIREGADRL, addr);
 	enc424j600_write_sfru(dev, ENC424J600_SFR3_MIWRL, data);
@@ -136,9 +137,10 @@ static void enc424j600_write_phy(struct device *dev, u16_t addr, u16_t data)
 	} while ((mistat & ENC424J600_MISTAT_BUSY));
 }
 
-static void enc424j600_read_phy(struct device *dev, u16_t addr, u16_t *data)
+static void enc424j600_read_phy(const struct device *dev, uint16_t addr,
+				uint16_t *data)
 {
-	u16_t mistat;
+	uint16_t mistat;
 
 	enc424j600_write_sfru(dev, ENC424J600_SFR2_MIREGADRL, addr);
 	enc424j600_write_sfru(dev, ENC424J600_SFR2_MICMDL,
@@ -153,11 +155,11 @@ static void enc424j600_read_phy(struct device *dev, u16_t addr, u16_t *data)
 	enc424j600_read_sfru(dev, ENC424J600_SFR3_MIRDL, data);
 }
 
-static void enc424j600_write_mem(struct device *dev, u8_t opcode,
-				 u8_t *data_buffer, u16_t buf_len)
+static void enc424j600_write_mem(const struct device *dev, uint8_t opcode,
+				 uint8_t *data_buffer, uint16_t buf_len)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u8_t buf[1] = { opcode };
+	struct enc424j600_runtime *context = dev->data;
+	uint8_t buf[1] = { opcode };
 	const struct spi_buf tx_buf[2] = {
 		{
 			.buf = buf,
@@ -179,11 +181,11 @@ static void enc424j600_write_mem(struct device *dev, u8_t opcode,
 	}
 }
 
-static void enc424j600_read_mem(struct device *dev, u8_t opcode,
-				u8_t *data_buffer, u16_t buf_len)
+static void enc424j600_read_mem(const struct device *dev, uint8_t opcode,
+				uint8_t *data_buffer, uint16_t buf_len)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u8_t buf[1] = { opcode };
+	struct enc424j600_runtime *context = dev->data;
+	uint8_t buf[1] = { opcode };
 	const struct spi_buf tx_buf = {
 		.buf = buf,
 		.len = 1
@@ -213,9 +215,9 @@ static void enc424j600_read_mem(struct device *dev, u8_t opcode,
 	}
 }
 
-static void enc424j600_gpio_callback(struct device *dev,
+static void enc424j600_gpio_callback(const struct device *dev,
 				       struct gpio_callback *cb,
-				       u32_t pins)
+				       uint32_t pins)
 {
 	struct enc424j600_runtime *context =
 		CONTAINER_OF(cb, struct enc424j600_runtime, gpio_cb);
@@ -223,9 +225,9 @@ static void enc424j600_gpio_callback(struct device *dev,
 	k_sem_give(&context->int_sem);
 }
 
-static void enc424j600_init_filters(struct device *dev)
+static void enc424j600_init_filters(const struct device *dev)
 {
-	u16_t tmp;
+	uint16_t tmp;
 
 	enc424j600_write_sfru(dev, ENC424J600_SFR1_ERXFCONL,
 			      ENC424J600_ERXFCON_CRCEN |
@@ -239,9 +241,9 @@ static void enc424j600_init_filters(struct device *dev)
 	}
 }
 
-static void enc424j600_init_phy(struct device *dev)
+static void enc424j600_init_phy(const struct device *dev)
 {
-	u16_t tmp;
+	uint16_t tmp;
 
 	enc424j600_write_phy(dev, ENC424J600_PSFR_PHANA,
 			     ENC424J600_PHANA_ADPAUS_SYMMETRIC_ONLY |
@@ -261,10 +263,10 @@ static void enc424j600_init_phy(struct device *dev)
 	enc424j600_write_phy(dev, ENC424J600_PSFR_PHCON1, tmp);
 }
 
-static void enc424j600_setup_mac(struct device *dev)
+static void enc424j600_setup_mac(const struct device *dev)
 {
-	u16_t tmp;
-	u16_t macon2;
+	uint16_t tmp;
+	uint16_t macon2;
 
 	if (CONFIG_ETHERNET_LOG_LEVEL == LOG_LEVEL_DBG) {
 		enc424j600_read_phy(dev, ENC424J600_PSFR_PHANLPA, &tmp);
@@ -302,12 +304,12 @@ static void enc424j600_setup_mac(struct device *dev)
 	}
 }
 
-static int enc424j600_tx(struct device *dev, struct net_pkt *pkt)
+static int enc424j600_tx(const struct device *dev, struct net_pkt *pkt)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u16_t len = net_pkt_get_len(pkt);
+	struct enc424j600_runtime *context = dev->data;
+	uint16_t len = net_pkt_get_len(pkt);
 	struct net_buf *frag;
-	u16_t tmp;
+	uint16_t tmp;
 
 	LOG_DBG("pkt %p (len %u)", pkt, len);
 
@@ -341,16 +343,16 @@ static int enc424j600_tx(struct device *dev, struct net_pkt *pkt)
 	return 0;
 }
 
-static int enc424j600_rx(struct device *dev)
+static int enc424j600_rx(const struct device *dev)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	const struct enc424j600_config *config = dev->config_info;
-	u8_t info[ENC424J600_RSV_SIZE + ENC424J600_PTR_NXP_PKT_SIZE];
+	struct enc424j600_runtime *context = dev->data;
+	const struct enc424j600_config *config = dev->config;
+	uint8_t info[ENC424J600_RSV_SIZE + ENC424J600_PTR_NXP_PKT_SIZE];
 	struct net_buf *pkt_buf = NULL;
 	struct net_pkt *pkt;
-	u16_t frm_len = 0U;
-	u32_t status;
-	u16_t tmp;
+	uint16_t frm_len = 0U;
+	uint32_t status;
+	uint16_t tmp;
 
 	k_sem_take(&context->tx_rx_sem, K_FOREVER);
 
@@ -396,7 +398,7 @@ static int enc424j600_rx(struct device *dev)
 
 	do {
 		size_t frag_len;
-		u8_t *data_ptr;
+		uint8_t *data_ptr;
 		size_t spi_frame_len;
 
 		data_ptr = pkt_buf->data;
@@ -439,41 +441,39 @@ done:
 	return 0;
 }
 
-static void enc424j600_rx_thread(struct device *dev)
+static void enc424j600_rx_thread(struct enc424j600_runtime *context)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u16_t eir;
-	u16_t estat;
-	u8_t counter;
+	uint16_t eir;
+	uint16_t estat;
+	uint8_t counter;
 
 	while (true) {
 		k_sem_take(&context->int_sem, K_FOREVER);
 
-		enc424j600_clear_sfru(dev, ENC424J600_SFR3_EIEL,
+		enc424j600_clear_sfru(context->dev, ENC424J600_SFR3_EIEL,
 				      ENC424J600_EIE_INTIE);
-		enc424j600_read_sfru(dev, ENC424J600_SFRX_EIRL, &eir);
-		enc424j600_read_sfru(dev, ENC424J600_SFRX_ESTATL, &estat);
+		enc424j600_read_sfru(context->dev, ENC424J600_SFRX_EIRL, &eir);
+		enc424j600_read_sfru(context->dev,
+				     ENC424J600_SFRX_ESTATL, &estat);
 		LOG_DBG("ESTAT: 0x%04x", estat);
 
 		if (eir & ENC424J600_EIR_PKTIF) {
-			counter = (u8_t)estat;
+			counter = (uint8_t)estat;
 			while (counter) {
-				enc424j600_rx(dev);
-				enc424j600_read_sfru(dev,
+				enc424j600_rx(context->dev);
+				enc424j600_read_sfru(context->dev,
 						     ENC424J600_SFRX_ESTATL,
 						     &estat);
-				counter = (u8_t)estat;
+				counter = (uint8_t)estat;
 				LOG_DBG("ESTAT: 0x%04x", estat);
 			}
-			goto done;
-		}
-
-		if (eir & ENC424J600_EIR_LINKIF) {
-			enc424j600_clear_sfru(dev, ENC424J600_SFRX_EIRL,
+		} else if (eir & ENC424J600_EIR_LINKIF) {
+			enc424j600_clear_sfru(context->dev,
+					      ENC424J600_SFRX_EIRL,
 					      ENC424J600_EIR_LINKIF);
 			if (estat & ENC424J600_ESTAT_PHYLNK) {
 				LOG_INF("Link up");
-				enc424j600_setup_mac(dev);
+				enc424j600_setup_mac(context->dev);
 				net_eth_carrier_on(context->iface);
 			} else {
 				LOG_INF("Link down");
@@ -482,18 +482,17 @@ static void enc424j600_rx_thread(struct device *dev)
 					net_eth_carrier_off(context->iface);
 				}
 			}
-			goto done;
+		} else {
+			LOG_ERR("Unknown Interrupt, EIR: 0x%04x", eir);
+			continue;
 		}
 
-		LOG_ERR("Unknown Interrupt, EIR: 0x%04x", eir);
-
-done:
-		enc424j600_set_sfru(dev, ENC424J600_SFR3_EIEL,
+		enc424j600_set_sfru(context->dev, ENC424J600_SFR3_EIEL,
 				    ENC424J600_EIE_INTIE);
 	}
 }
 
-static enum ethernet_hw_caps enc424j600_get_capabilities(struct device *dev)
+static enum ethernet_hw_caps enc424j600_get_capabilities(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
@@ -502,8 +501,8 @@ static enum ethernet_hw_caps enc424j600_get_capabilities(struct device *dev)
 
 static void enc424j600_iface_init(struct net_if *iface)
 {
-	struct device *dev = net_if_get_device(iface);
-	struct enc424j600_runtime *context = dev->driver_data;
+	const struct device *dev = net_if_get_device(iface);
+	struct enc424j600_runtime *context = dev->data;
 
 	net_if_set_link_addr(iface, context->mac_address,
 			     sizeof(context->mac_address),
@@ -515,10 +514,10 @@ static void enc424j600_iface_init(struct net_if *iface)
 	context->iface_initialized = true;
 }
 
-static int enc424j600_start_device(struct device *dev)
+static int enc424j600_start_device(const struct device *dev)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u16_t tmp;
+	struct enc424j600_runtime *context = dev->data;
+	uint16_t tmp;
 
 	if (!context->suspended) {
 		LOG_INF("Not suspended");
@@ -545,10 +544,10 @@ static int enc424j600_start_device(struct device *dev)
 	return 0;
 }
 
-static int enc424j600_stop_device(struct device *dev)
+static int enc424j600_stop_device(const struct device *dev)
 {
-	struct enc424j600_runtime *context = dev->driver_data;
-	u16_t tmp;
+	struct enc424j600_runtime *context = dev->data;
+	uint16_t tmp;
 
 	if (context->suspended) {
 		LOG_WRN("Already suspended");
@@ -594,12 +593,14 @@ static const struct ethernet_api api_funcs = {
 	.stop			= enc424j600_stop_device,
 };
 
-static int enc424j600_init(struct device *dev)
+static int enc424j600_init(const struct device *dev)
 {
-	const struct enc424j600_config *config = dev->config_info;
-	struct enc424j600_runtime *context = dev->driver_data;
-	u8_t retries = ENC424J600_DEFAULT_NUMOF_RETRIES;
-	u16_t tmp;
+	const struct enc424j600_config *config = dev->config;
+	struct enc424j600_runtime *context = dev->data;
+	uint8_t retries = ENC424J600_DEFAULT_NUMOF_RETRIES;
+	uint16_t tmp;
+
+	context->dev = dev;
 
 	/* SPI config */
 	context->spi_cfg.operation = SPI_WORD_SET(8);
@@ -621,6 +622,7 @@ static int enc424j600_init(struct device *dev)
 	}
 
 	context->spi_cs.gpio_pin = config->spi_cs_pin;
+	context->spi_cs.gpio_dt_flags = config->spi_cs_dt_flags;
 	context->spi_cfg.cs = &context->spi_cs;
 #endif
 
@@ -733,7 +735,7 @@ static int enc424j600_init(struct device *dev)
 	k_thread_create(&context->thread, context->thread_stack,
 			CONFIG_ETH_ENC424J600_RX_THREAD_STACK_SIZE,
 			(k_thread_entry_t)enc424j600_rx_thread,
-			(void *)dev, NULL, NULL,
+			context, NULL, NULL,
 			K_PRIO_COOP(CONFIG_ETH_ENC424J600_RX_THREAD_PRIO),
 			0, K_NO_WAIT);
 
@@ -763,6 +765,7 @@ static const struct enc424j600_config enc424j600_0_config = {
 #if DT_INST_SPI_DEV_HAS_CS_GPIOS(0)
 	.spi_cs_port = DT_INST_SPI_DEV_CS_GPIOS_LABEL(0),
 	.spi_cs_pin = DT_INST_SPI_DEV_CS_GPIOS_PIN(0),
+	.spi_cs_dt_flags = DT_INST_SPI_DEV_CS_GPIOS_FLAGS(0),
 #endif
 	.timeout = CONFIG_ETH_ENC424J600_TIMEOUT,
 };

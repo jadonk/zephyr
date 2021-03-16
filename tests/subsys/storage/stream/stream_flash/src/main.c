@@ -24,22 +24,22 @@
 #define FLASH_BASE (64*1024)
 #define FLASH_AVAILABLE (FLASH_SIZE-FLASH_BASE)
 
-static struct device *fdev;
+static const struct device *fdev;
 static const struct flash_driver_api *api;
 static const struct flash_pages_layout *layout;
 static size_t layout_size;
 static struct stream_flash_ctx ctx;
 static int page_size;
-static u8_t *cb_buf;
+static uint8_t *cb_buf;
 static size_t cb_len;
 static size_t cb_offset;
 static int cb_ret;
 
-static u8_t buf[BUF_LEN];
-static u8_t read_buf[TESTBUF_SIZE];
-const static u8_t write_buf[TESTBUF_SIZE] = {[0 ... TESTBUF_SIZE - 1] = 0xaa};
-static u8_t written_pattern[TESTBUF_SIZE] = {[0 ... TESTBUF_SIZE - 1] = 0xaa};
-static u8_t erased_pattern[TESTBUF_SIZE]  = {[0 ... TESTBUF_SIZE - 1] = 0xff};
+static uint8_t buf[BUF_LEN];
+static uint8_t read_buf[TESTBUF_SIZE];
+const static uint8_t write_buf[TESTBUF_SIZE] = {[0 ... TESTBUF_SIZE - 1] = 0xaa};
+static uint8_t written_pattern[TESTBUF_SIZE] = {[0 ... TESTBUF_SIZE - 1] = 0xaa};
+static uint8_t erased_pattern[TESTBUF_SIZE]  = {[0 ... TESTBUF_SIZE - 1] = 0xff};
 
 #define VERIFY_BUF(start, size, buf) \
 do { \
@@ -51,7 +51,7 @@ do { \
 #define VERIFY_WRITTEN(start, size) VERIFY_BUF(start, size, written_pattern)
 #define VERIFY_ERASED(start, size) VERIFY_BUF(start, size, erased_pattern)
 
-int stream_flash_callback(u8_t *buf, size_t len, size_t offset)
+int stream_flash_callback(uint8_t *buf, size_t len, size_t offset)
 {
 	if (cb_buf) {
 		zassert_equal(cb_buf, buf, "incorrect buf");
@@ -306,6 +306,17 @@ static void test_stream_flash_buffered_write_callback(void)
 	zassert_equal(rc, -EFAULT, "expected failure from callback");
 }
 
+static void test_stream_flash_flush(void)
+{
+	int rc;
+
+	init_target();
+
+	/* Perform flush with NULL data pointer and 0 lentgth */
+	rc = stream_flash_buffered_write(&ctx, NULL, 0, true);
+	zassert_equal(rc, 0, "expected success");
+}
+
 #ifdef CONFIG_STREAM_FLASH_ERASE
 static void test_stream_flash_buffered_write_whole_page(void)
 {
@@ -367,7 +378,7 @@ static void test_stream_flash_buffered_write_whole_page(void)
 void test_main(void)
 {
 	fdev = device_get_binding(FLASH_NAME);
-	api = fdev->driver_api;
+	api = fdev->api;
 	api->page_layout(fdev, &layout, &layout_size);
 
 	page_size = layout->pages_size;
@@ -381,6 +392,7 @@ void test_main(void)
 	     ztest_unit_test(test_stream_flash_buffered_write_multi_page),
 	     ztest_unit_test(test_stream_flash_buf_size_greater_than_page_size),
 	     ztest_unit_test(test_stream_flash_buffered_write_callback),
+	     ztest_unit_test(test_stream_flash_flush),
 	     ztest_unit_test(test_stream_flash_buffered_write_whole_page),
 	     ztest_unit_test(test_stream_flash_erase_page),
 	     ztest_unit_test(test_stream_flash_bytes_written)

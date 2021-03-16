@@ -23,9 +23,9 @@
 
 #define US_TO_HZ(_us)  (USEC_PER_SEC / (_us))
 
-static struct device *pwm;
-static struct device *gpio;
-static u32_t period = PERIOD_INIT;
+static const struct device *pwm;
+static const struct device *gpio;
+static uint32_t period = PERIOD_INIT;
 static struct k_work beep_work;
 static volatile bool beep_active;
 
@@ -45,8 +45,8 @@ static void beep(struct k_work *work)
 	beep_active = false;
 }
 
-static void button_pressed(struct device *dev, struct gpio_callback *cb,
-			   u32_t pins)
+static void button_pressed(const struct device *dev, struct gpio_callback *cb,
+			   uint32_t pins)
 {
 	struct mb_display *disp;
 

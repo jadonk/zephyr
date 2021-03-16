@@ -25,12 +25,12 @@
 #define TMP117_DEVICE_ID		0x0117
 
 struct tmp116_data {
-	struct device *i2c;
-	u16_t sample;
+	const struct device *i2c;
+	uint16_t sample;
 };
 
 struct tmp116_dev_config {
-	u16_t i2c_addr;
+	uint16_t i2c_addr;
 };
 
 #endif /*  ZEPHYR_DRIVERS_SENSOR_TMP116_TMP116_H_ */

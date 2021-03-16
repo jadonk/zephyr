@@ -40,14 +40,15 @@ LOG_MODULE_REGISTER(VL53L0X, CONFIG_SENSOR_LOG_LEVEL);
 #define VL53L0X_SETUP_FINAL_RANGE_VCSEL_PERIOD 14
 
 struct vl53l0x_data {
-	struct device *i2c;
+	const struct device *i2c;
 	VL53L0X_Dev_t vl53l0x;
 	VL53L0X_RangingMeasurementData_t RangingMeasurementData;
 };
 
-static int vl53l0x_sample_fetch(struct device *dev, enum sensor_channel chan)
+static int vl53l0x_sample_fetch(const struct device *dev,
+				enum sensor_channel chan)
 {
-	struct vl53l0x_data *drv_data = dev->driver_data;
+	struct vl53l0x_data *drv_data = dev->data;
 	VL53L0X_Error ret;
 
 	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL
@@ -65,11 +66,11 @@ static int vl53l0x_sample_fetch(struct device *dev, enum sensor_channel chan)
 }
 
 
-static int vl53l0x_channel_get(struct device *dev,
+static int vl53l0x_channel_get(const struct device *dev,
 			       enum sensor_channel chan,
 			       struct sensor_value *val)
 {
-	struct vl53l0x_data *drv_data = (struct vl53l0x_data *)dev->driver_data;
+	struct vl53l0x_data *drv_data = (struct vl53l0x_data *)dev->data;
 
 	__ASSERT_NO_MSG(chan == SENSOR_CHAN_DISTANCE
 			|| chan == SENSOR_CHAN_PROX);
@@ -95,14 +96,14 @@ static const struct sensor_driver_api vl53l0x_api_funcs = {
 	.channel_get = vl53l0x_channel_get,
 };
 
-static int vl53l0x_setup_single_shot(struct device *dev)
+static int vl53l0x_setup_single_shot(const struct device *dev)
 {
-	struct vl53l0x_data *drv_data = dev->driver_data;
+	struct vl53l0x_data *drv_data = dev->data;
 	int ret;
-	u8_t VhvSettings;
-	u8_t PhaseCal;
-	u32_t refSpadCount;
-	u8_t isApertureSpads;
+	uint8_t VhvSettings;
+	uint8_t PhaseCal;
+	uint32_t refSpadCount;
+	uint8_t isApertureSpads;
 
 	ret = VL53L0X_StaticInit(&drv_data->vl53l0x);
 	if (ret) {
@@ -195,17 +196,17 @@ exit:
 }
 
 
-static int vl53l0x_init(struct device *dev)
+static int vl53l0x_init(const struct device *dev)
 {
-	struct vl53l0x_data *drv_data = dev->driver_data;
+	struct vl53l0x_data *drv_data = dev->data;
 	VL53L0X_Error ret;
-	u16_t vl53l0x_id = 0U;
+	uint16_t vl53l0x_id = 0U;
 	VL53L0X_DeviceInfo_t vl53l0x_dev_info;
 
 	LOG_DBG("enter in %s", __func__);
 
 #if DT_INST_NODE_HAS_PROP(0, xshut_gpios)
-	struct device *gpio;
+	const struct device *gpio;
 
 	/* configure and set VL53L0X_XSHUT_Pin */
 	gpio = device_get_binding(DT_INST_GPIO_LABEL(0, xshut_gpios));

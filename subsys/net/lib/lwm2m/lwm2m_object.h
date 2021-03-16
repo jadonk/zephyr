@@ -124,6 +124,7 @@
 #define LWM2M_RES_TYPE_TIME	12
 #define LWM2M_RES_TYPE_FLOAT32	13
 #define LWM2M_RES_TYPE_FLOAT64	14
+#define LWM2M_RES_TYPE_OBJLNK	15
 
 /* remember that we have already output a value - can be between two block's */
 #define WRITER_OUTPUT_VALUE      1
@@ -141,11 +142,11 @@ struct lwm2m_message;
 
 /* path representing object instances */
 struct lwm2m_obj_path {
-	u16_t obj_id;
-	u16_t obj_inst_id;
-	u16_t res_id;
-	u16_t res_inst_id;
-	u8_t  level;  /* 0/1/2/3/4 (4 = resource instance) */
+	uint16_t obj_id;
+	uint16_t obj_inst_id;
+	uint16_t res_id;
+	uint16_t res_inst_id;
+	uint8_t  level;  /* 0/1/2/3/4 (4 = resource instance) */
 };
 
 #define OBJ_FIELD(_id, _perm, _type) \
@@ -164,13 +165,13 @@ struct lwm2m_obj_path {
 	OBJ_FIELD(res_id, X_OPT, NONE)
 
 struct lwm2m_engine_obj_field {
-	u16_t  res_id;
-	u8_t   permissions;
-	u8_t   data_type;
+	uint16_t  res_id;
+	uint8_t   permissions;
+	uint8_t   data_type;
 };
 
 typedef struct lwm2m_engine_obj_inst *
-	(*lwm2m_engine_obj_create_cb_t)(u16_t obj_inst_id);
+	(*lwm2m_engine_obj_create_cb_t)(uint16_t obj_inst_id);
 
 struct lwm2m_engine_obj {
 	/* object list */
@@ -186,10 +187,10 @@ struct lwm2m_engine_obj {
 	lwm2m_engine_user_cb_t user_delete_cb;
 
 	/* object member data */
-	u16_t obj_id;
-	u16_t field_count;
-	u16_t instance_count;
-	u16_t max_instance_count;
+	uint16_t obj_id;
+	uint16_t field_count;
+	uint16_t instance_count;
+	uint16_t max_instance_count;
 };
 
 /* Resource instances with this value are considered "not created" yet */
@@ -213,6 +214,8 @@ struct lwm2m_engine_obj {
 			for (int _i = 0; _i < _ri_count; _i++) { \
 				_ri_ptr[_ri_idx + _i].data_ptr = \
 						(_data_ptr + _i); \
+				_ri_ptr[_ri_idx + _i].max_data_len = \
+						_data_len; \
 				_ri_ptr[_ri_idx + _i].data_len = \
 						_data_len; \
 				if (_ri_create) { \
@@ -232,6 +235,7 @@ struct lwm2m_engine_obj {
 		if (_ri_count > 0) { \
 			for (int _i = 0; _i < _ri_count; _i++) { \
 				_ri_ptr[_ri_idx + _i].data_ptr = NULL; \
+				_ri_ptr[_ri_idx + _i].max_data_len = 0; \
 				_ri_ptr[_ri_idx + _i].data_len = 0; \
 				if (_ri_create) { \
 					_ri_ptr[_ri_idx + _i].res_inst_id = \
@@ -314,28 +318,29 @@ struct lwm2m_attr {
 	/* values */
 	union {
 		float32_value_t float_val;
-		s32_t int_val;
+		int32_t int_val;
 	};
 
-	u8_t type;
+	uint8_t type;
 };
 
 struct lwm2m_engine_res_inst {
 	void  *data_ptr;
-	u16_t data_len;
-	u16_t res_inst_id; /* 65535 == not "created" */
-	u8_t  data_flags;
+	uint16_t max_data_len;
+	uint16_t data_len;
+	uint16_t res_inst_id; /* 65535 == not "created" */
+	uint8_t  data_flags;
 };
 
 struct lwm2m_engine_res {
 	lwm2m_engine_get_data_cb_t		read_cb;
 	lwm2m_engine_get_data_cb_t		pre_write_cb;
 	lwm2m_engine_set_data_cb_t		post_write_cb;
-	lwm2m_engine_user_cb_t			execute_cb;
+	lwm2m_engine_execute_cb_t		execute_cb;
 
 	struct lwm2m_engine_res_inst *res_instances;
-	u16_t res_id;
-	u8_t  res_inst_count;
+	uint16_t res_id;
+	uint8_t  res_inst_count;
 };
 
 struct lwm2m_engine_obj_inst {
@@ -346,8 +351,8 @@ struct lwm2m_engine_obj_inst {
 	struct lwm2m_engine_res *resources;
 
 	/* object instance member data */
-	u16_t obj_inst_id;
-	u16_t resource_count;
+	uint16_t obj_inst_id;
+	uint16_t resource_count;
 };
 
 /* Initialize resource instances prior to use */
@@ -362,6 +367,21 @@ static inline void init_res_instance(struct lwm2m_engine_res_inst *ri,
 	}
 }
 
+struct lwm2m_opaque_context {
+	size_t len;
+	size_t remaining;
+};
+
+struct lwm2m_block_context {
+	struct coap_block_context ctx;
+	struct lwm2m_opaque_context opaque;
+	int64_t timestamp;
+	uint32_t expected;
+	uint8_t token[8];
+	uint8_t tkl;
+	bool last_block : 1;
+};
+
 struct lwm2m_output_context {
 	const struct lwm2m_writer *writer;
 	struct coap_packet *out_cpkt;
@@ -375,10 +395,10 @@ struct lwm2m_input_context {
 	struct coap_packet *in_cpkt;
 
 	/* current position in buffer */
-	u16_t offset;
+	uint16_t offset;
 
-	/* length of incoming opaque */
-	u16_t opaque_len;
+	/* Corresponding block context. NULL if block transfer is not used. */
+	struct lwm2m_block_context *block_ctx;
 
 	/* private output data */
 	void *user_data;
@@ -403,26 +423,29 @@ struct lwm2m_message {
 	struct coap_packet cpkt;
 
 	/** Buffer data related outgoing message */
-	u8_t msg_data[MAX_PACKET_SIZE];
+	uint8_t msg_data[MAX_PACKET_SIZE];
 
 	/** Message transmission handling for TYPE_CON */
 	struct coap_pending *pending;
 	struct coap_reply *reply;
 
 	/** Message configuration */
-	u8_t *token;
+	uint8_t *token;
 	coap_reply_t reply_cb;
 	lwm2m_message_timeout_cb_t message_timeout_cb;
-	u16_t mid;
-	u8_t type;
-	u8_t code;
-	u8_t tkl;
+	uint16_t mid;
+	uint8_t type;
+	uint8_t code;
+	uint8_t tkl;
 
 	/** Incoming message action */
-	u8_t operation;
+	uint8_t operation;
 
 	/** Counter for message re-send / abort handling */
-	u8_t send_attempts;
+	uint8_t send_attempts;
+
+	/* Information whether the message was acknowledged. */
+	bool acknowledged : 1;
 };
 
 /* LWM2M format writer for the various formats supported */
@@ -445,16 +468,16 @@ struct lwm2m_writer {
 			     struct lwm2m_obj_path *path);
 	size_t (*put_s8)(struct lwm2m_output_context *out,
 			 struct lwm2m_obj_path *path,
-			 s8_t value);
+			 int8_t value);
 	size_t (*put_s16)(struct lwm2m_output_context *out,
 			  struct lwm2m_obj_path *path,
-			  s16_t value);
+			  int16_t value);
 	size_t (*put_s32)(struct lwm2m_output_context *out,
 			  struct lwm2m_obj_path *path,
-			  s32_t value);
+			  int32_t value);
 	size_t (*put_s64)(struct lwm2m_output_context *out,
 			  struct lwm2m_obj_path *path,
-			  s64_t value);
+			  int64_t value);
 	size_t (*put_string)(struct lwm2m_output_context *out,
 			     struct lwm2m_obj_path *path,
 			     char *buf, size_t buflen);
@@ -470,15 +493,18 @@ struct lwm2m_writer {
 	size_t (*put_opaque)(struct lwm2m_output_context *out,
 			     struct lwm2m_obj_path *path,
 			     char *buf, size_t buflen);
+	size_t (*put_objlnk)(struct lwm2m_output_context *out,
+			     struct lwm2m_obj_path *path,
+			     struct lwm2m_objlnk *value);
 };
 
 struct lwm2m_reader {
 	size_t (*get_s32)(struct lwm2m_input_context *in,
-			  s32_t *value);
+			  int32_t *value);
 	size_t (*get_s64)(struct lwm2m_input_context *in,
-			  s64_t *value);
+			  int64_t *value);
 	size_t (*get_string)(struct lwm2m_input_context *in,
-			     u8_t *buf, size_t buflen);
+			     uint8_t *buf, size_t buflen);
 	size_t (*get_float32fix)(struct lwm2m_input_context *in,
 				 float32_value_t *value);
 	size_t (*get_float64fix)(struct lwm2m_input_context *in,
@@ -486,7 +512,11 @@ struct lwm2m_reader {
 	size_t (*get_bool)(struct lwm2m_input_context *in,
 			   bool *value);
 	size_t (*get_opaque)(struct lwm2m_input_context *in,
-			     u8_t *buf, size_t buflen, bool *last_block);
+			     uint8_t *buf, size_t buflen,
+			     struct lwm2m_opaque_context *opaque,
+			     bool *last_block);
+	size_t (*get_objlnk)(struct lwm2m_input_context *in,
+			     struct lwm2m_objlnk *value);
 };
 
 /* output user_data management functions */
@@ -609,28 +639,28 @@ static inline size_t engine_put_end_ri(struct lwm2m_output_context *out,
 
 static inline size_t engine_put_s8(struct lwm2m_output_context *out,
 				   struct lwm2m_obj_path *path,
-				   s8_t value)
+				   int8_t value)
 {
 	return out->writer->put_s8(out, path, value);
 }
 
 static inline size_t engine_put_s16(struct lwm2m_output_context *out,
 				    struct lwm2m_obj_path *path,
-				    s16_t value)
+				    int16_t value)
 {
 	return out->writer->put_s16(out, path, value);
 }
 
 static inline size_t engine_put_s32(struct lwm2m_output_context *out,
 				    struct lwm2m_obj_path *path,
-				    s32_t value)
+				    int32_t value)
 {
 	return out->writer->put_s32(out, path, value);
 }
 
 static inline size_t engine_put_s64(struct lwm2m_output_context *out,
 				    struct lwm2m_obj_path *path,
-				    s64_t value)
+				    int64_t value)
 {
 	return out->writer->put_s64(out, path, value);
 }
@@ -674,20 +704,27 @@ static inline size_t engine_put_opaque(struct lwm2m_output_context *out,
 	return 0;
 }
 
+static inline size_t engine_put_objlnk(struct lwm2m_output_context *out,
+				       struct lwm2m_obj_path *path,
+				       struct lwm2m_objlnk *value)
+{
+	return out->writer->put_objlnk(out, path, value);
+}
+
 static inline size_t engine_get_s32(struct lwm2m_input_context *in,
-				    s32_t *value)
+				    int32_t *value)
 {
 	return in->reader->get_s32(in, value);
 }
 
 static inline size_t engine_get_s64(struct lwm2m_input_context *in,
-				    s64_t *value)
+				    int64_t *value)
 {
 	return in->reader->get_s64(in, value);
 }
 
 static inline size_t engine_get_string(struct lwm2m_input_context *in,
-				       u8_t *buf, size_t buflen)
+				       uint8_t *buf, size_t buflen)
 {
 	return in->reader->get_string(in, buf, buflen);
 }
@@ -711,14 +748,22 @@ static inline size_t engine_get_bool(struct lwm2m_input_context *in,
 }
 
 static inline size_t engine_get_opaque(struct lwm2m_input_context *in,
-				       u8_t *buf, size_t buflen,
+				       uint8_t *buf, size_t buflen,
+				       struct lwm2m_opaque_context *opaque,
 				       bool *last_block)
 {
 	if (in->reader->get_opaque) {
-		return in->reader->get_opaque(in, buf, buflen, last_block);
+		return in->reader->get_opaque(in, buf, buflen,
+					      opaque, last_block);
 	}
 
 	return 0;
+}
+
+static inline size_t engine_get_objlnk(struct lwm2m_input_context *in,
+				       struct lwm2m_objlnk *value)
+{
+	return in->reader->get_objlnk(in, value);
 }
 
 #endif /* LWM2M_OBJECT_H_ */

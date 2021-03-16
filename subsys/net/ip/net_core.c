@@ -350,13 +350,15 @@ static void process_rx_packet(struct k_work *work)
 
 	pkt = CONTAINER_OF(work, struct net_pkt, work);
 
+	net_pkt_set_rx_stats_tick(pkt, k_cycle_get_32());
+
 	net_rx(net_pkt_iface(pkt), pkt);
 }
 
 static void net_queue_rx(struct net_if *iface, struct net_pkt *pkt)
 {
-	u8_t prio = net_pkt_priority(pkt);
-	u8_t tc = net_rx_priority2tc(prio);
+	uint8_t prio = net_pkt_priority(pkt);
+	uint8_t tc = net_rx_priority2tc(prio);
 
 	k_work_init(net_pkt_work(pkt), process_rx_packet);
 
@@ -380,7 +382,7 @@ int net_recv_data(struct net_if *iface, struct net_pkt *pkt)
 		return -EINVAL;
 	}
 
-	if (!pkt->frags) {
+	if (net_pkt_is_empty(pkt)) {
 		return -ENODATA;
 	}
 
@@ -446,7 +448,7 @@ static inline int services_init(void)
 	return status;
 }
 
-static int net_init(struct device *unused)
+static int net_init(const struct device *unused)
 {
 	net_hostname_init();
 

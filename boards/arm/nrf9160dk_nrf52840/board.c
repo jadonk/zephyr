@@ -56,8 +56,8 @@ LOG_MODULE_REGISTER(board_control, CONFIG_BOARD_NRF9160DK_LOG_LEVEL);
  */
 
 __packed struct pin_config {
-	u8_t pin;
-	u8_t val;
+	uint8_t pin;
+	uint8_t val;
 };
 
 /* The following tables specify the configuration of each pin based on the
@@ -171,7 +171,8 @@ static void config_print(void)
 		IS_ENABLED(CONFIG_BOARD_NRF9160DK_SWITCH1_ARDUINO));
 }
 
-static int pins_configure(struct device *port, const struct pin_config cfg[],
+static int pins_configure(const struct device *port,
+			  const struct pin_config cfg[],
 			  size_t pins)
 {
 	int err;
@@ -183,7 +184,7 @@ static int pins_configure(struct device *port, const struct pin_config cfg[],
 		 * so configure the pin as output with the proper initial
 		 * state.
 		 */
-		u32_t flag = (cfg[i].val ? GPIO_OUTPUT_LOW
+		uint32_t flag = (cfg[i].val ? GPIO_OUTPUT_LOW
 					 : GPIO_OUTPUT_HIGH);
 		err = gpio_pin_configure(port, cfg[i].pin, flag);
 		if (err) {
@@ -197,10 +198,10 @@ static int pins_configure(struct device *port, const struct pin_config cfg[],
 	return 0;
 }
 
-static void chip_reset(struct device *gpio,
-		       struct gpio_callback *cb, u32_t pins)
+static void chip_reset(const struct device *gpio,
+		       struct gpio_callback *cb, uint32_t pins)
 {
-	const u32_t stamp = k_cycle_get_32();
+	const uint32_t stamp = k_cycle_get_32();
 
 	printk("GPIO reset line asserted, device reset.\n");
 	printk("Bye @ cycle32 %u\n", stamp);
@@ -208,7 +209,7 @@ static void chip_reset(struct device *gpio,
 	NVIC_SystemReset();
 }
 
-static void reset_pin_wait_low(struct device *port, u32_t pin)
+static void reset_pin_wait_low(const struct device *port, uint32_t pin)
 {
 	int val;
 
@@ -218,11 +219,12 @@ static void reset_pin_wait_low(struct device *port, u32_t pin)
 	} while (val > 0);
 }
 
-static int reset_pin_configure(struct device *p0, struct device *p1)
+static int reset_pin_configure(const struct device *p0,
+			       const struct device *p1)
 {
 	int err;
-	u32_t pin = 0;
-	struct device *port = NULL;
+	uint32_t pin = 0;
+	const struct device *port = NULL;
 
 	static struct gpio_callback gpio_ctx;
 
@@ -283,11 +285,11 @@ static int reset_pin_configure(struct device *p0, struct device *p1)
 	return 0;
 }
 
-static int init(struct device *dev)
+static int init(const struct device *dev)
 {
 	int rc;
-	struct device *p0;
-	struct device *p1;
+	const struct device *p0;
+	const struct device *p1;
 
 	p0 = device_get_binding(DT_LABEL(DT_NODELABEL(gpio0)));
 	if (!p0) {

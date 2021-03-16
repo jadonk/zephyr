@@ -13,4 +13,6 @@ supported:
   - gpio
   - usb_device
   - watchdog
+  - counter
   - adc
+  - dac

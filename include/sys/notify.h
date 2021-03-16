@@ -47,7 +47,7 @@ struct sys_notify;
  */
 #define SYS_NOTIFY_METHOD_CALLBACK 3
 
-#define SYS_NOTIFY_METHOD_MASK 0x03
+#define SYS_NOTIFY_METHOD_MASK 0x03U
 #define SYS_NOTIFY_METHOD_POS 0
 
 /**
@@ -162,7 +162,7 @@ struct sys_notify {
 	 * are zeroed by the async notify API init functions, and will
 	 * be zeroed by sys_notify_finalize().
 	 */
-	u32_t volatile flags;
+	uint32_t volatile flags;
 
 	/*
 	 * The result of the operation.
@@ -175,9 +175,9 @@ struct sys_notify {
 };
 
 /** @internal */
-static inline u32_t sys_notify_get_method(const struct sys_notify *notify)
+static inline uint32_t sys_notify_get_method(const struct sys_notify *notify)
 {
-	u32_t method = notify->flags >> SYS_NOTIFY_METHOD_POS;
+	uint32_t method = notify->flags >> SYS_NOTIFY_METHOD_POS;
 
 	return method & SYS_NOTIFY_METHOD_MASK;
 }
@@ -280,10 +280,8 @@ static inline void sys_notify_init_spinwait(struct sys_notify *notify)
  * reinitialized before it can be re-used.
  *
  * @note
- *   @rst
- *   This capability is available only when :option:`CONFIG_POLL` is
+ *   This capability is available only when @option{CONFIG_POLL} is
  *   selected.
- *   @endrst
  *
  * @param notify pointer to the notification configuration object.
  *

@@ -1,0 +1,40 @@
+# Copyright 2020, Friedt Professional Engineering Services, Inc
+# SPDX-License-Identifier: Apache-2.0
+
+description: GPIO Emulator
+
+compatible: "zephyr,gpio-emul"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+    reg:
+      required: true
+
+    label:
+      required: true
+
+    rising-edge:
+      type: boolean
+
+    falling-edge:
+      type: boolean
+
+    dual-edge:
+      type: boolean
+
+    high-level:
+      type: boolean
+
+    low-level:
+      type: boolean
+
+    dual-level:
+      type: boolean
+
+    "#gpio-cells":
+      const: 2
+
+gpio-cells:
+  - pin
+  - flags

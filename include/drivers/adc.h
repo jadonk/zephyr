@@ -62,7 +62,7 @@ enum adc_gain {
  * @retval -EINVAL if the gain could not be interpreted
  */
 int adc_gain_invert(enum adc_gain gain,
-		    s32_t *value);
+		    int32_t *value);
 
 /** @brief ADC references. */
 enum adc_reference {
@@ -108,7 +108,7 @@ struct adc_channel_cfg {
 	 * Particular drivers do not necessarily support all the possible units.
 	 * Value range is 0-16383 for a given unit.
 	 */
-	u16_t acquisition_time;
+	uint16_t acquisition_time;
 
 	/**
 	 * Channel identifier.
@@ -132,10 +132,10 @@ struct adc_channel_cfg {
 	 * on the underlying hardware capabilities or configured via a dedicated
 	 * Kconfig option).
 	 */
-	u8_t channel_id   : 5;
+	uint8_t channel_id   : 5;
 
 	/** Channel type: single-ended or differential. */
-	u8_t differential : 1;
+	uint8_t differential : 1;
 
 #ifdef CONFIG_ADC_CONFIGURABLE_INPUTS
 	/**
@@ -143,14 +143,14 @@ struct adc_channel_cfg {
 	 * This is a driver dependent value that identifies an ADC input to be
 	 * associated with the channel.
 	 */
-	u8_t input_positive;
+	uint8_t input_positive;
 
 	/**
 	 * Negative ADC input (used only for differential channels).
 	 * This is a driver dependent value that identifies an ADC input to be
 	 * associated with the channel.
 	 */
-	u8_t input_negative;
+	uint8_t input_negative;
 #endif /* CONFIG_ADC_CONFIGURABLE_INPUTS */
 };
 
@@ -177,12 +177,12 @@ struct adc_channel_cfg {
  * @retval 0 on successful conversion
  * @retval -EINVAL if the gain is not reversible
  */
-static inline int adc_raw_to_millivolts(s32_t ref_mv,
+static inline int adc_raw_to_millivolts(int32_t ref_mv,
 					enum adc_gain gain,
-					u8_t resolution,
-					s32_t *valp)
+					uint8_t resolution,
+					int32_t *valp)
 {
-	s32_t adc_mv = *valp * ref_mv;
+	int32_t adc_mv = *valp * ref_mv;
 	int ret = adc_gain_invert(gain, &adc_mv);
 
 	if (ret == 0) {
@@ -224,10 +224,9 @@ enum adc_action {
  *
  * @returns Action to be performed by the driver. See @ref adc_action.
  */
-typedef enum adc_action (*adc_sequence_callback)(
-				struct device *dev,
-				const struct adc_sequence *sequence,
-				u16_t sampling_index);
+typedef enum adc_action (*adc_sequence_callback)(const struct device *dev,
+						 const struct adc_sequence *sequence,
+						 uint16_t sampling_index);
 
 /**
  * @brief Structure defining additional options for an ADC sampling sequence.
@@ -242,7 +241,7 @@ struct adc_sequence_options {
 	 * kernel's system clock. Particular drivers may use some dedicated
 	 * hardware timers and achieve a better precision.
 	 */
-	u32_t interval_us;
+	uint32_t interval_us;
 
 	/**
 	 * Callback function to be called after each sampling is done.
@@ -254,7 +253,7 @@ struct adc_sequence_options {
 	 * Number of extra samplings to perform (the total number of samplings
 	 * is 1 + extra_samplings).
 	 */
-	u16_t extra_samplings;
+	uint16_t extra_samplings;
 };
 
 /**
@@ -273,7 +272,7 @@ struct adc_sequence {
 	 * All selected channels must be configured with adc_channel_setup()
 	 * before they are used in a sequence.
 	 */
-	u32_t channels;
+	uint32_t channels;
 
 	/**
 	 * Pointer to a buffer where the samples are to be written. Samples
@@ -301,7 +300,7 @@ struct adc_sequence {
 	 * for differential ones:
 	 *   - 2^(resolution-1) .. 2^(resolution-1) - 1.
 	 */
-	u8_t resolution;
+	uint8_t resolution;
 
 	/**
 	 * Oversampling setting.
@@ -309,7 +308,7 @@ struct adc_sequence {
 	 * This feature may be unsupported by a given ADC hardware, or in
 	 * a specific mode (e.g. when sampling multiple channels).
 	 */
-	u8_t oversampling;
+	uint8_t oversampling;
 
 	/**
 	 * Perform calibration before the reading is taken if requested.
@@ -327,14 +326,14 @@ struct adc_sequence {
  * @brief Type definition of ADC API function for configuring a channel.
  * See adc_channel_setup() for argument descriptions.
  */
-typedef int (*adc_api_channel_setup)(struct device *dev,
+typedef int (*adc_api_channel_setup)(const struct device *dev,
 				     const struct adc_channel_cfg *channel_cfg);
 
 /**
  * @brief Type definition of ADC API function for setting a read request.
  * See adc_read() for argument descriptions.
  */
-typedef int (*adc_api_read)(struct device *dev,
+typedef int (*adc_api_read)(const struct device *dev,
 			    const struct adc_sequence *sequence);
 
 #ifdef CONFIG_ADC_ASYNC
@@ -343,7 +342,7 @@ typedef int (*adc_api_read)(struct device *dev,
  *        read request.
  * See adc_read_async() for argument descriptions.
  */
-typedef int (*adc_api_read_async)(struct device *dev,
+typedef int (*adc_api_read_async)(const struct device *dev,
 				  const struct adc_sequence *sequence,
 				  struct k_poll_signal *async);
 #endif
@@ -359,7 +358,7 @@ __subsystem struct adc_driver_api {
 #ifdef CONFIG_ADC_ASYNC
 	adc_api_read_async    read_async;
 #endif
-	u16_t ref_internal;	/* mV */
+	uint16_t ref_internal;	/* mV */
 };
 
 /**
@@ -374,14 +373,14 @@ __subsystem struct adc_driver_api {
  * @retval 0       On success.
  * @retval -EINVAL If a parameter with an invalid value has been provided.
  */
-__syscall int adc_channel_setup(struct device *dev,
+__syscall int adc_channel_setup(const struct device *dev,
 				const struct adc_channel_cfg *channel_cfg);
 
-static inline int z_impl_adc_channel_setup(struct device *dev,
-				const struct adc_channel_cfg *channel_cfg)
+static inline int z_impl_adc_channel_setup(const struct device *dev,
+					   const struct adc_channel_cfg *channel_cfg)
 {
 	const struct adc_driver_api *api =
-				(const struct adc_driver_api *)dev->driver_api;
+				(const struct adc_driver_api *)dev->api;
 
 	return api->channel_setup(dev, channel_cfg);
 }
@@ -407,14 +406,14 @@ static inline int z_impl_adc_channel_setup(struct device *dev,
  *                  in the buffer, but at least some of them were taken with
  *                  an extra delay compared to what was scheduled.
  */
-__syscall int adc_read(struct device *dev,
+__syscall int adc_read(const struct device *dev,
 		       const struct adc_sequence *sequence);
 
-static inline int z_impl_adc_read(struct device *dev,
+static inline int z_impl_adc_read(const struct device *dev,
 				  const struct adc_sequence *sequence)
 {
 	const struct adc_driver_api *api =
-				(const struct adc_driver_api *)dev->driver_api;
+				(const struct adc_driver_api *)dev->api;
 
 	return api->read(dev, sequence);
 }
@@ -436,17 +435,17 @@ static inline int z_impl_adc_read(struct device *dev,
  * @returns 0 on success, negative error code otherwise.
  *
  */
-__syscall int adc_read_async(struct device *dev,
+__syscall int adc_read_async(const struct device *dev,
 			     const struct adc_sequence *sequence,
 			     struct k_poll_signal *async);
 
 
-static inline int z_impl_adc_read_async(struct device *dev,
+static inline int z_impl_adc_read_async(const struct device *dev,
 					const struct adc_sequence *sequence,
 					struct k_poll_signal *async)
 {
 	const struct adc_driver_api *api =
-				(const struct adc_driver_api *)dev->driver_api;
+				(const struct adc_driver_api *)dev->api;
 
 	return api->read_async(dev, sequence, async);
 }
@@ -461,10 +460,10 @@ static inline int z_impl_adc_read_async(struct device *dev,
  * @return a positive value is the reference voltage value.  Returns
  * zero if reference voltage information is not available.
  */
-static inline u16_t adc_ref_internal(struct device *dev)
+static inline uint16_t adc_ref_internal(const struct device *dev)
 {
 	const struct adc_driver_api *api =
-				(const struct adc_driver_api *)dev->driver_api;
+				(const struct adc_driver_api *)dev->api;
 
 	return api->ref_internal;
 }

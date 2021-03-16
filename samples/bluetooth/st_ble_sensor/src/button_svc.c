@@ -34,12 +34,12 @@ extern struct bt_conn *conn;
 extern struct bt_gatt_service_static stsensor_svc[];
 extern volatile bool notify_enable;
 
-static struct device *button_dev;
+static const struct device *button_dev;
 static struct gpio_callback gpio_cb;
-u16_t but_val;
+uint16_t but_val;
 
-void button_pressed(struct device *gpiob, struct gpio_callback *cb,
-		    u32_t pins)
+void button_pressed(const struct device *gpiob, struct gpio_callback *cb,
+		    uint32_t pins)
 {
 	int err;
 

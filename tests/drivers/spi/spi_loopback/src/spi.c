@@ -25,6 +25,7 @@ LOG_MODULE_REGISTER(main);
 #define CS_CTRL_GPIO_DRV_NAME CONFIG_SPI_LOOPBACK_CS_CTRL_GPIO_DRV_NAME
 struct spi_cs_control spi_cs = {
 	.gpio_pin = CONFIG_SPI_LOOPBACK_CS_CTRL_GPIO_PIN,
+	.gpio_dt_flags = GPIO_ACTIVE_LOW,
 	.delay = 0,
 };
 #define SPI_CS (&spi_cs)
@@ -37,24 +38,24 @@ struct spi_cs_control spi_cs = {
 
 #define STACK_SIZE 512
 #define BUF_SIZE 17
-u8_t buffer_tx[] = "0123456789abcdef\0";
-u8_t buffer_rx[BUF_SIZE] = {};
+uint8_t buffer_tx[] = "0123456789abcdef\0";
+uint8_t buffer_rx[BUF_SIZE] = {};
 
 #define BUF2_SIZE 36
-u8_t buffer2_tx[] = "Thequickbrownfoxjumpsoverthelazydog\0";
-u8_t buffer2_rx[BUF2_SIZE] = {};
+uint8_t buffer2_tx[] = "Thequickbrownfoxjumpsoverthelazydog\0";
+uint8_t buffer2_rx[BUF2_SIZE] = {};
 
 /*
  * We need 5x(buffer size) + 1 to print a comma-separated list of each
  * byte in hex, plus a null.
  */
-u8_t buffer_print_tx[BUF_SIZE * 5 + 1];
-u8_t buffer_print_rx[BUF_SIZE * 5 + 1];
+uint8_t buffer_print_tx[BUF_SIZE * 5 + 1];
+uint8_t buffer_print_rx[BUF_SIZE * 5 + 1];
 
-u8_t buffer_print_tx2[BUF2_SIZE * 5 + 1];
-u8_t buffer_print_rx2[BUF2_SIZE * 5 + 1];
+uint8_t buffer_print_tx2[BUF2_SIZE * 5 + 1];
+uint8_t buffer_print_rx2[BUF2_SIZE * 5 + 1];
 
-static void to_display_format(const u8_t *src, size_t size, char *dst)
+static void to_display_format(const uint8_t *src, size_t size, char *dst)
 {
 	size_t i;
 
@@ -102,7 +103,7 @@ static int cs_ctrl_gpio_config(void)
 #endif /* CONFIG_SPI_LOOPBACK_CS_GPIO */
 
 /* test transferring different buffers on the same dma channels */
-static int spi_complete_multiple(struct device *dev,
+static int spi_complete_multiple(const struct device *dev,
 				 struct spi_config *spi_conf)
 {
 	struct spi_buf tx_bufs[2];
@@ -167,7 +168,8 @@ static int spi_complete_multiple(struct device *dev,
 	return 0;
 }
 
-static int spi_complete_loop(struct device *dev, struct spi_config *spi_conf)
+static int spi_complete_loop(const struct device *dev,
+			     struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -217,9 +219,10 @@ static int spi_complete_loop(struct device *dev, struct spi_config *spi_conf)
 	return 0;
 }
 
-static int spi_null_tx_buf(struct device *dev, struct spi_config *spi_conf)
+static int spi_null_tx_buf(const struct device *dev,
+			   struct spi_config *spi_conf)
 {
-	static const u8_t EXPECTED_NOP_RETURN_BUF[BUF_SIZE] = { 0 };
+	static const uint8_t EXPECTED_NOP_RETURN_BUF[BUF_SIZE] = { 0 };
 	(void)memset(buffer_rx, 0x77, BUF_SIZE);
 
 	const struct spi_buf tx_bufs[] = {
@@ -272,7 +275,8 @@ static int spi_null_tx_buf(struct device *dev, struct spi_config *spi_conf)
 	return 0;
 }
 
-static int spi_rx_half_start(struct device *dev, struct spi_config *spi_conf)
+static int spi_rx_half_start(const struct device *dev,
+			     struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -323,7 +327,8 @@ static int spi_rx_half_start(struct device *dev, struct spi_config *spi_conf)
 	return 0;
 }
 
-static int spi_rx_half_end(struct device *dev, struct spi_config *spi_conf)
+static int spi_rx_half_end(const struct device *dev,
+			   struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -383,7 +388,8 @@ static int spi_rx_half_end(struct device *dev, struct spi_config *spi_conf)
 	return 0;
 }
 
-static int spi_rx_every_4(struct device *dev, struct spi_config *spi_conf)
+static int spi_rx_every_4(const struct device *dev,
+			  struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -491,7 +497,8 @@ static void spi_async_call_cb(struct k_poll_event *async_evt,
 	}
 }
 
-static int spi_async_call(struct device *dev, struct spi_config *spi_conf)
+static int spi_async_call(const struct device *dev,
+			  struct spi_config *spi_conf)
 {
 	const struct spi_buf tx_bufs[] = {
 		{
@@ -543,9 +550,9 @@ static int spi_async_call(struct device *dev, struct spi_config *spi_conf)
 }
 #endif
 
-static int spi_resource_lock_test(struct device *lock_dev,
+static int spi_resource_lock_test(const struct device *lock_dev,
 				  struct spi_config *spi_conf_lock,
-				  struct device *try_dev,
+				  const struct device *try_dev,
 				  struct spi_config *spi_conf_try)
 {
 	spi_conf_lock->operation |= SPI_LOCK_ON;
@@ -573,8 +580,8 @@ void test_spi_loopback(void)
 	struct k_thread async_thread;
 	k_tid_t async_thread_id;
 #endif
-	struct device *spi_slow;
-	struct device *spi_fast;
+	const struct device *spi_slow;
+	const struct device *spi_fast;
 
 	LOG_INF("SPI test on buffers TX/RX %p/%p", buffer_tx, buffer_rx);
 

@@ -13,14 +13,14 @@
 
 BUILD_ASSERT(NUM_THREAD <= MAX_NUM_THREAD);
 
-/* slice size in millisecond*/
+/* slice size in millisecond */
 #define SLICE_SIZE 200
-/* busy for more than one slice*/
+/* busy for more than one slice */
 #define BUSY_MS (SLICE_SIZE + 20)
-/* a half timeslice*/
+/* a half timeslice */
 #define HALF_SLICE_SIZE (SLICE_SIZE >> 1)
 #define HALF_SLICE_SIZE_CYCLES                                                 \
-	((u64_t)(HALF_SLICE_SIZE)*sys_clock_hw_cycles_per_sec() / 1000)
+	((uint64_t)(HALF_SLICE_SIZE)*sys_clock_hw_cycles_per_sec() / 1000)
 
 /* Task switch tolerance ... */
 #if CONFIG_SYS_CLOCK_TICKS_PER_SEC >= 1000
@@ -32,13 +32,13 @@ BUILD_ASSERT(NUM_THREAD <= MAX_NUM_THREAD);
 #endif
 
 K_SEM_DEFINE(sema, 0, NUM_THREAD);
-/*elapsed_slice taken by last thread*/
-static u32_t elapsed_slice;
+/* elapsed_slice taken by last thread */
+static uint32_t elapsed_slice;
 static int thread_idx;
 
-static u32_t cycles_delta(u32_t *reftime)
+static uint32_t cycles_delta(uint32_t *reftime)
 {
-	u32_t now, delta;
+	uint32_t now, delta;
 
 	now = k_cycle_get_32();
 	delta = now - *reftime;
@@ -49,8 +49,8 @@ static u32_t cycles_delta(u32_t *reftime)
 
 static void thread_time_slice(void *p1, void *p2, void *p3)
 {
-	u32_t t = cycles_delta(&elapsed_slice);
-	u32_t expected_slice_min, expected_slice_max;
+	uint32_t t = cycles_delta(&elapsed_slice);
+	uint32_t expected_slice_min, expected_slice_max;
 
 	if (thread_idx == 0) {
 		/*
@@ -58,10 +58,10 @@ static void thread_time_slice(void *p1, void *p2, void *p3)
 		 * expected to switch in less than the switching tolerance.
 		 */
 		expected_slice_min =
-			(u64_t)(HALF_SLICE_SIZE - TASK_SWITCH_TOLERANCE) *
+			(uint64_t)(HALF_SLICE_SIZE - TASK_SWITCH_TOLERANCE) *
 			sys_clock_hw_cycles_per_sec() / 1000;
 		expected_slice_max =
-			(u64_t)(HALF_SLICE_SIZE + TASK_SWITCH_TOLERANCE) *
+			(uint64_t)(HALF_SLICE_SIZE + TASK_SWITCH_TOLERANCE) *
 			sys_clock_hw_cycles_per_sec() / 1000;
 	} else {
 		/*
@@ -83,7 +83,7 @@ static void thread_time_slice(void *p1, void *p2, void *p3)
 		 thread_idx, t, expected_slice_min, expected_slice_max);
 #endif
 
-	/** TESTPOINT: timeslice should be reset for each preemptive thread*/
+	/** TESTPOINT: timeslice should be reset for each preemptive thread */
 #ifndef CONFIG_COVERAGE
 	zassert_true(t >= expected_slice_min,
 		     "timeslice too small, expected %u got %u",
@@ -103,7 +103,7 @@ static void thread_time_slice(void *p1, void *p2, void *p3)
 	k_sem_give(&sema);
 }
 
-/*test cases*/
+/* test cases */
 /**
  * @brief Check the behavior of preemptive threads when the
  * time slice is disabled and enabled
@@ -119,43 +119,39 @@ static void thread_time_slice(void *p1, void *p2, void *p3)
  */
 void test_slice_reset(void)
 {
-	u32_t t32;
+	uint32_t t32;
 	k_tid_t tid[NUM_THREAD];
 	struct k_thread t[NUM_THREAD];
 	int old_prio = k_thread_priority_get(k_current_get());
 
 	thread_idx = 0;
-	/*disable timeslice*/
+	/* disable timeslice */
 	k_sched_time_slice_set(0, K_PRIO_PREEMPT(0));
 
 	for (int j = 0; j < 2; j++) {
 		k_sem_reset(&sema);
 
-		/* update priority for current thread*/
+		/* update priority for current thread */
 		k_thread_priority_set(k_current_get(), K_PRIO_PREEMPT(j));
 
-		/* create delayed threads with equal preemptive priority*/
+		/* synchronize to tick boundary */
+		k_usleep(1);
+
+		/* create delayed threads with equal preemptive priority */
 		for (int i = 0; i < NUM_THREAD; i++) {
 			tid[i] = k_thread_create(&t[i], tstacks[i], STACK_SIZE,
 						 thread_time_slice, NULL, NULL,
 						 NULL, K_PRIO_PREEMPT(j), 0,
 						 K_NO_WAIT);
 		}
-		/* enable time slice*/
+
+		/* enable time slice (and reset the counter!) */
 		k_sched_time_slice_set(SLICE_SIZE, K_PRIO_PREEMPT(0));
 
-		/*synchronize to tick boundary*/
-		t32 = k_uptime_get_32();
-		while (k_uptime_get_32() == t32) {
-#if defined(CONFIG_ARCH_POSIX)
-			k_busy_wait(50);
-#endif
-		}
-
-		/*set reference time*/
+		/* initialize reference timestamp */
 		cycles_delta(&elapsed_slice);
 
-		/* current thread (ztest native) consumed a half timeslice*/
+		/* current thread (ztest native) consumed a half timeslice */
 		t32 = k_cycle_get_32();
 		while (k_cycle_get_32() - t32 < HALF_SLICE_SIZE_CYCLES) {
 #if defined(CONFIG_ARCH_POSIX)
@@ -163,16 +159,17 @@ void test_slice_reset(void)
 #endif
 		}
 
-		/* relinquish CPU and wait for each thread to complete*/
+		/* relinquish CPU and wait for each thread to complete */
+		k_msleep(SLICE_SIZE * (NUM_THREAD + 1));
 		for (int i = 0; i < NUM_THREAD; i++) {
 			k_sem_take(&sema, K_FOREVER);
 		}
 
-		/* test case teardown*/
+		/* test case teardown */
 		for (int i = 0; i < NUM_THREAD; i++) {
 			k_thread_abort(tid[i]);
 		}
-		/* disable time slice*/
+		/* disable time slice */
 		k_sched_time_slice_set(0, K_PRIO_PREEMPT(0));
 	}
 	k_thread_priority_set(k_current_get(), old_prio);

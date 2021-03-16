@@ -16,13 +16,13 @@ static void zephyr_timer_wrapper(struct k_timer *timer);
 struct timer_obj {
 	struct k_timer ztimer;
 	os_timer_type type;
-	u32_t status;
+	uint32_t status;
 	void (*callback_function)(void const *argument);
 	void *arg;
 };
 
 K_MEM_SLAB_DEFINE(cmsis_timer_slab, sizeof(struct timer_obj),
-		  CONFIG_CMSIS_TIMER_MAX_COUNT, 4);
+		  CONFIG_CMSIS_TIMER_MAX_COUNT, __alignof__(struct timer_obj));
 
 static void zephyr_timer_wrapper(struct k_timer *timer)
 {

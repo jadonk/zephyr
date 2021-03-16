@@ -92,10 +92,10 @@ struct fp_non_volatile_register_set {
 
 struct fp_volatile_register_set {
 #ifdef CONFIG_FP_FPU_DA
-	u32_t dpfp2h;
-	u32_t dpfp2l;
-	u32_t dpfp1h;
-	u32_t dpfp1l;
+	uint32_t dpfp2h;
+	uint32_t dpfp2l;
+	uint32_t dpfp1h;
+	uint32_t dpfp1l;
 #endif
 };
 
@@ -110,14 +110,26 @@ struct fp_non_volatile_register_set {
 
 struct fp_volatile_register_set {
 #ifdef CONFIG_CPU_HAS_FPU_DOUBLE_PRECISION
-	u64_t fp[32];
+	uint64_t fp[32];
 #else
-	u32_t fp[32];
+	uint32_t fp[32];
 #endif
 };
 
 struct fp_non_volatile_register_set {
 	/* No non-volatile floating point registers */
+};
+
+#define SIZEOF_FP_VOLATILE_REGISTER_SET sizeof(struct fp_volatile_register_set)
+#define SIZEOF_FP_NON_VOLATILE_REGISTER_SET 0
+
+#elif defined(CONFIG_SPARC)
+
+struct fp_volatile_register_set {
+	double d[16];
+};
+
+struct fp_non_volatile_register_set {
 };
 
 #define SIZEOF_FP_VOLATILE_REGISTER_SET sizeof(struct fp_volatile_register_set)

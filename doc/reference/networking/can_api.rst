@@ -169,7 +169,7 @@ occurred. It does not block until the message is sent like the example above.
 
 .. code-block:: C
 
-  void tx_irq_callback(u32_t error_flags, void *arg)
+  void tx_irq_callback(uint32_t error_flags, void *arg)
   {
           char *sender = (char *)arg;
 
@@ -178,7 +178,7 @@ occurred. It does not block until the message is sent like the example above.
           }
   }
 
-  int send_function(struct device *can_dev)
+  int send_function(const struct device *can_dev)
   {
           struct zcan_frame frame = {
                   .id_type = CAN_EXTENDED_IDENTIFIER,

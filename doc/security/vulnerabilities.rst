@@ -353,22 +353,138 @@ available.
 
 See NCC-ZEP-030
 
-This issue has not been fixed.
+This has been fixed in a PR against Zephyr master.
 
 - `CVE-2020-10060 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10060>`_
 
 - `Zephyr project bug tracker ZEPSEC-37
   <https://zephyrprojectsec.atlassian.net/browse/ZEPSEC-37>`_
 
+- `PR27865 fix on master (to be fixed in v2.4.0)
+  <https://github.com/zephyrproject-rtos/zephyr/pull/27865>`_
+
+- `PR27865 fix for v2.3.0
+  <https://github.com/zephyrproject-rtos/zephyr/pull/27889>`_
+
+- `PR27865 fix for v2.2.0
+  <https://github.com/zephyrproject-rtos/zephyr/pull/27891>`_
+
+- `PR27865 fix for v2.1.0
+  <https://github.com/zephyrproject-rtos/zephyr/pull/27893>`_
+
+CVE-2020-10061
+--------------
+
+Error handling invalid packet sequence
+
+Improper handling of the full-buffer case in the Zephyr Bluetooth
+implementation can result in memory corruption.
+
+This has been fixed in branches for v1.14.0, v2.2.0, and will be
+included in v2.3.0.
+
+- `CVE-2020-10061 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10061>`_
+
+- `Zephyr project bug tracker ZEPSEC-75
+  <https://zephyrprojectsec.atlassian.net/browse/ZEPSEC-75>`_
+
+- `PR23516 fix for v2.3 (split driver)
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23516>`_
+
+- `PR23517 fix for v2.3 (legacy driver)
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23517>`_
+
+- `PR23091 fix for branch from v1.14.0
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23091>`_
+
+- `PR23547 fix for branch from v2.2.0
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23547>`_
+
 CVE-2020-10062
 --------------
 
-Under embargo until 2020/05/25
+Packet length decoding error in MQTT
+
+CVE: An off-by-one error in the Zephyr project MQTT packet length
+decoder can result in memory corruption and possible remote code
+execution. NCC-ZEP-031
+
+The MQTT packet header length can be 1 to 4 bytes. An off-by-one error
+in the code can result in this being interpreted as 5 bytes, which can
+cause an integer overflow, resulting in memory corruption.
+
+This has been fixed in master for v2.3.
+
+- `CVE-2020-10062 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10062>`_
+
+- `Zephyr project bug tracker ZEPSEC-84
+  <https://zephyrprojectsec.atlassian.net/browse/ZEPSEC-84>`_
+
+- `commit 11b7a37d for v2.3
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23821/commits/11b7a37d9a0b438270421b224221d91929843de4>`_
+
+- `NCC-ZEP report`_ (NCC-ZEP-031)
+
+.. _NCC-ZEP report: https://research.nccgroup.com/2020/05/26/research-report-zephyr-and-mcuboot-security-assessment
 
 CVE-2020-10063
 --------------
 
-Under embargo until 2020/05/25
+Remote Denial of Service in CoAP Option Parsing Due To Integer
+Overflow
+
+A remote adversary with the ability to send arbitrary CoAP packets to
+be parsed by Zephyr is able to cause a denial of service.
+
+This has been fixed in master for v2.3.
+
+- `CVE-2020-10063 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10063>`_
+
+- `Zephyr project bug tracker ZEPSEC-55
+  <https://zephyrprojectsec.atlassian.net/browse/ZEPSEC-55>`_
+
+- `PR24435 fix in master for v2.3
+  <https://github.com/zephyrproject-rtos/zephyr/pull/24435>`_
+
+- `PR24531 fix for branch from v2.2
+  <https://github.com/zephyrproject-rtos/zephyr/pull/24531>`_
+
+- `PR24535 fix for branch from v2.1
+  <https://github.com/zephyrproject-rtos/zephyr/pull/24535>`_
+
+- `PR24530 fix for branch from v1.14
+  <https://github.com/zephyrproject-rtos/zephyr/pull/24530>`_
+
+- `NCC-ZEP report`_ (NCC-ZEP-032)
+
+CVE-2020-10064
+--------------
+
+Improper Input Frame Validation in ieee802154 Processing
+
+- `CVE-2020-10064 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10064>`_
+
+- `Zephyr project bug tracker ZEPSEC-65
+  <https://zephyrprojectsec.atlasssian.net/browse/ZEPSEC-65>`_
+
+- `PR24971 fix for v2.4
+  <https://github.com/zephyrproject-rtos/zephyr/pull/24971>`_
+
+CVE-2020-10066
+--------------
+
+Incorrect Error Handling in Bluetooth HCI core
+
+In hci_cmd_done, the buf argument being passed as null causes
+nullpointer dereference.
+
+- `CVE-2020-10066 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10066>`_
+
+- `Zephyr project bug tracker ZEPSEC-67
+  <https://zephyrprojectsec.atlasssian.net/browse/ZEPSEC-67>`_
+
+- `PR24902 fix for v2.4
+  <https://github.com/zephyrproject-rtos/zephyr/pull/24902>`_
 
 CVE-2020-10067
 --------------
@@ -398,3 +514,179 @@ This has been fixed in releases v1.14.2, and v2.2.0.
 
 - `PR23239 fix for v2.2.0
   <https://github.com/zephyrproject-rtos/zephyr/pull/23239>`_
+
+CVE-2020-10068
+--------------
+
+Zephyr Bluetooth DLE duplicate requests vulnerability
+
+In the Zephyr project Bluetooth subsystem, certain duplicate and
+back-to-back packets can cause incorrect behavior, resulting in a
+denial of service.
+
+This has been fixed in branches for v1.14.0, v2.2.0, and will be
+included in v2.3.0.
+
+- `CVE-2020-10068 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10068>`_
+
+- `Zephyr project bug tracker ZEPSEC-78
+  <https://zephyrprojectsec.atlassian.net/browse/ZEPSEC-78>`_
+
+- `PR23707 fix for v2.3 (split driver)
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23707>`_
+
+- `PR23708 fix for v2.3 (legacy driver)
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23708>`_
+
+- `PR23091 fix for branch from v1.14.0
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23091>`_
+
+- `PR23964 fix for v2.2.0
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23964>`_
+
+CVE-2020-10069
+--------------
+
+Zephyr Bluetooth unchecked packet data results in denial of service
+
+An unchecked parameter in bluetooth data can result in an assertion
+failure, or division by zero, resulting in a denial of service attack.
+
+This has been fixed in branches for v1.14.0, v2.2.0, and will be
+included in v2.3.0.
+
+- `CVE-2020-10069 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10069>`_
+
+- `Zephyr project bug tracker ZEPSEC-81
+  <https://zephyrprojectsec.atlassian.net/browse/ZEPSEC-81>`_
+
+- `PR23705 fix for v2.3 (split driver)
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23705>`_
+
+- `PR23706 fix for v2.3 (legacy driver)
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23706>`_
+
+- `PR23091 fix for branch from v1.14.0
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23091>`_
+
+- `PR23963 fix for branch from v2.2.0
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23963>`_
+
+CVE-2020-10070
+--------------
+
+MQTT buffer overflow on receive buffer
+
+In the Zephyr Project MQTT code, improper bounds checking can result
+in memory corruption and possibly remote code execution.  NCC-ZEP-031
+
+When calculating the packet length, arithmetic overflow can result in
+accepting a receive buffer larger than the available buffer space,
+resulting in user data being written beyond this buffer.
+
+This has been fixed in master for v2.3.
+
+- `CVE-2020-10070 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10070>`_
+
+- `Zephyr project bug tracker ZEPSEC-85
+  <https://zephyrprojectsec.atlassian.net/browse/ZEPSEC-85>`_
+
+- `commit 0b39cbf3 for v2.3
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23821/commits/0b39cbf3c01d7feec9d0dd7cc7e0e374b6113542>`_
+
+- `NCC-ZEP report`_ (NCC-ZEP-031)
+
+CVE-2020-10071
+--------------
+
+Insufficient publish message length validation in MQTT
+
+The Zephyr MQTT parsing code performs insufficient checking of the
+length field on publish messages, allowing a buffer overflow and
+potentially remote code execution. NCC-ZEP-031
+
+This has been fixed in master for v2.3.
+
+- `CVE-2020-10071 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10071>`_
+
+- `Zephyr project bug tracker ZEPSEC-86
+  <https://zephyrprojectsec.atlassian.net/browse/ZEPSEC-86>`_
+
+- `commit 989c4713 fix for v2.3
+  <https://github.com/zephyrproject-rtos/zephyr/pull/23821/commits/989c4713ba429aa5105fe476b4d629718f3e6082>`_
+
+- `NCC-ZEP report`_ (NCC-ZEP-031)
+
+CVE-2020-10072
+--------------
+
+All threads can access all socket file descriptors
+
+There is no management of permissions to network socket API file
+descriptors. Any thread running on the system may read/write a socket
+file descriptor knowing only the numerical value of the file
+descriptor.
+
+- `CVE-2020-10072 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10072>`_
+
+- `Zephyr project bug tracker ZEPSEC-87
+  <https://zephyrprojectsec.atlasssian.net/browse/ZEPSEC-87>`_
+
+- `PR25804 fix for v2.4
+  <https://github.com/zephyrproject-rtos/zephyr/pull/25804>`_
+
+
+CVE-2020-13598
+--------------
+
+FS: Buffer Overflow when enabling Long File Names in FAT_FS and calling fs_stat
+
+Performing fs_stat on a file with a filename longer than 12
+characters long will cause a buffer overflow.
+
+- `CVE-2020-13598 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-13598>`_
+
+- `Zephyr project bug tracker ZEPSEC-88
+  <https://zephyrprojectsec.atlasssian.net/browse/ZEPSEC-88>`_
+
+- `PR25852 fix for v2.4
+  <https://github.com/zephyrproject-rtos/zephyr/pull/25852>`_
+
+CVE-2020-13599
+--------------
+
+Security problem with settings and littlefs
+
+When settings is used in combination with littlefs all security
+related information can be extracted from the device using MCUmgr and
+this could be used e.g in bt-mesh to get the device key, network key,
+app keys from the device.
+
+- `CVE-2020-13599 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-13599>`_
+
+- `Zephyr project bug tracker ZEPSEC-57
+  <https://zephyrprojectsec.atlasssian.net/browse/ZEPSEC-57>`_
+
+- `PR26083 fix for v2.4
+  <https://github.com/zephyrproject-rtos/zephyr/pull/26083>`_
+
+CVE-2020-13601
+--------------
+
+Under embargo until 2020/11/18
+
+CVE-2020-13602
+--------------
+
+Remote Denial of Service in LwM2M do_write_op_tlv
+
+In the Zephyr LwM2M implementation, malformed input can result in an
+infinite loop, resulting in a denial of service attack.
+
+- `CVE-2020-13602 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-13602>`_
+
+- `Zephyr project bug tracker ZEPSEC-56
+  <https://zephyrprojectsec.atlasssian.net/browse/ZEPSEC-56>`_
+
+- `PR26571 fix for v2.4
+  <https://github.com/zephyrproject-rtos/zephyr/pull/26571>`_

@@ -39,12 +39,12 @@ static void tstack_pop(struct k_stack *pstack)
 }
 
 /*entry of contexts*/
-static void tIsr_entry_push(void *p)
+static void tIsr_entry_push(const void *p)
 {
 	tstack_push((struct k_stack *)p);
 }
 
-static void tIsr_entry_pop(void *p)
+static void tIsr_entry_pop(const void *p)
 {
 	tstack_pop((struct k_stack *)p);
 }
@@ -79,11 +79,11 @@ static void tstack_thread_isr(struct k_stack *pstack)
 {
 	k_sem_init(&end_sema1, 0, 1);
 	/**TESTPOINT: thread-isr data passing via stack*/
-	irq_offload(tIsr_entry_push, pstack);
+	irq_offload(tIsr_entry_push, (const void *)pstack);
 	tstack_pop(pstack);
 
 	tstack_push(pstack);
-	irq_offload(tIsr_entry_pop, pstack);
+	irq_offload(tIsr_entry_pop, (const void *)pstack);
 }
 
 /**
@@ -93,6 +93,17 @@ static void tstack_thread_isr(struct k_stack *pstack)
 
 /**
  * @brief Test to verify data passing between threads via stack
+ *
+ * @details Static define and Dynamic define stacks,
+ * Then initialize them.
+ * Current thread push or pop data item into the stack.
+ * Create a new thread pop or push data item into the stack.
+ * Controlled by semaphore.
+ * Verify data passing between threads via stack
+ * And verify stack can be define at compile time.
+ *
+ * @ingroup kernel_stack_tests
+ *
  * @see k_stack_init(), k_stack_push(), #K_STACK_DEFINE(x), k_stack_pop()
  */
 void test_stack_thread2thread(void)

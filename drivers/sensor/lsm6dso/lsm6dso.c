@@ -23,11 +23,11 @@
 
 LOG_MODULE_REGISTER(LSM6DSO, CONFIG_SENSOR_LOG_LEVEL);
 
-static const u16_t lsm6dso_odr_map[] = {0, 12, 26, 52, 104, 208, 416, 833,
+static const uint16_t lsm6dso_odr_map[] = {0, 12, 26, 52, 104, 208, 416, 833,
 					1660, 3330, 6660};
 
 #if defined(LSM6DSO_ACCEL_ODR_RUNTIME) || defined(LSM6DSO_GYRO_ODR_RUNTIME)
-static int lsm6dso_freq_to_odr_val(u16_t freq)
+static int lsm6dso_freq_to_odr_val(uint16_t freq)
 {
 	size_t i;
 
@@ -41,7 +41,7 @@ static int lsm6dso_freq_to_odr_val(u16_t freq)
 }
 #endif
 
-static int lsm6dso_odr_to_freq_val(u16_t odr)
+static int lsm6dso_odr_to_freq_val(uint16_t odr)
 {
 	/* for valid index, return value from map */
 	if (odr < ARRAY_SIZE(lsm6dso_odr_map)) {
@@ -53,10 +53,10 @@ static int lsm6dso_odr_to_freq_val(u16_t odr)
 }
 
 #ifdef LSM6DSO_ACCEL_FS_RUNTIME
-static const u16_t lsm6dso_accel_fs_map[] = {2, 16, 4, 8};
-static const u16_t lsm6dso_accel_fs_sens[] = {1, 8, 2, 4};
+static const uint16_t lsm6dso_accel_fs_map[] = {2, 16, 4, 8};
+static const uint16_t lsm6dso_accel_fs_sens[] = {1, 8, 2, 4};
 
-static int lsm6dso_accel_range_to_fs_val(s32_t range)
+static int lsm6dso_accel_range_to_fs_val(int32_t range)
 {
 	size_t i;
 
@@ -71,10 +71,10 @@ static int lsm6dso_accel_range_to_fs_val(s32_t range)
 #endif
 
 #ifdef LSM6DSO_GYRO_FS_RUNTIME
-static const u16_t lsm6dso_gyro_fs_map[] = {250, 500, 1000, 2000, 125};
-static const u16_t lsm6dso_gyro_fs_sens[] = {2, 4, 8, 16, 1};
+static const uint16_t lsm6dso_gyro_fs_map[] = {250, 500, 1000, 2000, 125};
+static const uint16_t lsm6dso_gyro_fs_sens[] = {2, 4, 8, 16, 1};
 
-static int lsm6dso_gyro_range_to_fs_val(s32_t range)
+static int lsm6dso_gyro_range_to_fs_val(int32_t range)
 {
 	size_t i;
 
@@ -88,9 +88,9 @@ static int lsm6dso_gyro_range_to_fs_val(s32_t range)
 }
 #endif
 
-static inline int lsm6dso_reboot(struct device *dev)
+static inline int lsm6dso_reboot(const struct device *dev)
 {
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 
 	if (lsm6dso_boot_set(data->ctx, 1) < 0) {
 		return -EIO;
@@ -102,9 +102,9 @@ static inline int lsm6dso_reboot(struct device *dev)
 	return 0;
 }
 
-static int lsm6dso_accel_set_fs_raw(struct device *dev, u8_t fs)
+static int lsm6dso_accel_set_fs_raw(const struct device *dev, uint8_t fs)
 {
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 
 	if (lsm6dso_xl_full_scale_set(data->ctx, fs) < 0) {
 		return -EIO;
@@ -115,9 +115,9 @@ static int lsm6dso_accel_set_fs_raw(struct device *dev, u8_t fs)
 	return 0;
 }
 
-static int lsm6dso_accel_set_odr_raw(struct device *dev, u8_t odr)
+static int lsm6dso_accel_set_odr_raw(const struct device *dev, uint8_t odr)
 {
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 
 	if (lsm6dso_xl_data_rate_set(data->ctx, odr) < 0) {
 		return -EIO;
@@ -128,9 +128,9 @@ static int lsm6dso_accel_set_odr_raw(struct device *dev, u8_t odr)
 	return 0;
 }
 
-static int lsm6dso_gyro_set_fs_raw(struct device *dev, u8_t fs)
+static int lsm6dso_gyro_set_fs_raw(const struct device *dev, uint8_t fs)
 {
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 
 	if (lsm6dso_gy_full_scale_set(data->ctx, fs) < 0) {
 		return -EIO;
@@ -139,9 +139,9 @@ static int lsm6dso_gyro_set_fs_raw(struct device *dev, u8_t fs)
 	return 0;
 }
 
-static int lsm6dso_gyro_set_odr_raw(struct device *dev, u8_t odr)
+static int lsm6dso_gyro_set_odr_raw(const struct device *dev, uint8_t odr)
 {
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 
 	if (lsm6dso_gy_data_rate_set(data->ctx, odr) < 0) {
 		return -EIO;
@@ -151,7 +151,7 @@ static int lsm6dso_gyro_set_odr_raw(struct device *dev, u8_t odr)
 }
 
 #ifdef LSM6DSO_ACCEL_ODR_RUNTIME
-static int lsm6dso_accel_odr_set(struct device *dev, u16_t freq)
+static int lsm6dso_accel_odr_set(const struct device *dev, uint16_t freq)
 {
 	int odr;
 
@@ -170,10 +170,10 @@ static int lsm6dso_accel_odr_set(struct device *dev, u16_t freq)
 #endif
 
 #ifdef LSM6DSO_ACCEL_FS_RUNTIME
-static int lsm6dso_accel_range_set(struct device *dev, s32_t range)
+static int lsm6dso_accel_range_set(const struct device *dev, int32_t range)
 {
 	int fs;
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 
 	fs = lsm6dso_accel_range_to_fs_val(range);
 	if (fs < 0) {
@@ -190,9 +190,10 @@ static int lsm6dso_accel_range_set(struct device *dev, s32_t range)
 }
 #endif
 
-static int lsm6dso_accel_config(struct device *dev, enum sensor_channel chan,
-			    enum sensor_attribute attr,
-			    const struct sensor_value *val)
+static int lsm6dso_accel_config(const struct device *dev,
+				enum sensor_channel chan,
+				enum sensor_attribute attr,
+				const struct sensor_value *val)
 {
 	switch (attr) {
 #ifdef LSM6DSO_ACCEL_FS_RUNTIME
@@ -212,7 +213,7 @@ static int lsm6dso_accel_config(struct device *dev, enum sensor_channel chan,
 }
 
 #ifdef LSM6DSO_GYRO_ODR_RUNTIME
-static int lsm6dso_gyro_odr_set(struct device *dev, u16_t freq)
+static int lsm6dso_gyro_odr_set(const struct device *dev, uint16_t freq)
 {
 	int odr;
 
@@ -231,10 +232,10 @@ static int lsm6dso_gyro_odr_set(struct device *dev, u16_t freq)
 #endif
 
 #ifdef LSM6DSO_GYRO_FS_RUNTIME
-static int lsm6dso_gyro_range_set(struct device *dev, s32_t range)
+static int lsm6dso_gyro_range_set(const struct device *dev, int32_t range)
 {
 	int fs;
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 
 	fs = lsm6dso_gyro_range_to_fs_val(range);
 	if (fs < 0) {
@@ -251,9 +252,10 @@ static int lsm6dso_gyro_range_set(struct device *dev, s32_t range)
 }
 #endif
 
-static int lsm6dso_gyro_config(struct device *dev, enum sensor_channel chan,
-			    enum sensor_attribute attr,
-			    const struct sensor_value *val)
+static int lsm6dso_gyro_config(const struct device *dev,
+			       enum sensor_channel chan,
+			       enum sensor_attribute attr,
+			       const struct sensor_value *val)
 {
 	switch (attr) {
 #ifdef LSM6DSO_GYRO_FS_RUNTIME
@@ -272,9 +274,10 @@ static int lsm6dso_gyro_config(struct device *dev, enum sensor_channel chan,
 	return 0;
 }
 
-static int lsm6dso_attr_set(struct device *dev, enum sensor_channel chan,
-			   enum sensor_attribute attr,
-			   const struct sensor_value *val)
+static int lsm6dso_attr_set(const struct device *dev,
+			    enum sensor_channel chan,
+			    enum sensor_attribute attr,
+			    const struct sensor_value *val)
 {
 	switch (chan) {
 	case SENSOR_CHAN_ACCEL_XYZ:
@@ -295,9 +298,9 @@ static int lsm6dso_attr_set(struct device *dev, enum sensor_channel chan,
 	return 0;
 }
 
-static int lsm6dso_sample_fetch_accel(struct device *dev)
+static int lsm6dso_sample_fetch_accel(const struct device *dev)
 {
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 	union axis3bit16_t buf;
 
 	if (lsm6dso_acceleration_raw_get(data->ctx, buf.u8bit) < 0) {
@@ -312,9 +315,9 @@ static int lsm6dso_sample_fetch_accel(struct device *dev)
 	return 0;
 }
 
-static int lsm6dso_sample_fetch_gyro(struct device *dev)
+static int lsm6dso_sample_fetch_gyro(const struct device *dev)
 {
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 	union axis3bit16_t buf;
 
 	if (lsm6dso_angular_rate_raw_get(data->ctx, buf.u8bit) < 0) {
@@ -330,9 +333,9 @@ static int lsm6dso_sample_fetch_gyro(struct device *dev)
 }
 
 #if defined(CONFIG_LSM6DSO_ENABLE_TEMP)
-static int lsm6dso_sample_fetch_temp(struct device *dev)
+static int lsm6dso_sample_fetch_temp(const struct device *dev)
 {
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 	union axis1bit16_t buf;
 
 	if (lsm6dso_temperature_raw_get(data->ctx, buf.u8bit) < 0) {
@@ -347,7 +350,7 @@ static int lsm6dso_sample_fetch_temp(struct device *dev)
 #endif
 
 #if defined(CONFIG_LSM6DSO_SENSORHUB)
-static int lsm6dso_sample_fetch_shub(struct device *dev)
+static int lsm6dso_sample_fetch_shub(const struct device *dev)
 {
 	if (lsm6dso_shub_fetch_external_devs(dev) < 0) {
 		LOG_DBG("failed to read ext shub devices");
@@ -358,7 +361,8 @@ static int lsm6dso_sample_fetch_shub(struct device *dev)
 }
 #endif /* CONFIG_LSM6DSO_SENSORHUB */
 
-static int lsm6dso_sample_fetch(struct device *dev, enum sensor_channel chan)
+static int lsm6dso_sample_fetch(const struct device *dev,
+				enum sensor_channel chan)
 {
 	switch (chan) {
 	case SENSOR_CHAN_ACCEL_XYZ:
@@ -393,24 +397,24 @@ static int lsm6dso_sample_fetch(struct device *dev, enum sensor_channel chan)
 }
 
 static inline void lsm6dso_accel_convert(struct sensor_value *val, int raw_val,
-					 u32_t sensitivity)
+					 uint32_t sensitivity)
 {
-	s64_t dval;
+	int64_t dval;
 
 	/* Sensitivity is exposed in ug/LSB */
 	/* Convert to m/s^2 */
-	dval = (s64_t)(raw_val) * sensitivity * SENSOR_G_DOUBLE;
-	val->val1 = (s32_t)(dval / 1000000);
-	val->val2 = (s32_t)(dval % 1000000);
+	dval = (int64_t)(raw_val) * sensitivity * SENSOR_G_DOUBLE;
+	val->val1 = (int32_t)(dval / 1000000);
+	val->val2 = (int32_t)(dval % 1000000);
 
 }
 
 static inline int lsm6dso_accel_get_channel(enum sensor_channel chan,
 					    struct sensor_value *val,
 					    struct lsm6dso_data *data,
-					    u32_t sensitivity)
+					    uint32_t sensitivity)
 {
-	u8_t i;
+	uint8_t i;
 
 	switch (chan) {
 	case SENSOR_CHAN_ACCEL_X:
@@ -442,23 +446,23 @@ static int lsm6dso_accel_channel_get(enum sensor_channel chan,
 }
 
 static inline void lsm6dso_gyro_convert(struct sensor_value *val, int raw_val,
-					u32_t sensitivity)
+					uint32_t sensitivity)
 {
-	s64_t dval;
+	int64_t dval;
 
 	/* Sensitivity is exposed in udps/LSB */
 	/* Convert to rad/s */
-	dval = (s64_t)(raw_val) * sensitivity * SENSOR_DEG2RAD_DOUBLE;
-	val->val1 = (s32_t)(dval / 1000000);
-	val->val2 = (s32_t)(dval % 1000000);
+	dval = (int64_t)(raw_val) * sensitivity * SENSOR_DEG2RAD_DOUBLE;
+	val->val1 = (int32_t)(dval / 1000000);
+	val->val2 = (int32_t)(dval % 1000000);
 }
 
 static inline int lsm6dso_gyro_get_channel(enum sensor_channel chan,
 					   struct sensor_value *val,
 					   struct lsm6dso_data *data,
-					   u32_t sensitivity)
+					   uint32_t sensitivity)
 {
-	u8_t i;
+	uint8_t i;
 
 	switch (chan) {
 	case SENSOR_CHAN_GYRO_X:
@@ -502,21 +506,21 @@ static void lsm6dso_gyro_channel_get_temp(struct sensor_value *val,
 
 #if defined(CONFIG_LSM6DSO_SENSORHUB)
 static inline void lsm6dso_magn_convert(struct sensor_value *val, int raw_val,
-					u16_t sensitivity)
+					uint16_t sensitivity)
 {
 	double dval;
 
 	/* Sensitivity is exposed in mgauss/LSB */
 	dval = (double)(raw_val * sensitivity);
-	val->val1 = (s32_t)dval / 1000000;
-	val->val2 = (s32_t)dval % 1000000;
+	val->val1 = (int32_t)dval / 1000000;
+	val->val2 = (int32_t)dval % 1000000;
 }
 
 static inline int lsm6dso_magn_get_channel(enum sensor_channel chan,
 					   struct sensor_value *val,
 					   struct lsm6dso_data *data)
 {
-	s16_t sample[3];
+	int16_t sample[3];
 	int idx;
 
 	idx = lsm6dso_shub_get_idx(SENSOR_CHAN_MAGN_XYZ);
@@ -526,11 +530,11 @@ static inline int lsm6dso_magn_get_channel(enum sensor_channel chan,
 	}
 
 
-	sample[0] = sys_le16_to_cpu((s16_t)(data->ext_data[idx][0] |
+	sample[0] = sys_le16_to_cpu((int16_t)(data->ext_data[idx][0] |
 				    (data->ext_data[idx][1] << 8)));
-	sample[1] = sys_le16_to_cpu((s16_t)(data->ext_data[idx][2] |
+	sample[1] = sys_le16_to_cpu((int16_t)(data->ext_data[idx][2] |
 				    (data->ext_data[idx][3] << 8)));
-	sample[2] = sys_le16_to_cpu((s16_t)(data->ext_data[idx][4] |
+	sample[2] = sys_le16_to_cpu((int16_t)(data->ext_data[idx][4] |
 				    (data->ext_data[idx][5] << 8)));
 
 	switch (chan) {
@@ -559,7 +563,7 @@ static inline void lsm6dso_hum_convert(struct sensor_value *val,
 				       struct lsm6dso_data *data)
 {
 	float rh;
-	s16_t raw_val;
+	int16_t raw_val;
 	struct hts221_data *ht = &data->hts221;
 	int idx;
 
@@ -569,7 +573,7 @@ static inline void lsm6dso_hum_convert(struct sensor_value *val,
 		return;
 	}
 
-	raw_val = sys_le16_to_cpu((s16_t)(data->ext_data[idx][0] |
+	raw_val = sys_le16_to_cpu((int16_t)(data->ext_data[idx][0] |
 					  (data->ext_data[idx][1] << 8)));
 
 	/* find relative humidty by linear interpolation */
@@ -584,7 +588,7 @@ static inline void lsm6dso_hum_convert(struct sensor_value *val,
 static inline void lsm6dso_press_convert(struct sensor_value *val,
 					 struct lsm6dso_data *data)
 {
-	s32_t raw_val;
+	int32_t raw_val;
 	int idx;
 
 	idx = lsm6dso_shub_get_idx(SENSOR_CHAN_PRESS);
@@ -593,7 +597,7 @@ static inline void lsm6dso_press_convert(struct sensor_value *val,
 		return;
 	}
 
-	raw_val = sys_le32_to_cpu((s32_t)(data->ext_data[idx][0] |
+	raw_val = sys_le32_to_cpu((int32_t)(data->ext_data[idx][0] |
 					  (data->ext_data[idx][1] << 8) |
 					  (data->ext_data[idx][2] << 16)));
 
@@ -601,13 +605,13 @@ static inline void lsm6dso_press_convert(struct sensor_value *val,
 	/* Convert raw_val to val in kPa */
 	val->val1 = (raw_val >> 12) / 10;
 	val->val2 = (raw_val >> 12) % 10 * 100000 +
-		(((s32_t)((raw_val) & 0x0FFF) * 100000L) >> 12);
+		(((int32_t)((raw_val) & 0x0FFF) * 100000L) >> 12);
 }
 
 static inline void lsm6dso_temp_convert(struct sensor_value *val,
 					struct lsm6dso_data *data)
 {
-	s16_t raw_val;
+	int16_t raw_val;
 	int idx;
 
 	idx = lsm6dso_shub_get_idx(SENSOR_CHAN_PRESS);
@@ -616,20 +620,20 @@ static inline void lsm6dso_temp_convert(struct sensor_value *val,
 		return;
 	}
 
-	raw_val = sys_le16_to_cpu((s16_t)(data->ext_data[idx][3] |
+	raw_val = sys_le16_to_cpu((int16_t)(data->ext_data[idx][3] |
 					  (data->ext_data[idx][4] << 8)));
 
 	/* Temperature sensitivity is 100 LSB/deg C */
 	val->val1 = raw_val / 100;
-	val->val2 = (s32_t)raw_val % 100 * (10000);
+	val->val2 = (int32_t)raw_val % 100 * (10000);
 }
 #endif
 
-static int lsm6dso_channel_get(struct device *dev,
+static int lsm6dso_channel_get(const struct device *dev,
 			       enum sensor_channel chan,
 			       struct sensor_value *val)
 {
-	struct lsm6dso_data *data = dev->driver_data;
+	struct lsm6dso_data *data = dev->data;
 
 	switch (chan) {
 	case SENSOR_CHAN_ACCEL_X:
@@ -685,10 +689,10 @@ static const struct sensor_driver_api lsm6dso_api_funcs = {
 	.channel_get = lsm6dso_channel_get,
 };
 
-static int lsm6dso_init_chip(struct device *dev)
+static int lsm6dso_init_chip(const struct device *dev)
 {
-	struct lsm6dso_data *lsm6dso = dev->driver_data;
-	u8_t chip_id;
+	struct lsm6dso_data *lsm6dso = dev->data;
+	uint8_t chip_id;
 
 	if (lsm6dso_device_id_get(lsm6dso->ctx, &chip_id) < 0) {
 		LOG_DBG("Failed reading chip id");
@@ -762,6 +766,7 @@ static const struct lsm6dso_config lsm6dso_config = {
 #if DT_INST_SPI_DEV_HAS_CS_GPIOS(0)
 	.gpio_cs_port	    = DT_INST_SPI_DEV_CS_GPIOS_LABEL(0),
 	.cs_gpio	    = DT_INST_SPI_DEV_CS_GPIOS_PIN(0),
+	.cs_gpio_flags	    = DT_INST_SPI_DEV_CS_GPIOS_FLAGS(0),
 
 	.spi_conf.cs        =  &lsm6dso_data.cs_ctrl,
 #else
@@ -786,10 +791,12 @@ static const struct lsm6dso_config lsm6dso_config = {
 #endif /* CONFIG_LSM6DSO_TRIGGER */
 };
 
-static int lsm6dso_init(struct device *dev)
+static int lsm6dso_init(const struct device *dev)
 {
-	const struct lsm6dso_config * const config = dev->config_info;
-	struct lsm6dso_data *data = dev->driver_data;
+	const struct lsm6dso_config * const config = dev->config;
+	struct lsm6dso_data *data = dev->data;
+
+	data->dev = dev;
 
 	data->bus = device_get_binding(config->bus_name);
 	if (!data->bus) {

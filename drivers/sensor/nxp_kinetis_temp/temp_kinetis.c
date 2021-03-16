@@ -15,7 +15,7 @@ LOG_MODULE_REGISTER(temp_kinetis, CONFIG_SENSOR_LOG_LEVEL);
 
 /*
  * Driver assumptions:
- * - ADC samples are in u16_t format
+ * - ADC samples are in uint16_t format
  * - Both ADC channels (sensor and bandgap) are on the same ADC instance
  *
  * See NXP Application Note AN3031 for details on calculations.
@@ -26,8 +26,8 @@ LOG_MODULE_REGISTER(temp_kinetis, CONFIG_SENSOR_LOG_LEVEL);
 
 struct temp_kinetis_config {
 	const char *adc_dev_name;
-	u8_t sensor_adc_ch;
-	u8_t bandgap_adc_ch;
+	uint8_t sensor_adc_ch;
+	uint8_t bandgap_adc_ch;
 	int bandgap_mv;
 	int vtemp25_mv;
 	int slope_cold_uv;
@@ -36,17 +36,17 @@ struct temp_kinetis_config {
 };
 
 struct temp_kinetis_data {
-	struct device *adc;
-	u16_t buffer[TEMP_KINETIS_ADC_SAMPLES];
+	const struct device *adc;
+	uint16_t buffer[TEMP_KINETIS_ADC_SAMPLES];
 };
 
-static int temp_kinetis_sample_fetch(struct device *dev,
+static int temp_kinetis_sample_fetch(const struct device *dev,
 				     enum sensor_channel chan)
 {
-	const struct temp_kinetis_config *config = dev->config_info;
-	struct temp_kinetis_data *data = dev->driver_data;
+	const struct temp_kinetis_config *config = dev->config;
+	struct temp_kinetis_data *data = dev->data;
 #ifdef CONFIG_TEMP_KINETIS_FILTER
-	u16_t previous[TEMP_KINETIS_ADC_SAMPLES];
+	uint16_t previous[TEMP_KINETIS_ADC_SAMPLES];
 	int i;
 #endif /* CONFIG_TEMP_KINETIS_FILTER */
 	int err;
@@ -84,18 +84,18 @@ static int temp_kinetis_sample_fetch(struct device *dev,
 	return 0;
 }
 
-static int temp_kinetis_channel_get(struct device *dev,
+static int temp_kinetis_channel_get(const struct device *dev,
 				    enum sensor_channel chan,
 				    struct sensor_value *val)
 {
-	const struct temp_kinetis_config *config = dev->config_info;
-	struct temp_kinetis_data *data = dev->driver_data;
-	u16_t adcr_vdd = BIT_MASK(config->adc_seq.resolution);
-	u16_t adcr_temp25;
-	s32_t temp_cc;
-	s32_t vdd_mv;
+	const struct temp_kinetis_config *config = dev->config;
+	struct temp_kinetis_data *data = dev->data;
+	uint16_t adcr_vdd = BIT_MASK(config->adc_seq.resolution);
+	uint16_t adcr_temp25;
+	int32_t temp_cc;
+	int32_t vdd_mv;
 	int slope_uv;
-	u16_t adcr_100m;
+	uint16_t adcr_100m;
 
 	if (chan != SENSOR_CHAN_VOLTAGE && chan != SENSOR_CHAN_DIE_TEMP) {
 		return -ENOTSUP;
@@ -137,10 +137,10 @@ static const struct sensor_driver_api temp_kinetis_driver_api = {
 	.channel_get = temp_kinetis_channel_get,
 };
 
-static int temp_kinetis_init(struct device *dev)
+static int temp_kinetis_init(const struct device *dev)
 {
-	const struct temp_kinetis_config *config = dev->config_info;
-	struct temp_kinetis_data *data = dev->driver_data;
+	const struct temp_kinetis_config *config = dev->config;
+	struct temp_kinetis_data *data = dev->data;
 	int err;
 	int i;
 	const struct adc_channel_cfg ch_cfg[] = {

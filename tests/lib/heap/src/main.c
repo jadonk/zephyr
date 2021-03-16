@@ -119,10 +119,10 @@ void testfree(void *arg, void *p)
 
 static void log_result(size_t sz, struct z_heap_stress_result *r)
 {
-	u32_t tot = r->total_allocs + r->total_frees;
-	u32_t avg = (u32_t)((r->accumulated_in_use_bytes + tot/2) / tot);
-	u32_t avg_pct = (u32_t)((100ULL * avg + sz / 2) / sz);
-	u32_t succ_pct = ((100ULL * r->successful_allocs + r->total_allocs / 2)
+	uint32_t tot = r->total_allocs + r->total_frees;
+	uint32_t avg = (uint32_t)((r->accumulated_in_use_bytes + tot/2) / tot);
+	uint32_t avg_pct = (uint32_t)((100ULL * avg + sz / 2) / sz);
+	uint32_t succ_pct = ((100ULL * r->successful_allocs + r->total_allocs / 2)
 			  / r->total_allocs);
 
 	TC_PRINT("successful allocs: %d/%d (%d%%), frees: %d,"
@@ -204,9 +204,83 @@ static void test_big_heap(void)
 	log_result(BIG_HEAP_SZ, &result);
 }
 
+/* Simple clobber detection */
+void realloc_fill_block(uint8_t *p, size_t sz)
+{
+	uint8_t val = (uint8_t)((uintptr_t)p >> 3);
+
+	for (int i = 0; i < sz; i++) {
+		p[i] = (uint8_t)(val + i);
+	}
+}
+
+bool realloc_check_block(uint8_t *data, uint8_t *orig, size_t sz)
+{
+	uint8_t val = (uint8_t)((uintptr_t)orig >> 3);
+
+	for (int i = 0; i < sz; i++) {
+		if (data[i] != (uint8_t)(val + i)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static void test_realloc(void)
+{
+	struct sys_heap heap;
+	void *p1, *p2, *p3;
+
+	/* Note whitebox assumption: allocation goes from low address
+	 * to high in an empty heap.
+	 */
+
+	sys_heap_init(&heap, heapmem, SMALL_HEAP_SZ);
+
+	/* Allocate from an empty heap, then expand, validate that it
+	 * happens in place.
+	 */
+	p1 = sys_heap_alloc(&heap, 64);
+	realloc_fill_block(p1, 64);
+	p2 = sys_heap_realloc(&heap, p1, 128);
+
+	zassert_true(sys_heap_validate(&heap), "invalid heap");
+	zassert_true(p1 == p2,
+		     "Realloc should have expanded in place %p -> %p",
+		     p1, p2);
+	zassert_true(realloc_check_block(p2, p1, 64), "data changed");
+
+	/* Allocate two blocks, then expand the first, validate that
+	 * it moves.
+	 */
+	p1 = sys_heap_alloc(&heap, 64);
+	realloc_fill_block(p1, 64);
+	p2 = sys_heap_alloc(&heap, 64);
+	realloc_fill_block(p2, 64);
+	p3 = sys_heap_realloc(&heap, p1, 128);
+
+	zassert_true(sys_heap_validate(&heap), "invalid heap");
+	zassert_true(p1 != p2,
+		     "Realloc should must have moved %p", p1);
+	zassert_true(realloc_check_block(p2, p2, 64), "data changed");
+	zassert_true(realloc_check_block(p3, p1, 64), "data changed");
+
+	/* Allocate, then shrink.  Validate that it does not move. */
+	p1 = sys_heap_alloc(&heap, 128);
+	realloc_fill_block(p1, 128);
+	p2 = sys_heap_realloc(&heap, p1, 64);
+
+	zassert_true(sys_heap_validate(&heap), "invalid heap");
+	zassert_true(p1 == p2,
+		     "Realloc should have shrunk in place %p -> %p",
+		     p1, p2);
+	zassert_true(realloc_check_block(p2, p1, 64), "data changed");
+}
+
 void test_main(void)
 {
 	ztest_test_suite(lib_heap_test,
+			 ztest_unit_test(test_realloc),
 			 ztest_unit_test(test_small_heap),
 			 ztest_unit_test(test_fragmentation),
 			 ztest_unit_test(test_big_heap)

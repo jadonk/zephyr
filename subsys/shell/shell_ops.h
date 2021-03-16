@@ -68,7 +68,7 @@ static inline void shell_putc(const struct shell *shell, char ch)
 
 static inline bool flag_insert_mode_get(const struct shell *shell)
 {
-	return ((shell->ctx->internal.flags.insert_mode == 1) ? true : false);
+	return shell->ctx->internal.flags.insert_mode == 1;
 }
 
 static inline void flag_insert_mode_set(const struct shell *shell, bool val)
@@ -78,7 +78,7 @@ static inline void flag_insert_mode_set(const struct shell *shell, bool val)
 
 static inline bool flag_use_colors_get(const struct shell *shell)
 {
-	return shell->ctx->internal.flags.use_colors == 1 ? true : false;
+	return shell->ctx->internal.flags.use_colors == 1;
 }
 
 static inline void flag_use_colors_set(const struct shell *shell, bool val)
@@ -88,7 +88,7 @@ static inline void flag_use_colors_set(const struct shell *shell, bool val)
 
 static inline bool flag_echo_get(const struct shell *shell)
 {
-	return shell->ctx->internal.flags.echo == 1 ? true : false;
+	return shell->ctx->internal.flags.echo == 1;
 }
 
 static inline void flag_echo_set(const struct shell *shell, bool val)
@@ -98,12 +98,12 @@ static inline void flag_echo_set(const struct shell *shell, bool val)
 
 static inline bool flag_processing_get(const struct shell *shell)
 {
-	return shell->ctx->internal.flags.processing == 1 ? true : false;
+	return shell->ctx->internal.flags.processing == 1;
 }
 
 static inline bool flag_tx_rdy_get(const struct shell *shell)
 {
-	return shell->ctx->internal.flags.tx_rdy == 1 ? true : false;
+	return shell->ctx->internal.flags.tx_rdy == 1;
 }
 
 static inline void flag_tx_rdy_set(const struct shell *shell, bool val)
@@ -113,7 +113,7 @@ static inline void flag_tx_rdy_set(const struct shell *shell, bool val)
 
 static inline bool flag_mode_delete_get(const struct shell *shell)
 {
-	return shell->ctx->internal.flags.mode_delete == 1 ? true : false;
+	return shell->ctx->internal.flags.mode_delete == 1;
 }
 
 static inline void flag_mode_delete_set(const struct shell *shell, bool val)
@@ -123,7 +123,7 @@ static inline void flag_mode_delete_set(const struct shell *shell, bool val)
 
 static inline bool flag_history_exit_get(const struct shell *shell)
 {
-	return shell->ctx->internal.flags.history_exit == 1 ? true : false;
+	return shell->ctx->internal.flags.history_exit == 1;
 }
 
 static inline void flag_history_exit_set(const struct shell *shell, bool val)
@@ -133,7 +133,7 @@ static inline void flag_history_exit_set(const struct shell *shell, bool val)
 
 static inline bool flag_cmd_ctx_get(const struct shell *shell)
 {
-	return shell->ctx->internal.flags.cmd_ctx == 1 ? true : false;
+	return shell->ctx->internal.flags.cmd_ctx == 1;
 }
 
 static inline void flag_cmd_ctx_set(const struct shell *shell, bool val)
@@ -141,18 +141,28 @@ static inline void flag_cmd_ctx_set(const struct shell *shell, bool val)
 	shell->ctx->internal.flags.cmd_ctx = val ? 1 : 0;
 }
 
-static inline u8_t flag_last_nl_get(const struct shell *shell)
+static inline uint8_t flag_last_nl_get(const struct shell *shell)
 {
 	return shell->ctx->internal.flags.last_nl;
 }
 
-static inline void flag_last_nl_set(const struct shell *shell, u8_t val)
+static inline void flag_last_nl_set(const struct shell *shell, uint8_t val)
 {
 	shell->ctx->internal.flags.last_nl = val;
 }
 
-void shell_op_cursor_vert_move(const struct shell *shell, s32_t delta);
-void shell_op_cursor_horiz_move(const struct shell *shell, s32_t delta);
+static inline bool flag_print_noinit_get(const struct shell *shell)
+{
+	return shell->ctx->internal.flags.print_noinit == 1;
+}
+
+static inline void flag_print_noinit_set(const struct shell *shell, bool val)
+{
+	shell->ctx->internal.flags.print_noinit = val ? 1 : 0;
+}
+
+void shell_op_cursor_vert_move(const struct shell *shell, int32_t delta);
+void shell_op_cursor_horiz_move(const struct shell *shell, int32_t delta);
 
 void shell_op_cond_next_line(const struct shell *shell);
 
@@ -163,14 +173,14 @@ void shell_op_cond_next_line(const struct shell *shell);
  */
 void shell_op_cursor_position_synchronize(const struct shell *shell);
 
-void shell_op_cursor_move(const struct shell *shell, s16_t val);
+void shell_op_cursor_move(const struct shell *shell, int16_t val);
 
 void shell_op_left_arrow(const struct shell *shell);
 
 void shell_op_right_arrow(const struct shell *shell);
 
 /* Moves cursor by defined number of words left (val negative) or right. */
-void shell_op_cursor_word_move(const struct shell *shell, s16_t val);
+void shell_op_cursor_word_move(const struct shell *shell, int16_t val);
 
 /*
  *  Removes the "word" to the left of the cursor:
@@ -198,7 +208,7 @@ void shell_op_delete_from_cursor(const struct shell *shell);
 
 void shell_op_completion_insert(const struct shell *shell,
 				const char *compl,
-				u16_t compl_len);
+				uint16_t compl_len);
 
 bool shell_cursor_in_empty_line(const struct shell *shell);
 

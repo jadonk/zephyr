@@ -43,7 +43,7 @@ void test_multiple_signal_flags(void const *thread_id)
 
 	for (sig_cnt = 0; sig_cnt < max_signal_cnt; sig_cnt++) {
 		/* create unique signal flags to set one flag at a time */
-		s32_t signal_each_flag = SIGNAL_FLAG << sig_cnt;
+		int32_t signal_each_flag = SIGNAL_FLAG << sig_cnt;
 		/* check if each signal flag is set properly */
 		signals = osSignalSet((osThreadId)thread_id, signal_each_flag);
 		zassert_not_equal(signals, 0x80000000,
@@ -161,9 +161,9 @@ void test_signal_events_signalled(void)
 }
 
 /* IRQ offload function handler to set signal flag */
-static void offload_function(void *param)
+static void offload_function(const void *param)
 {
-	osThreadId tid = param;
+	osThreadId tid = (osThreadId)param;
 	int signals;
 
 	/* Make sure we're in IRQ context */
@@ -176,7 +176,7 @@ static void offload_function(void *param)
 void test_signal_from_isr(void const *thread_id)
 {
 	/**TESTPOINT: Offload to IRQ context*/
-	irq_offload(offload_function, (void *)thread_id);
+	irq_offload(offload_function, (const void *)thread_id);
 }
 
 osThreadDef(test_signal_from_isr, osPriorityHigh, 1, 0);

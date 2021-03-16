@@ -1,36 +1,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
-title: Deprecated stuff
-description: Deprecated stuff
+description: Property deprecated value test
 
-# Deprecated include syntax
-inherits:
-    !include deprecated-include.yaml
+compatible: "test-deprecated"
 
 properties:
-    # Deprecated way of specifying the 'compatible' string
-    compatible:
-        constraint: "deprecated"
-        type: string-array
-
-    # Deprecated 'category' key (replaced with 'required')
-
-    required:
+    oldprop:
         type: int
-        category: required
+        deprecated: true
+        required: false
 
-    optional:
+    curprop:
         type: int
-        category: optional
-
-# Deprecated older 'child-binding'-alike
-sub-node:
-    properties:
-        foos:
-            type: phandle-array
-            required: true
-
-# Deprecated older catch-all version of *-cells
-"#cells":
-    - foo
-    - bar
+        required: false

@@ -13,14 +13,14 @@ LOG_MODULE_REGISTER(test);
 static struct k_sem top_cnt_sem;
 static struct k_sem alarm_cnt_sem;
 
-static void top_handler(struct device *dev, void *user_data);
+static void top_handler(const struct device *dev, void *user_data);
 
 void *exp_user_data = (void *)199;
 
 #if defined(CONFIG_COUNTER_MCUX_RTC) || defined(CONFIG_COUNTER_RTC_STM32)
-#define COUNTER_PERIOD_US (USEC_PER_SEC * 2U)
+#define COUNTER_PERIOD_US_VAL (USEC_PER_SEC * 2U)
 #else
-#define COUNTER_PERIOD_US 20000
+#define COUNTER_PERIOD_US_VAL 20000
 #endif
 
 struct counter_alarm_cfg alarm_cfg;
@@ -58,6 +58,9 @@ static const char * const devices[] = {
 #ifdef CONFIG_COUNTER_RTC2
 	DT_LABEL(DT_NODELABEL(rtc2)),
 #endif
+#ifdef CONFIG_COUNTER_NATIVE_POSIX
+	DT_LABEL(DT_NODELABEL(counter0)),
+#endif
 	/* NOTE: there is no trailing comma, as the DT_LABELS_FOR_COMPAT
 	 * handles it.
 	 */
@@ -66,9 +69,17 @@ static const char * const devices[] = {
 	LABELS_FOR_DT_COMPAT(microchip_xec_timer)
 	LABELS_FOR_DT_COMPAT(nxp_imx_epit)
 	LABELS_FOR_DT_COMPAT(nxp_imx_gpt)
+#ifdef CONFIG_COUNTER_MCUX_RTC
 	LABELS_FOR_DT_COMPAT(nxp_kinetis_rtc)
+#endif
 	LABELS_FOR_DT_COMPAT(silabs_gecko_rtcc)
 	LABELS_FOR_DT_COMPAT(st_stm32_rtc)
+#ifdef CONFIG_COUNTER_MCUX_PIT
+	LABELS_FOR_DT_COMPAT(nxp_kinetis_pit)
+#endif
+#ifdef CONFIG_COUNTER_XLNX_AXI_TIMER
+	LABELS_FOR_DT_COMPAT(xlnx_xps_timer_1_00_a)
+#endif
 };
 
 typedef void (*counter_test_func_t)(const char *dev_name);
@@ -84,7 +95,7 @@ static void counter_setup_instance(const char *dev_name)
 static void counter_tear_down_instance(const char *dev_name)
 {
 	int err;
-	struct device *dev;
+	const struct device *dev;
 	struct counter_top_cfg top_cfg = {
 		.callback = NULL,
 		.user_data = NULL,
@@ -129,7 +140,7 @@ static void test_all_instances(counter_test_func_t func,
 
 static bool set_top_value_capable(const char *dev_name)
 {
-	struct device *dev = device_get_binding(dev_name);
+	const struct device *dev = device_get_binding(dev_name);
 	struct counter_top_cfg cfg = {
 		.ticks = counter_get_top_value(dev) - 1
 	};
@@ -149,7 +160,7 @@ static bool set_top_value_capable(const char *dev_name)
 	return true;
 }
 
-static void top_handler(struct device *dev, void *user_data)
+static void top_handler(const struct device *dev, void *user_data)
 {
 	zassert_true(user_data == exp_user_data,
 			"%s: Unexpected callback", dev->name);
@@ -158,10 +169,11 @@ static void top_handler(struct device *dev, void *user_data)
 
 void test_set_top_value_with_alarm_instance(const char *dev_name)
 {
-	struct device *dev;
+	const struct device *dev;
 	int err;
-	u32_t cnt;
-	u32_t top_cnt;
+	uint32_t cnt;
+	uint32_t counter_period_us;
+	uint32_t top_cnt;
 	struct counter_top_cfg top_cfg = {
 		.callback = top_handler,
 		.user_data = exp_user_data,
@@ -171,7 +183,14 @@ void test_set_top_value_with_alarm_instance(const char *dev_name)
 	k_sem_reset(&top_cnt_sem);
 
 	dev = device_get_binding(dev_name);
-	top_cfg.ticks = counter_us_to_ticks(dev, COUNTER_PERIOD_US);
+	if (strcmp(dev_name, "RTC_0") == 0) {
+		counter_period_us = COUNTER_PERIOD_US_VAL;
+	} else {
+		/* if more counter drivers exist other than RTC,
+		   the test vaule set to 20000 by default */
+		counter_period_us = 20000;
+	}
+	top_cfg.ticks = counter_us_to_ticks(dev, counter_period_us);
 	err = counter_start(dev);
 	zassert_equal(0, err, "%s: Counter failed to start", dev_name);
 
@@ -192,7 +211,7 @@ void test_set_top_value_with_alarm_instance(const char *dev_name)
 	zassert_equal(0, err, "%s: Counter failed to set top value (err: %d)",
 			dev_name, err);
 
-	k_busy_wait(5.2*COUNTER_PERIOD_US);
+	k_busy_wait(5.2*counter_period_us);
 
 	top_cnt = k_sem_count_get(&top_cnt_sem);
 	zassert_true(top_cnt == 5U,
@@ -208,18 +227,26 @@ void test_set_top_value_with_alarm(void)
 
 void test_set_top_value_without_alarm_instance(const char *dev_name)
 {
-	struct device *dev;
+	const struct device *dev;
 	int err;
-	u32_t cnt;
-	u32_t top_cnt;
+	uint32_t cnt;
+	uint32_t top_cnt;
+	uint32_t counter_period_us;
 	struct counter_top_cfg top_cfg = {
 		.callback = NULL,
 		.user_data = NULL,
 		.flags = 0
 	};
 
+	if (strcmp(dev_name, "RTC_0") == 0) {
+		counter_period_us = COUNTER_PERIOD_US_VAL;
+	} else {
+		/* if more counter drivers exist other than RTC,
+		   the test vaule set to 20000 by default */
+		counter_period_us = 20000;
+	}
 	dev = device_get_binding(dev_name);
-	top_cfg.ticks = counter_us_to_ticks(dev, COUNTER_PERIOD_US);
+	top_cfg.ticks = counter_us_to_ticks(dev, counter_period_us);
 	err = counter_start(dev);
 	zassert_equal(0, err, "%s: Counter failed to start", dev_name);
 
@@ -251,17 +278,18 @@ void test_set_top_value_without_alarm(void)
 			   set_top_value_capable);
 }
 
-static void alarm_handler(struct device *dev, u8_t chan_id, u32_t counter,
+static void alarm_handler(const struct device *dev, uint8_t chan_id,
+			  uint32_t counter,
 			  void *user_data)
 {
 	/* Arbitrary limit for alarm processing - time between hw expiration
 	 * and read-out from counter in the handler.
 	 */
-	static const u64_t processing_limit_us = 1000;
-	u32_t now;
+	static const uint64_t processing_limit_us = 1000;
+	uint32_t now;
 	int err;
-	u32_t top;
-	u32_t diff;
+	uint32_t top;
+	uint32_t diff;
 
 	err = counter_get_value(dev, &now);
 	zassert_true(err == 0, "%s: Counter read failed (err: %d)",
@@ -294,18 +322,26 @@ static void alarm_handler(struct device *dev, u8_t chan_id, u32_t counter,
 
 void test_single_shot_alarm_instance(const char *dev_name, bool set_top)
 {
-	struct device *dev;
+	const struct device *dev;
 	int err;
-	u32_t ticks;
-	u32_t alarm_cnt;
+	uint32_t ticks;
+	uint32_t alarm_cnt;
+	uint32_t counter_period_us;
 	struct counter_top_cfg top_cfg = {
 		.callback = top_handler,
 		.user_data = exp_user_data,
 		.flags = 0
 	};
 
+	if (strcmp(dev_name, "RTC_0") == 0) {
+		counter_period_us = COUNTER_PERIOD_US_VAL;
+	} else {
+		/* if more counter drivers exist other than RTC,
+		   the test vaule set to 20000 by default */
+		counter_period_us = 20000;
+	}
 	dev = device_get_binding(dev_name);
-	ticks = counter_us_to_ticks(dev, COUNTER_PERIOD_US);
+	ticks = counter_us_to_ticks(dev, counter_period_us);
 	top_cfg.ticks = ticks;
 
 	alarm_cfg.flags = 0;
@@ -341,7 +377,7 @@ void test_single_shot_alarm_instance(const char *dev_name, bool set_top)
 	zassert_equal(0, err, "%s: Counter set alarm failed (err: %d)",
 			dev_name, err);
 
-	k_busy_wait(2*(u32_t)counter_ticks_to_us(dev, ticks));
+	k_busy_wait(2*(uint32_t)counter_ticks_to_us(dev, ticks));
 
 	alarm_cnt = k_sem_count_get(&alarm_cnt_sem);
 	zassert_equal(1, alarm_cnt,
@@ -384,7 +420,7 @@ void test_single_shot_alarm_top_instance(const char *dev_name)
 
 static bool single_channel_alarm_capable(const char *dev_name)
 {
-	struct device *dev = device_get_binding(dev_name);
+	const struct device *dev = device_get_binding(dev_name);
 
 	return (counter_get_num_of_channels(dev) > 0);
 }
@@ -409,7 +445,8 @@ void test_single_shot_alarm_top(void)
 
 static void *clbk_data[10];
 
-static void alarm_handler2(struct device *dev, u8_t chan_id, u32_t counter,
+static void alarm_handler2(const struct device *dev, uint8_t chan_id,
+			   uint32_t counter,
 			   void *user_data)
 {
 	clbk_data[k_sem_count_get(&alarm_cnt_sem)] = user_data;
@@ -424,18 +461,26 @@ static void alarm_handler2(struct device *dev, u8_t chan_id, u32_t counter,
  */
 void test_multiple_alarms_instance(const char *dev_name)
 {
-	struct device *dev;
+	const struct device *dev;
 	int err;
-	u32_t ticks;
-	u32_t alarm_cnt;
+	uint32_t ticks;
+	uint32_t alarm_cnt;
+	uint32_t counter_period_us;
 	struct counter_top_cfg top_cfg = {
 		.callback = top_handler,
 		.user_data = exp_user_data,
 		.flags = 0
 	};
 
+	if (strcmp(dev_name, "RTC_0") == 0) {
+		counter_period_us = COUNTER_PERIOD_US_VAL;
+	} else {
+		/* if more counter drivers exist other than RTC,
+		   the test vaule set to 20000 by default */
+		counter_period_us = 20000;
+	}
 	dev = device_get_binding(dev_name);
-	ticks = counter_us_to_ticks(dev, COUNTER_PERIOD_US);
+	ticks = counter_us_to_ticks(dev, counter_period_us);
 	top_cfg.ticks = ticks;
 
 	alarm_cfg.flags = COUNTER_ALARM_CFG_ABSOLUTE;
@@ -462,7 +507,7 @@ void test_multiple_alarms_instance(const char *dev_name)
 	zassert_equal(0, err,
 			"%s: Counter failed to set top value", dev_name);
 
-	k_busy_wait(3*(u32_t)counter_ticks_to_us(dev, alarm_cfg.ticks));
+	k_busy_wait(3*(uint32_t)counter_ticks_to_us(dev, alarm_cfg.ticks));
 
 	err = counter_set_channel_alarm(dev, 0, &alarm_cfg);
 	zassert_equal(0, err, "%s: Counter set alarm failed", dev_name);
@@ -493,7 +538,7 @@ void test_multiple_alarms_instance(const char *dev_name)
 
 static bool multiple_channel_alarm_capable(const char *dev_name)
 {
-	struct device *dev = device_get_binding(dev_name);
+	const struct device *dev = device_get_binding(dev_name);
 
 	return (counter_get_num_of_channels(dev) > 1);
 }
@@ -506,17 +551,23 @@ void test_multiple_alarms(void)
 
 void test_all_channels_instance(const char *dev_name)
 {
-	struct device *dev;
+	const struct device *dev;
 	int err;
 	const int n = 10;
 	int nchan = 0;
 	bool limit_reached = false;
 	struct counter_alarm_cfg alarm_cfgs;
-	u32_t ticks;
-	u32_t alarm_cnt;
+	uint32_t ticks;
+	uint32_t alarm_cnt;
+	uint32_t counter_period_us;
 
+	if (strcmp(dev_name, "RTC_0") == 0) {
+		counter_period_us = COUNTER_PERIOD_US_VAL;
+	} else {
+		counter_period_us = 20000;
+	}
 	dev = device_get_binding(dev_name);
-	ticks = counter_us_to_ticks(dev, COUNTER_PERIOD_US);
+	ticks = counter_us_to_ticks(dev, counter_period_us);
 
 	alarm_cfgs.flags = 0;
 	alarm_cfgs.ticks = ticks;
@@ -569,10 +620,10 @@ void test_all_channels(void)
 void test_late_alarm_instance(const char *dev_name)
 {
 	int err;
-	u32_t alarm_cnt;
-	struct device *dev = device_get_binding(dev_name);
-	u32_t tick_us = (u32_t)counter_ticks_to_us(dev, 1);
-	u32_t guard = counter_us_to_ticks(dev, 200);
+	uint32_t alarm_cnt;
+	const struct device *dev = device_get_binding(dev_name);
+	uint32_t tick_us = (uint32_t)counter_ticks_to_us(dev, 1);
+	uint32_t guard = counter_us_to_ticks(dev, 200);
 	struct counter_alarm_cfg alarm_cfg = {
 		.callback = alarm_handler,
 		.flags = COUNTER_ALARM_CFG_ABSOLUTE |
@@ -621,9 +672,9 @@ void test_late_alarm_instance(const char *dev_name)
 void test_late_alarm_error_instance(const char *dev_name)
 {
 	int err;
-	struct device *dev = device_get_binding(dev_name);
-	u32_t tick_us = (u32_t)counter_ticks_to_us(dev, 1);
-	u32_t guard = counter_us_to_ticks(dev, 200);
+	const struct device *dev = device_get_binding(dev_name);
+	uint32_t tick_us = (uint32_t)counter_ticks_to_us(dev, 1);
+	uint32_t guard = counter_us_to_ticks(dev, 200);
 	struct counter_alarm_cfg alarm_cfg = {
 		.callback = alarm_handler,
 		.flags = COUNTER_ALARM_CFG_ABSOLUTE,
@@ -657,8 +708,8 @@ void test_late_alarm_error_instance(const char *dev_name)
 
 static bool late_detection_capable(const char *dev_name)
 {
-	struct device *dev = device_get_binding(dev_name);
-	u32_t guard = counter_get_guard_period(dev,
+	const struct device *dev = device_get_binding(dev_name);
+	uint32_t guard = counter_get_guard_period(dev,
 					COUNTER_GUARD_PERIOD_LATE_TO_SET);
 	int err = counter_set_guard_period(dev, guard,
 					COUNTER_GUARD_PERIOD_LATE_TO_SET);
@@ -684,9 +735,9 @@ void test_late_alarm_error(void)
 static void test_short_relative_alarm_instance(const char *dev_name)
 {
 	int err;
-	u32_t alarm_cnt;
-	struct device *dev = device_get_binding(dev_name);
-	u32_t tick_us = (u32_t)counter_ticks_to_us(dev, 1);
+	uint32_t alarm_cnt;
+	const struct device *dev = device_get_binding(dev_name);
+	uint32_t tick_us = (uint32_t)counter_ticks_to_us(dev, 1);
 	struct counter_alarm_cfg alarm_cfg = {
 		.callback = alarm_handler,
 		.flags = 0,
@@ -720,7 +771,7 @@ static void test_short_relative_alarm_instance(const char *dev_name)
  */
 static bool short_relative_capable(const char *dev_name)
 {
-	struct device *dev = device_get_binding(dev_name);
+	const struct device *dev = device_get_binding(dev_name);
 	struct counter_alarm_cfg alarm_cfg = {
 		.callback = alarm_handler,
 		.flags = 0,
@@ -775,13 +826,13 @@ static void test_short_relative_alarm(void)
 static void test_cancelled_alarm_does_not_expire_instance(const char *dev_name)
 {
 	int err;
-	u32_t alarm_cnt;
-	struct device *dev = device_get_binding(dev_name);
-	u32_t us = 1000;
-	u32_t ticks = counter_us_to_ticks(dev, us);
-	u32_t top = counter_get_top_value(dev);
+	uint32_t alarm_cnt;
+	const struct device *dev = device_get_binding(dev_name);
+	uint32_t us = 1000;
+	uint32_t ticks = counter_us_to_ticks(dev, us);
+	uint32_t top = counter_get_top_value(dev);
 
-	us = (u32_t)counter_ticks_to_us(dev, ticks);
+	us = (uint32_t)counter_ticks_to_us(dev, ticks);
 
 	struct counter_alarm_cfg alarm_cfg = {
 		.callback = alarm_handler,
@@ -876,6 +927,11 @@ static bool reliable_cancel_capable(const char *dev_name)
 		return true;
 	}
 #endif
+#ifdef CONFIG_COUNTER_NATIVE_POSIX
+	if (strcmp(dev_name, DT_LABEL(DT_NODELABEL(counter0))) == 0) {
+		return true;
+	}
+#endif
 	return false;
 }
 
@@ -887,7 +943,7 @@ void test_cancelled_alarm_does_not_expire(void)
 
 void test_main(void)
 {
-	struct device *dev;
+	const struct device *dev;
 	int i;
 
 	/* Give required clocks some time to stabilize. In particular, nRF SoCs

@@ -43,13 +43,41 @@ extern "C" {
 /** @cond INTERNAL_HIDDEN */
 
 /* Network subsystem logging helpers */
-#define NET_DBG(fmt, ...) LOG_DBG("(%p): " fmt, k_current_get(), \
+#ifdef CONFIG_THREAD_NAME
+#define NET_DBG(fmt, ...) LOG_DBG("(%s): " fmt,				\
+			log_strdup(k_thread_name_get(k_current_get())), \
+			##__VA_ARGS__)
+#else
+#define NET_DBG(fmt, ...) LOG_DBG("(%p): " fmt, k_current_get(),	\
 				  ##__VA_ARGS__)
+#endif /* CONFIG_THREAD_NAME */
 #define NET_ERR(fmt, ...) LOG_ERR(fmt, ##__VA_ARGS__)
 #define NET_WARN(fmt, ...) LOG_WRN(fmt, ##__VA_ARGS__)
 #define NET_INFO(fmt, ...) LOG_INF(fmt,  ##__VA_ARGS__)
 
 #define NET_ASSERT(cond, ...) __ASSERT(cond, "" __VA_ARGS__)
+
+/* This needs to be here in order to avoid circular include dependency between
+ * net_pkt.h and net_if.h
+ */
+#if defined(CONFIG_NET_PKT_TXTIME_STATS_DETAIL) || \
+	defined(CONFIG_NET_PKT_RXTIME_STATS_DETAIL)
+#if !defined(NET_PKT_DETAIL_STATS_COUNT)
+#if defined(CONFIG_NET_PKT_TXTIME_STATS_DETAIL)
+
+#if defined(CONFIG_NET_PKT_RXTIME_STATS_DETAIL)
+#define NET_PKT_DETAIL_STATS_COUNT 4
+#else
+#define NET_PKT_DETAIL_STATS_COUNT 3
+#endif /* CONFIG_NET_PKT_RXTIME_STATS_DETAIL */
+
+#else
+#define NET_PKT_DETAIL_STATS_COUNT 4
+#endif /* CONFIG_NET_PKT_TXTIME_STATS_DETAIL */
+
+#endif /* !NET_PKT_DETAIL_STATS_COUNT */
+#endif /* CONFIG_NET_PKT_TXTIME_STATS_DETAIL ||
+	  CONFIG_NET_PKT_RXTIME_STATS_DETAIL */
 
 /** @endcond */
 

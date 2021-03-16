@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 Intel Corporation
+ * Copyright (c) 2017, 2020 Intel Corporation
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,9 +10,14 @@
 #include "test_syscalls.h"
 
 #define BUF_SIZE	32
+#define SLEEP_MS_LONG	15000
 
-#if defined(CONFIG_BOARD_NUCLEO_F429ZI) || defined(CONFIG_BOARD_NUCLEO_F207ZG)
+#if defined(CONFIG_BOARD_NUCLEO_F429ZI) || defined(CONFIG_BOARD_NUCLEO_F207ZG) \
+	|| defined(CONFIG_BOARD_NUCLEO_L073RZ)
 #define FAULTY_ADDRESS 0x0FFFFFFF
+#elif CONFIG_MMU
+/* Just past the permanent RAM mapping should be a non-present page */
+#define FAULTY_ADDRESS (CONFIG_KERNEL_VM_BASE + CONFIG_KERNEL_RAM_SIZE)
 #else
 #define FAULTY_ADDRESS 0xFFFFFFF0
 #endif
@@ -104,7 +109,7 @@ static inline int z_vrfy_to_copy(char *dest)
 }
 #include <syscalls/to_copy_mrsh.c>
 
-int z_impl_syscall_arg64(u64_t arg)
+int z_impl_syscall_arg64(uint64_t arg)
 {
 	/* "Hash" (heh) the return to avoid accidental false positives
 	 * due to using common/predictable values.
@@ -112,7 +117,7 @@ int z_impl_syscall_arg64(u64_t arg)
 	return (int)(arg + 0x8c32a9eda4ca2621ULL + (size_t)&kernel_string);
 }
 
-static inline int z_vrfy_syscall_arg64(u64_t arg)
+static inline int z_vrfy_syscall_arg64(uint64_t arg)
 {
 	return z_impl_syscall_arg64(arg);
 }
@@ -122,12 +127,12 @@ static inline int z_vrfy_syscall_arg64(u64_t arg)
  * arguments (this one happens to need 9), and to test generation of
  * 64 bit return values.
  */
-u64_t z_impl_syscall_arg64_big(u32_t arg1, u32_t arg2,
-			       u64_t arg3, u32_t arg4,
-			       u32_t arg5, u64_t arg6)
+uint64_t z_impl_syscall_arg64_big(uint32_t arg1, uint32_t arg2,
+			       uint64_t arg3, uint32_t arg4,
+			       uint32_t arg5, uint64_t arg6)
 {
-	u64_t args[] = { arg1, arg2, arg3, arg4, arg5, arg6 };
-	u64_t ret = 0xae751a24ef464cc0ULL;
+	uint64_t args[] = { arg1, arg2, arg3, arg4, arg5, arg6 };
+	uint64_t ret = 0xae751a24ef464cc0ULL;
 
 	for (int i = 0; i < ARRAY_SIZE(args); i++) {
 		ret += args[i];
@@ -137,13 +142,37 @@ u64_t z_impl_syscall_arg64_big(u32_t arg1, u32_t arg2,
 	return ret;
 }
 
-static inline u64_t z_vrfy_syscall_arg64_big(u32_t arg1, u32_t arg2,
-					     u64_t arg3, u32_t arg4,
-					     u32_t arg5, u64_t arg6)
+static inline uint64_t z_vrfy_syscall_arg64_big(uint32_t arg1, uint32_t arg2,
+					     uint64_t arg3, uint32_t arg4,
+					     uint32_t arg5, uint64_t arg6)
 {
 	return z_impl_syscall_arg64_big(arg1, arg2, arg3, arg4, arg5, arg6);
 }
 #include <syscalls/syscall_arg64_big_mrsh.c>
+
+uint32_t z_impl_more_args(uint32_t arg1, uint32_t arg2, uint32_t arg3,
+			  uint32_t arg4, uint32_t arg5, uint32_t arg6,
+			  uint32_t arg7)
+{
+	uint32_t ret = 0x4ef464cc;
+	uint32_t args[] = { arg1, arg2, arg3, arg4, arg5, arg6, arg7 };
+
+	for (int i = 0; i < ARRAY_SIZE(args); i++) {
+		ret += args[i];
+		ret = (ret << 11) | (ret >> 5);
+	}
+
+	return ret;
+}
+
+static inline uint32_t z_vrfy_more_args(uint32_t arg1, uint32_t arg2,
+					uint32_t arg3, uint32_t arg4,
+					uint32_t arg5, uint32_t arg6,
+					uint32_t arg7)
+{
+	return z_impl_more_args(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+}
+#include <syscalls/more_args_mrsh.c>
 
 /**
  * @brief Test to demonstrate usage of z_user_string_nlen()
@@ -178,8 +207,18 @@ void test_string_nlen(void)
 	/* Skip this scenario for nsim_sem emulated board, unfortunately
 	 * the emulator doesn't set up memory as specified in DTS and poking
 	 * this address doesn't fault
+	 * Also skip this scenario for em_starterkit_7d, which won't generate
+	 * exceptions when unmapped address is accessed.
+	 *
+	 * In addition to the above, skip the scenario for Non-Secure Cortex-M
+	 * builds; Zephyr running in Non-Secure mode will generate SecureFault
+	 * if it attempts to access any address outside the image Flash or RAM
+	 * boundaries, and the program will hang.
 	 */
-#if !(defined(CONFIG_BOARD_NSIM) && defined(CONFIG_SOC_NSIM_SEM))
+#if !((defined(CONFIG_BOARD_NSIM) && defined(CONFIG_SOC_NSIM_SEM)) || \
+	defined(CONFIG_SOC_EMSK_EM7D) || \
+	(defined(CONFIG_CPU_CORTEX_M) && \
+		defined(CONFIG_TRUSTED_EXECUTION_NONSECURE)))
 	/* Try to blow up the kernel */
 	ret = string_nlen((char *)FAULTY_ADDRESS, BUF_SIZE, &err);
 	zassert_equal(err, -1, "nonsense string address did not fault");
@@ -267,6 +306,13 @@ void test_arg64(void)
 		      "syscall didn't match impl");
 }
 
+void test_more_args(void)
+{
+	zassert_equal(more_args(1, 2, 3, 4, 5, 6, 7),
+		      z_impl_more_args(1, 2, 3, 4, 5, 6, 7),
+		      "syscall didn't match impl");
+}
+
 #define NR_THREADS	(CONFIG_MP_NUM_CPUS * 4)
 #define STACK_SZ	(1024 + CONFIG_TEST_EXTRA_STACKSIZE)
 
@@ -325,10 +371,11 @@ void test_syscall_torture(void)
 	}
 
 	/* Let the torture threads hog the system for 15 seconds before we
-	 * abort them. They will all be hammering the cpu(s) with system calls,
+	 * abort them.
+	 * They will all be hammering the cpu(s) with system calls,
 	 * hopefully smoking out any issues and causing a crash.
 	 */
-	k_msleep(15000);
+	k_sleep(K_MSEC(SLEEP_MS_LONG));
 
 	for (i = 0; i < NR_THREADS; i++) {
 		k_thread_abort(&torture_threads[i]);
@@ -337,13 +384,51 @@ void test_syscall_torture(void)
 	printk("\n");
 }
 
-K_MEM_POOL_DEFINE(test_pool, BUF_SIZE, BUF_SIZE, 4 * NR_THREADS, 4);
+bool z_impl_syscall_context(void)
+{
+	return z_is_in_user_syscall();
+}
+
+static inline bool z_vrfy_syscall_context(void)
+{
+	return z_impl_syscall_context();
+}
+#include <syscalls/syscall_context_mrsh.c>
+
+void test_syscall_context_user(void *p1, void *p2, void *p3)
+{
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
+	zassert_true(syscall_context(),
+		     "not reported in user syscall");
+}
+
+/* Show that z_is_in_syscall() works properly */
+void test_syscall_context(void)
+{
+	/* We're a regular supervisor thread. */
+	zassert_false(z_is_in_user_syscall(),
+		      "reported in user syscall when in supv. thread ctx");
+
+	/* Make a system call from supervisor mode. The check in the
+	 * implementation function should return false.
+	 */
+	zassert_false(syscall_context(),
+		      "reported in user syscall when called from supervisor");
+
+	/* Remainder of the test in user mode */
+	k_thread_user_mode_enter(test_syscall_context_user, NULL, NULL, NULL);
+}
+
+K_HEAP_DEFINE(test_heap, BUF_SIZE * (4 * NR_THREADS));
 
 void test_main(void)
 {
 	sprintf(kernel_string, "this is a kernel string");
 	sprintf(user_string, "this is a user string");
-	k_thread_resource_pool_assign(k_current_get(), &test_pool);
+	k_thread_heap_assign(k_current_get(), &test_heap);
 
 	ztest_test_suite(syscalls,
 			 ztest_unit_test(test_string_nlen),
@@ -352,7 +437,9 @@ void test_main(void)
 			 ztest_user_unit_test(test_user_string_copy),
 			 ztest_user_unit_test(test_user_string_alloc_copy),
 			 ztest_user_unit_test(test_arg64),
-			 ztest_unit_test(test_syscall_torture)
+			 ztest_user_unit_test(test_more_args),
+			 ztest_unit_test(test_syscall_torture),
+			 ztest_unit_test(test_syscall_context)
 			 );
 	ztest_run_test_suite(syscalls);
 }

@@ -24,7 +24,7 @@
 K_THREAD_STACK_DEFINE(thread_stack, APP_TASK_STACK_SIZE);
 static struct k_thread thread_data;
 
-static struct device *ipm_handle;
+static const struct device *ipm_handle;
 
 static metal_phys_addr_t shm_physmap[] = { SHM_START_ADDR };
 static struct metal_device shm_device = {
@@ -72,13 +72,13 @@ static void virtio_set_status(struct virtio_device *vdev, unsigned char status)
 	sys_write8(status, VDEV_STATUS_ADDR);
 }
 
-static u32_t virtio_get_features(struct virtio_device *vdev)
+static uint32_t virtio_get_features(struct virtio_device *vdev)
 {
 	return 1 << VIRTIO_RPMSG_F_NS;
 }
 
 static void virtio_set_features(struct virtio_device *vdev,
-				u32_t features)
+				uint32_t features)
 {
 }
 
@@ -87,11 +87,11 @@ static void virtio_notify(struct virtqueue *vq)
 #if defined(CONFIG_SOC_MPS2_AN521) || \
 	defined(CONFIG_SOC_V2M_MUSCA_A) || \
 	defined(CONFIG_SOC_V2M_MUSCA_B1)
-	u32_t current_core = sse_200_platform_get_cpu_id();
+	uint32_t current_core = sse_200_platform_get_cpu_id();
 
 	ipm_send(ipm_handle, 0, current_core ? 0 : 1, 0, 1);
 #else
-	u32_t dummy_data = 0x55005500; /* Some data must be provided */
+	uint32_t dummy_data = 0x55005500; /* Some data must be provided */
 
 	ipm_send(ipm_handle, 0, 0, &dummy_data, sizeof(dummy_data));
 #endif /* #if defined(CONFIG_SOC_MPS2_AN521) */
@@ -108,13 +108,14 @@ struct virtio_dispatch dispatch = {
 static K_SEM_DEFINE(data_sem, 0, 1);
 static K_SEM_DEFINE(data_rx_sem, 0, 1);
 
-static void platform_ipm_callback(void *context, u32_t id, volatile void *data)
+static void platform_ipm_callback(const struct device *dev, void *context,
+				  uint32_t id, volatile void *data)
 {
 	k_sem_give(&data_sem);
 }
 
 int endpoint_cb(struct rpmsg_endpoint *ept, void *data,
-		size_t len, u32_t src, void *priv)
+		size_t len, uint32_t src, void *priv)
 {
 	received_data = *((unsigned int *) data);
 
@@ -134,7 +135,7 @@ static void rpmsg_service_unbind(struct rpmsg_endpoint *ept)
 	rpmsg_destroy_ept(ep);
 }
 
-void ns_bind_cb(struct rpmsg_device *rdev, const char *name, u32_t dest)
+void ns_bind_cb(struct rpmsg_device *rdev, const char *name, uint32_t dest)
 {
 	(void)rpmsg_create_ept(ep, rdev, name,
 			RPMSG_ADDR_ANY, dest,
@@ -299,7 +300,7 @@ void main(void)
 /* Make sure we clear out the status flag very early (before we bringup the
  * secondary core) so the secondary core see's the proper status
  */
-int init_status_flag(struct device *arg)
+int init_status_flag(const struct device *arg)
 {
 	virtio_set_status(NULL, 0);
 

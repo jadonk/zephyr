@@ -26,18 +26,18 @@ LOG_MODULE_REGISTER(adc_sam0, CONFIG_ADC_LOG_LEVEL);
 
 struct adc_sam0_data {
 	struct adc_context ctx;
-	struct device *dev;
+	const struct device *dev;
 
-	u16_t *buffer;
+	uint16_t *buffer;
 
 	/*
 	 * Saved initial start, so we can reset the advances we've done
 	 * if required
 	 */
-	u16_t *repeat_buffer;
+	uint16_t *repeat_buffer;
 
 #ifdef ADC_SAM0_REFERENCE_GLITCH
-	u8_t reference_changed;
+	uint8_t reference_changed;
 #endif
 };
 
@@ -45,23 +45,23 @@ struct adc_sam0_cfg {
 	Adc *regs;
 
 #ifdef MCLK
-	u32_t mclk_mask;
-	u32_t gclk_mask;
-	u16_t gclk_id;
+	uint32_t mclk_mask;
+	uint32_t gclk_mask;
+	uint16_t gclk_id;
 #else
-	u32_t gclk;
+	uint32_t gclk;
 #endif
 
-	u32_t freq;
-	u16_t prescaler;
+	uint32_t freq;
+	uint16_t prescaler;
 
-	void (*config_func)(struct device *dev);
+	void (*config_func)(const struct device *dev);
 };
 
 #define DEV_CFG(dev) \
-	((const struct adc_sam0_cfg *const)(dev)->config_info)
+	((const struct adc_sam0_cfg *const)(dev)->config)
 #define DEV_DATA(dev) \
-	((struct adc_sam0_data *)(dev)->driver_data)
+	((struct adc_sam0_data *)(dev)->data)
 
 static void wait_synchronization(Adc *const adc)
 {
@@ -74,11 +74,11 @@ static void wait_synchronization(Adc *const adc)
 #endif
 }
 
-static int adc_sam0_acquisition_to_clocks(struct device *dev,
-					  u16_t acquisition_time)
+static int adc_sam0_acquisition_to_clocks(const struct device *dev,
+					  uint16_t acquisition_time)
 {
 	const struct adc_sam0_cfg *const cfg = DEV_CFG(dev);
-	u64_t scaled_acq;
+	uint64_t scaled_acq;
 
 	switch (ADC_ACQ_TIME_UNIT(acquisition_time)) {
 	case ADC_ACQ_TIME_TICKS:
@@ -88,11 +88,11 @@ static int adc_sam0_acquisition_to_clocks(struct device *dev,
 
 		return (int)ADC_ACQ_TIME_VALUE(acquisition_time) - 1;
 	case ADC_ACQ_TIME_MICROSECONDS:
-		scaled_acq = (u64_t)ADC_ACQ_TIME_VALUE(acquisition_time) *
+		scaled_acq = (uint64_t)ADC_ACQ_TIME_VALUE(acquisition_time) *
 			     1000000U;
 		break;
 	case ADC_ACQ_TIME_NANOSECONDS:
-		scaled_acq = (u64_t)ADC_ACQ_TIME_VALUE(acquisition_time) *
+		scaled_acq = (uint64_t)ADC_ACQ_TIME_VALUE(acquisition_time) *
 			     1000U;
 		break;
 	default:
@@ -119,13 +119,13 @@ static int adc_sam0_acquisition_to_clocks(struct device *dev,
 	return (int)scaled_acq;
 }
 
-static int adc_sam0_channel_setup(struct device *dev,
+static int adc_sam0_channel_setup(const struct device *dev,
 				  const struct adc_channel_cfg *channel_cfg)
 {
 	const struct adc_sam0_cfg *const cfg = DEV_CFG(dev);
 	Adc *const adc = cfg->regs;
 	int retval;
-	u8_t SAMPCTRL = 0;
+	uint8_t SAMPCTRL = 0;
 
 	if (channel_cfg->acquisition_time != ADC_ACQ_TIME_DEFAULT) {
 		retval = adc_sam0_acquisition_to_clocks(dev,
@@ -142,7 +142,7 @@ static int adc_sam0_channel_setup(struct device *dev,
 	wait_synchronization(adc);
 
 
-	u8_t REFCTRL;
+	uint8_t REFCTRL;
 
 	switch (channel_cfg->reference) {
 	case ADC_REF_INTERNAL:
@@ -189,7 +189,7 @@ static int adc_sam0_channel_setup(struct device *dev,
 	}
 
 
-	u32_t INPUTCTRL = 0;
+	uint32_t INPUTCTRL = 0;
 
 	switch (channel_cfg->gain) {
 	case ADC_GAIN_1:
@@ -281,7 +281,7 @@ static int adc_sam0_channel_setup(struct device *dev,
 	return 0;
 }
 
-static void adc_sam0_start_conversion(struct device *dev)
+static void adc_sam0_start_conversion(const struct device *dev)
 {
 	const struct adc_sam0_cfg *const cfg = DEV_CFG(dev);
 	Adc *const adc = cfg->regs;
@@ -316,11 +316,11 @@ static void adc_context_update_buffer_pointer(struct adc_context *ctx,
 }
 
 static int check_buffer_size(const struct adc_sequence *sequence,
-			     u8_t active_channels)
+			     uint8_t active_channels)
 {
 	size_t needed_buffer_size;
 
-	needed_buffer_size = active_channels * sizeof(u16_t);
+	needed_buffer_size = active_channels * sizeof(uint16_t);
 	if (sequence->options) {
 		needed_buffer_size *= (1U + sequence->options->extra_samplings);
 	}
@@ -333,7 +333,8 @@ static int check_buffer_size(const struct adc_sequence *sequence,
 	return 0;
 }
 
-static int start_read(struct device *dev, const struct adc_sequence *sequence)
+static int start_read(const struct device *dev,
+		      const struct adc_sequence *sequence)
 {
 	const struct adc_sam0_cfg *const cfg = DEV_CFG(dev);
 	struct adc_sam0_data *data = DEV_DATA(dev);
@@ -415,7 +416,7 @@ static int start_read(struct device *dev, const struct adc_sequence *sequence)
 	return error;
 }
 
-static int adc_sam0_read(struct device *dev,
+static int adc_sam0_read(const struct device *dev,
 			 const struct adc_sequence *sequence)
 {
 	struct adc_sam0_data *data = DEV_DATA(dev);
@@ -428,17 +429,16 @@ static int adc_sam0_read(struct device *dev,
 	return error;
 }
 
-static void adc_sam0_isr(void *arg)
+static void adc_sam0_isr(const struct device *dev)
 {
-	struct device *dev = (struct device *)arg;
 	struct adc_sam0_data *data = DEV_DATA(dev);
 	const struct adc_sam0_cfg *const cfg = DEV_CFG(dev);
 	Adc *const adc = cfg->regs;
-	u16_t result;
+	uint16_t result;
 
 	adc->INTFLAG.reg = ADC_INTFLAG_MASK;
 
-	result = (u16_t)(adc->RESULT.reg);
+	result = (uint16_t)(adc->RESULT.reg);
 
 #ifdef ADC_SAM0_REFERENCE_GLITCH
 	if (data->reference_changed) {
@@ -454,7 +454,7 @@ static void adc_sam0_isr(void *arg)
 	adc_context_on_sampling_done(&data->ctx, dev);
 }
 
-static int adc_sam0_init(struct device *dev)
+static int adc_sam0_init(const struct device *dev)
 {
 	const struct adc_sam0_cfg *const cfg = DEV_CFG(dev);
 	struct adc_sam0_data *data = DEV_DATA(dev);
@@ -498,7 +498,7 @@ static int adc_sam0_init(struct device *dev)
 }
 
 #ifdef CONFIG_ADC_ASYNC
-static int adc_sam0_read_async(struct device *dev,
+static int adc_sam0_read_async(const struct device *dev,
 			       const struct adc_sequence *sequence,
 			       struct k_poll_signal *async)
 {
@@ -535,25 +535,25 @@ static const struct adc_driver_api adc_sam0_api = {
 #define ADC_SAM0_BIASCOMP_SHIFT(n)					\
 	(ADC0_FUSES_BIASCOMP_Pos + DT_INST_PROP(n, calib_offset))
 #define ADC_SAM0_BIASCOMP(n)						\
-	(((*(u32_t *)NVMCTRL_SW0) >> ADC_SAM0_BIASCOMP_SHIFT(n)) & 0x7)
+	(((*(uint32_t *)NVMCTRL_SW0) >> ADC_SAM0_BIASCOMP_SHIFT(n)) & 0x7)
 
 #define ADC_SAM0_BIASR2R_SHIFT(n)					\
 	(ADC0_FUSES_BIASR2R_Pos + DT_INST_PROP(n, calib_offset))
 #define ADC_SAM0_BIASR2R(n)						\
-	(((*(u32_t *)NVMCTRL_SW0) >> ADC_SAM0_BIASR2R_SHIFT(n)) & 0x7)
+	(((*(uint32_t *)NVMCTRL_SW0) >> ADC_SAM0_BIASR2R_SHIFT(n)) & 0x7)
 
 #define ADC_SAM0_BIASREFBUF_SHIFT(n)					\
 	(ADC0_FUSES_BIASREFBUF_Pos + DT_INST_PROP(n, calib_offset))
 #define ADC_SAM0_BIASREFBUF(n)						\
-	(((*(u32_t *)NVMCTRL_SW0) >> ADC_SAM0_BIASREFBUF_SHIFT(n)) & 0x7)
+	(((*(uint32_t *)NVMCTRL_SW0) >> ADC_SAM0_BIASREFBUF_SHIFT(n)) & 0x7)
 
 #define ADC_SAM0_CONFIGURE(n)						\
 do {									\
 	const struct adc_sam0_cfg *const cfg = DEV_CFG(dev);		\
 	Adc * const adc = cfg->regs;					\
-	u32_t comp = ADC_SAM0_BIASCOMP(n);				\
-	u32_t r2r = ADC_SAM0_BIASR2R(n);				\
-	u32_t rbuf = ADC_SAM0_BIASREFBUF(n);				\
+	uint32_t comp = ADC_SAM0_BIASCOMP(n);				\
+	uint32_t r2r = ADC_SAM0_BIASR2R(n);				\
+	uint32_t rbuf = ADC_SAM0_BIASREFBUF(n);				\
 	adc->CALIB.reg = ADC_CALIB_BIASCOMP(comp) |			\
 			 ADC_CALIB_BIASR2R(r2r) |			\
 			 ADC_CALIB_BIASREFBUF(rbuf);			\
@@ -572,13 +572,13 @@ do {									\
 	const struct adc_sam0_cfg *const cfg = DEV_CFG(dev);		\
 	Adc * const adc = cfg->regs;					\
 	/* Linearity is split across two words */			\
-	u32_t lin = ((*(u32_t *)ADC_FUSES_LINEARITY_0_ADDR) &		\
+	uint32_t lin = ((*(uint32_t *)ADC_FUSES_LINEARITY_0_ADDR) &		\
 		     ADC_FUSES_LINEARITY_0_Msk) >>			\
 		     ADC_FUSES_LINEARITY_0_Pos;				\
-	lin |= (((*(u32_t *)ADC_FUSES_LINEARITY_1_ADDR) &		\
+	lin |= (((*(uint32_t *)ADC_FUSES_LINEARITY_1_ADDR) &		\
 		 ADC_FUSES_LINEARITY_1_Msk) >>				\
 		 ADC_FUSES_LINEARITY_1_Pos) << 4;			\
-	u32_t bias = ((*(u32_t *)ADC_FUSES_BIASCAL_ADDR) &		\
+	uint32_t bias = ((*(uint32_t *)ADC_FUSES_BIASCAL_ADDR) &		\
 		      ADC_FUSES_BIASCAL_Msk) >> ADC_FUSES_BIASCAL_Pos;	\
 	adc->CALIB.reg = ADC_CALIB_BIAS_CAL(bias) |			\
 			 ADC_CALIB_LINEARITY_CAL(lin);			\
@@ -587,7 +587,7 @@ do {									\
 #endif
 
 #define ADC_SAM0_DEVICE(n)						\
-	static void adc_sam0_config_##n(struct device *dev);		\
+	static void adc_sam0_config_##n(const struct device *dev);	\
 	static const struct adc_sam0_cfg adc_sam_cfg_##n = {		\
 		.regs = (Adc *)DT_INST_REG_ADDR(n),			\
 		ADC_SAM0_CLOCK_CONTROL(n)				\
@@ -602,17 +602,17 @@ do {									\
 		ADC_CONTEXT_INIT_LOCK(adc_sam_data_##n, ctx),		\
 		ADC_CONTEXT_INIT_SYNC(adc_sam_data_##n, ctx),		\
 	};								\
-	DEVICE_AND_API_INIT(adc0_sam_##n, DT_INST_LABEL(n),		\
-			    adc_sam0_init, &adc_sam_data_##n,		\
+	DEVICE_DT_INST_DEFINE(n, adc_sam0_init, device_pm_control_nop,	\
+			    &adc_sam_data_##n,				\
 			    &adc_sam_cfg_##n, POST_KERNEL,		\
 			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		\
 			    &adc_sam0_api);				\
-	static void adc_sam0_config_##n(struct device *dev)		\
+	static void adc_sam0_config_##n(const struct device *dev)	\
 	{								\
 		IRQ_CONNECT(DT_INST_IRQN(n),				\
 			    DT_INST_IRQ(n, priority),			\
 			    adc_sam0_isr,				\
-			    DEVICE_GET(adc0_sam_##n), 0);		\
+			    DEVICE_DT_INST_GET(n), 0);			\
 		irq_enable(DT_INST_IRQN(n));				\
 		ADC_SAM0_CONFIGURE(n);					\
 	}

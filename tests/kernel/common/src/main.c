@@ -14,14 +14,22 @@ extern void test_byteorder_memcpy_swap(void);
 extern void test_byteorder_mem_swap(void);
 extern void test_sys_get_be64(void);
 extern void test_sys_put_be64(void);
+extern void test_sys_get_be48(void);
+extern void test_sys_put_be48(void);
 extern void test_sys_get_be32(void);
 extern void test_sys_put_be32(void);
+extern void test_sys_get_be24(void);
+extern void test_sys_put_be24(void);
 extern void test_sys_get_be16(void);
 extern void test_sys_put_be16(void);
 extern void test_sys_get_le16(void);
 extern void test_sys_put_le16(void);
+extern void test_sys_get_le24(void);
+extern void test_sys_put_le24(void);
 extern void test_sys_get_le32(void);
 extern void test_sys_put_le32(void);
+extern void test_sys_get_le48(void);
+extern void test_sys_put_le48(void);
 extern void test_sys_get_le64(void);
 extern void test_sys_put_le64(void);
 extern void test_atomic(void);
@@ -29,9 +37,10 @@ extern void test_printk(void);
 extern void test_timeout_order(void);
 extern void test_clock_cycle(void);
 extern void test_clock_uptime(void);
+extern void test_ms_time_duration(void);
 extern void test_multilib(void);
 extern void test_thread_context(void);
-extern void test_verify_bootdelay(void);
+extern void test_bootdelay(void);
 extern void test_irq_offload(void);
 
 /**
@@ -67,7 +76,7 @@ void test_printk(void)
  */
 static void test_version(void)
 {
-	u32_t version = sys_kernel_version_get();
+	uint32_t version = sys_kernel_version_get();
 
 	zassert_true(SYS_KERNEL_VER_MAJOR(version) == KERNEL_VERSION_MAJOR,
 		     "major version mismatch");
@@ -99,20 +108,28 @@ static void test_bounds_check_mitigation(void)
 void test_main(void)
 {
 	ztest_test_suite(common,
-			 ztest_unit_test(test_verify_bootdelay),
+			 ztest_unit_test(test_bootdelay),
 			 ztest_unit_test(test_irq_offload),
 			 ztest_unit_test(test_byteorder_memcpy_swap),
 			 ztest_unit_test(test_byteorder_mem_swap),
 			 ztest_unit_test(test_sys_get_be64),
 			 ztest_unit_test(test_sys_put_be64),
+			 ztest_unit_test(test_sys_get_be48),
+			 ztest_unit_test(test_sys_put_be48),
 			 ztest_unit_test(test_sys_get_be32),
 			 ztest_unit_test(test_sys_put_be32),
+			 ztest_unit_test(test_sys_get_be24),
+			 ztest_unit_test(test_sys_put_be24),
 			 ztest_unit_test(test_sys_get_be16),
 			 ztest_unit_test(test_sys_put_be16),
 			 ztest_unit_test(test_sys_get_le16),
 			 ztest_unit_test(test_sys_put_le16),
+			 ztest_unit_test(test_sys_get_le24),
+			 ztest_unit_test(test_sys_put_le24),
 			 ztest_unit_test(test_sys_get_le32),
 			 ztest_unit_test(test_sys_put_le32),
+			 ztest_unit_test(test_sys_get_le48),
+			 ztest_unit_test(test_sys_put_le48),
 			 ztest_unit_test(test_sys_get_le64),
 			 ztest_unit_test(test_sys_put_le64),
 			 ztest_user_unit_test(test_atomic),
@@ -124,6 +141,7 @@ void test_main(void)
 			 ztest_unit_test(test_version),
 			 ztest_unit_test(test_multilib),
 			 ztest_unit_test(test_thread_context),
+			 ztest_unit_test(test_ms_time_duration),
 			 ztest_unit_test(test_bounds_check_mitigation)
 			 );
 

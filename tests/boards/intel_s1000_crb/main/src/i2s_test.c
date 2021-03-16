@@ -44,7 +44,7 @@ extern struct k_sem thread_sem;
 #define FRAME_CLK_FREQ		48000
 #define I2S_WORDSIZE		32
 #define BLOCK_SIZE		192
-#define BLOCK_SIZE_BYTES	(BLOCK_SIZE * sizeof(s32_t))
+#define BLOCK_SIZE_BYTES	(BLOCK_SIZE * sizeof(int32_t))
 #define FRAMES_PER_ITERATION	50
 #define TIMEOUT			2000
 
@@ -55,7 +55,7 @@ static struct k_mem_slab i2s_mem_slab;
 void test_i2s_bidirectional_transfer_configure(void)
 {
 	int ret;
-	struct device *dev_i2s;
+	const struct device *dev_i2s;
 	struct i2s_config i2s_cfg;
 
 	k_mem_slab_init(&i2s_mem_slab, audio_buffers, BLOCK_SIZE_BYTES,
@@ -96,7 +96,7 @@ void test_i2s_bidirectional_transfer_configure(void)
  */
 void test_i2s_bidirectional_transfer(void)
 {
-	struct device *dev_i2s;
+	const struct device *dev_i2s;
 	int frames = 0;
 	void *buffer;
 	size_t size;

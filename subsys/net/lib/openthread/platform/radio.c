@@ -27,10 +27,12 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_OPENTHREAD_L2_LOG_LEVEL);
 #include <net/net_pkt.h>
 #include <sys/__assert.h>
 
+#include <openthread/ip6.h>
 #include <openthread-system.h>
 #include <openthread/instance.h>
 #include <openthread/platform/radio.h>
 #include <openthread/platform/diag.h>
+#include <openthread/message.h>
 
 #include "platform-zephyr.h"
 
@@ -43,10 +45,17 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_OPENTHREAD_L2_LOG_LEVEL);
 #define FRAME_TYPE_ACK 0x02
 
 #define OT_WORKER_STACK_SIZE 512
+
+#if IS_ENABLED(CONFIG_NET_TC_THREAD_COOPERATIVE)
 #define OT_WORKER_PRIORITY   K_PRIO_COOP(CONFIG_OPENTHREAD_THREAD_PRIORITY)
+#else
+#define OT_WORKER_PRIORITY   K_PRIO_PREEMPT(CONFIG_OPENTHREAD_THREAD_PRIORITY)
+#endif
 
 enum pending_events {
+	PENDING_EVENT_FRAME_TO_SEND, /* There is a tx frame to send  */
 	PENDING_EVENT_FRAME_RECEIVED, /* Radio has received new frame */
+	PENDING_EVENT_RX_FAILED, /* The RX failed */
 	PENDING_EVENT_TX_STARTED, /* Radio has started transmitting */
 	PENDING_EVENT_TX_DONE, /* Radio transmission finished */
 	PENDING_EVENT_DETECT_ENERGY, /* Requested to start Energy Detection
@@ -62,28 +71,29 @@ static otRadioState sState = OT_RADIO_STATE_DISABLED;
 
 static otRadioFrame sTransmitFrame;
 static otRadioFrame ack_frame;
-static u8_t ack_psdu[ACK_PKT_LENGTH];
+static uint8_t ack_psdu[ACK_PKT_LENGTH];
 
 static struct net_pkt *tx_pkt;
 static struct net_buf *tx_payload;
 
-static struct device *radio_dev;
+static const struct device *radio_dev;
 static struct ieee802154_radio_api *radio_api;
 
-static s8_t tx_power;
-static u16_t channel;
+static int8_t tx_power;
+static uint16_t channel;
 static bool promiscuous;
 
-static u16_t energy_detection_time;
-static u8_t  energy_detection_channel;
-static s16_t energy_detected_value;
+static uint16_t energy_detection_time;
+static uint8_t  energy_detection_channel;
+static int16_t energy_detected_value;
 
 ATOMIC_DEFINE(pending_events, PENDING_EVENT_COUNT);
-K_THREAD_STACK_DEFINE(ot_task_stack, OT_WORKER_STACK_SIZE);
+K_KERNEL_STACK_DEFINE(ot_task_stack, OT_WORKER_STACK_SIZE);
 static struct k_work_q ot_work_q;
-static otError tx_result;
+static otError tx_rx_result;
 
 K_FIFO_DEFINE(rx_pkt_fifo);
+K_FIFO_DEFINE(tx_pkt_fifo);
 
 static inline bool is_pending_event_set(enum pending_events event)
 {
@@ -106,7 +116,7 @@ static inline void clear_pending_events(void)
 	atomic_clear(pending_events);
 }
 
-void energy_detected(struct device *dev, s16_t max_ed)
+void energy_detected(const struct device *dev, int16_t max_ed)
 {
 	if (dev == radio_dev) {
 		energy_detected_value = max_ed;
@@ -146,7 +156,7 @@ enum net_verdict ieee802154_radio_handle_ack(struct net_if *iface,
 	return NET_OK;
 }
 
-void handle_radio_event(struct device *dev, enum ieee802154_event evt,
+void handle_radio_event(const struct device *dev, enum ieee802154_event evt,
 			void *event_params)
 {
 	ARG_UNUSED(event_params);
@@ -157,6 +167,30 @@ void handle_radio_event(struct device *dev, enum ieee802154_event evt,
 			set_pending_event(PENDING_EVENT_TX_STARTED);
 		}
 		break;
+	case IEEE802154_EVENT_RX_FAILED:
+		if (sState == OT_RADIO_STATE_RECEIVE) {
+			switch (*(enum ieee802154_rx_fail_reason *)
+				event_params) {
+			case IEEE802154_RX_FAIL_NOT_RECEIVED:
+				tx_rx_result = OT_ERROR_NO_FRAME_RECEIVED;
+				break;
+
+			case IEEE802154_RX_FAIL_INVALID_FCS:
+				tx_rx_result = OT_ERROR_FCS;
+				break;
+
+			case IEEE802154_RX_FAIL_ADDR_FILTERED:
+				tx_rx_result
+					= OT_ERROR_DESTINATION_ADDRESS_FILTERED;
+				break;
+
+			case IEEE802154_RX_FAIL_OTHER:
+			default:
+				tx_rx_result = OT_ERROR_FAILED;
+				break;
+			}
+			set_pending_event(PENDING_EVENT_RX_FAILED);
+		}
 	default:
 		/* do nothing - ignore event */
 		break;
@@ -185,13 +219,13 @@ void platformRadioInit(void)
 	radio_dev = device_get_binding(CONFIG_NET_CONFIG_IEEE802154_DEV_NAME);
 	__ASSERT_NO_MSG(radio_dev != NULL);
 
-	radio_api = (struct ieee802154_radio_api *)radio_dev->driver_api;
+	radio_api = (struct ieee802154_radio_api *)radio_dev->api;
 	if (!radio_api) {
 		return;
 	}
 
 	k_work_q_start(&ot_work_q, ot_task_stack,
-		       K_THREAD_STACK_SIZEOF(ot_task_stack),
+		       K_KERNEL_STACK_SIZEOF(ot_task_stack),
 		       OT_WORKER_PRIORITY);
 
 	if ((radio_api->get_capabilities(radio_dev) &
@@ -209,7 +243,7 @@ void transmit_message(struct k_work *tx_job)
 {
 	ARG_UNUSED(tx_job);
 
-	tx_result = OT_ERROR_NONE;
+	tx_rx_result = OT_ERROR_NONE;
 	/*
 	 * The payload is already in tx_payload->data,
 	 * but we need to set the length field
@@ -230,17 +264,17 @@ void transmit_message(struct k_work *tx_job)
 			if (radio_api->tx(radio_dev,
 					  IEEE802154_TX_MODE_CSMA_CA,
 					  tx_pkt, tx_payload) != 0) {
-				tx_result = OT_ERROR_CHANNEL_ACCESS_FAILURE;
+				tx_rx_result = OT_ERROR_CHANNEL_ACCESS_FAILURE;
 			}
 		} else if (radio_api->cca(radio_dev) != 0 ||
 			   radio_api->tx(radio_dev, IEEE802154_TX_MODE_DIRECT,
 					 tx_pkt, tx_payload) != 0) {
-			tx_result = OT_ERROR_CHANNEL_ACCESS_FAILURE;
+			tx_rx_result = OT_ERROR_CHANNEL_ACCESS_FAILURE;
 		}
 	} else {
 		if (radio_api->tx(radio_dev, IEEE802154_TX_MODE_DIRECT,
 				  tx_pkt, tx_payload)) {
-			tx_result = OT_ERROR_CHANNEL_ACCESS_FAILURE;
+			tx_rx_result = OT_ERROR_CHANNEL_ACCESS_FAILURE;
 		}
 	}
 
@@ -249,9 +283,9 @@ void transmit_message(struct k_work *tx_job)
 
 static inline void handle_tx_done(otInstance *aInstance)
 {
-	if (IS_ENABLED(OPENTHREAD_ENABLE_DIAG) && otPlatDiagModeGet()) {
+	if (IS_ENABLED(CONFIG_OPENTHREAD_DIAG) && otPlatDiagModeGet()) {
 		otPlatDiagRadioTransmitDone(aInstance, &sTransmitFrame,
-					    tx_result);
+					    tx_rx_result);
 	} else {
 		if (sTransmitFrame.mPsdu[0] & IEEE802154_AR_FLAG_SET) {
 			if (ack_frame.mLength == 0) {
@@ -260,11 +294,11 @@ static inline void handle_tx_done(otInstance *aInstance)
 						  NULL, OT_ERROR_NO_ACK);
 			} else {
 				otPlatRadioTxDone(aInstance, &sTransmitFrame,
-						  &ack_frame, tx_result);
+						  &ack_frame, tx_rx_result);
 			}
 		} else {
 			otPlatRadioTxDone(aInstance, &sTransmitFrame, NULL,
-					  tx_result);
+					  tx_rx_result);
 		}
 		ack_frame.mLength = 0;
 	}
@@ -291,7 +325,7 @@ static void openthread_handle_received_frame(otInstance *instance,
 					      time->nanosecond / NSEC_PER_USEC;
 #endif
 
-	if (IS_ENABLED(OPENTHREAD_ENABLE_DIAG) && otPlatDiagModeGet()) {
+	if (IS_ENABLED(CONFIG_OPENTHREAD_DIAG) && otPlatDiagModeGet()) {
 		otPlatDiagRadioReceiveDone(instance,
 					   &recv_frame, OT_ERROR_NONE);
 	} else {
@@ -302,10 +336,52 @@ static void openthread_handle_received_frame(otInstance *instance,
 	net_pkt_unref(pkt);
 }
 
+static void openthread_handle_frame_to_send(otInstance *instance,
+					    struct net_pkt *pkt)
+{
+	struct net_buf *buf;
+	otMessage *message;
+	otMessageSettings settings;
+
+	NET_DBG("Sending Ip6 packet to ot stack");
+
+	settings.mPriority = OT_MESSAGE_PRIORITY_NORMAL;
+	settings.mLinkSecurityEnabled = true;
+	message = otIp6NewMessage(instance, &settings);
+	if (message == NULL) {
+		goto exit;
+	}
+
+	for (buf = pkt->buffer; buf; buf = buf->frags) {
+		if (otMessageAppend(message, buf->data,
+				    buf->len) != OT_ERROR_NONE) {
+			NET_ERR("Error while appending to otMessage");
+			otMessageFree(message);
+			goto exit;
+		}
+	}
+
+	if (otIp6Send(instance, message) != OT_ERROR_NONE) {
+		NET_ERR("Error while calling otIp6Send");
+		goto exit;
+	}
+
+exit:
+	net_pkt_unref(pkt);
+}
+
 int notify_new_rx_frame(struct net_pkt *pkt)
 {
 	k_fifo_put(&rx_pkt_fifo, pkt);
 	set_pending_event(PENDING_EVENT_FRAME_RECEIVED);
+
+	return 0;
+}
+
+int notify_new_tx_frame(struct net_pkt *pkt)
+{
+	k_fifo_put(&tx_pkt_fifo, pkt);
+	set_pending_event(PENDING_EVENT_FRAME_TO_SEND);
 
 	return 0;
 }
@@ -331,6 +407,22 @@ void platformRadioProcess(otInstance *aInstance)
 {
 	bool event_pending = false;
 
+	if (is_pending_event_set(PENDING_EVENT_FRAME_TO_SEND)) {
+		struct net_pkt *tx_pkt;
+
+		reset_pending_event(PENDING_EVENT_FRAME_TO_SEND);
+		while ((tx_pkt = (struct net_pkt *)k_fifo_get(&tx_pkt_fifo,
+							      K_NO_WAIT))
+		      != NULL) {
+			if (IS_ENABLED(CONFIG_OPENTHREAD_COPROCESSOR_RCP)) {
+				net_pkt_unref(tx_pkt);
+			} else {
+				openthread_handle_frame_to_send(aInstance,
+					tx_pkt);
+			}
+		}
+	}
+
 	if (is_pending_event_set(PENDING_EVENT_FRAME_RECEIVED)) {
 		struct net_pkt *rx_pkt;
 
@@ -339,6 +431,17 @@ void platformRadioProcess(otInstance *aInstance)
 							      K_NO_WAIT))
 		      != NULL) {
 			openthread_handle_received_frame(aInstance, rx_pkt);
+		}
+	}
+
+	if (is_pending_event_set(PENDING_EVENT_RX_FAILED)) {
+		reset_pending_event(PENDING_EVENT_RX_FAILED);
+		if (IS_ENABLED(CONFIG_OPENTHREAD_DIAG) && otPlatDiagModeGet()) {
+			otPlatDiagRadioReceiveDone(aInstance,
+						   NULL, tx_rx_result);
+		} else {
+			otPlatRadioReceiveDone(aInstance,
+					       NULL, tx_rx_result);
 		}
 	}
 
@@ -374,7 +477,7 @@ void platformRadioProcess(otInstance *aInstance)
 
 		if (is_pending_event_set(PENDING_EVENT_DETECT_ENERGY_DONE)) {
 			otPlatRadioEnergyScanDone(aInstance,
-						(s8_t)energy_detected_value);
+						(int8_t)energy_detected_value);
 			reset_pending_event(PENDING_EVENT_DETECT_ENERGY_DONE);
 		}
 	}
@@ -391,7 +494,7 @@ uint16_t platformRadioChannelGet(otInstance *aInstance)
 	return channel;
 }
 
-void otPlatRadioSetPanId(otInstance *aInstance, u16_t aPanId)
+void otPlatRadioSetPanId(otInstance *aInstance, uint16_t aPanId)
 {
 	ARG_UNUSED(aInstance);
 
@@ -408,7 +511,7 @@ void otPlatRadioSetExtendedAddress(otInstance *aInstance,
 			  (struct ieee802154_filter *) &aExtAddress);
 }
 
-void otPlatRadioSetShortAddress(otInstance *aInstance, u16_t aShortAddress)
+void otPlatRadioSetShortAddress(otInstance *aInstance, uint16_t aShortAddress)
 {
 	ARG_UNUSED(aInstance);
 
@@ -458,7 +561,7 @@ otError otPlatRadioSleep(otInstance *aInstance)
 	return error;
 }
 
-otError otPlatRadioReceive(otInstance *aInstance, u8_t aChannel)
+otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel)
 {
 	ARG_UNUSED(aInstance);
 
@@ -481,7 +584,12 @@ otError otPlatRadioTransmit(otInstance *aInstance, otRadioFrame *aPacket)
 
 	__ASSERT_NO_MSG(aPacket == &sTransmitFrame);
 
-	if (sState == OT_RADIO_STATE_RECEIVE) {
+	enum ieee802154_hw_caps radio_caps;
+
+	radio_caps = radio_api->get_capabilities(radio_dev);
+
+	if ((sState == OT_RADIO_STATE_RECEIVE) ||
+		(radio_caps & IEEE802154_HW_SLEEP_TO_TX)) {
 		if (run_tx_task(aInstance) == 0) {
 			error = OT_ERROR_NONE;
 		}
@@ -497,7 +605,7 @@ otRadioFrame *otPlatRadioGetTransmitBuffer(otInstance *aInstance)
 	return &sTransmitFrame;
 }
 
-static void get_rssi_energy_detected(struct device *dev, s16_t max_ed)
+static void get_rssi_energy_detected(const struct device *dev, int16_t max_ed)
 {
 	ARG_UNUSED(dev);
 	energy_detected_value = max_ed;
@@ -506,9 +614,9 @@ static void get_rssi_energy_detected(struct device *dev, s16_t max_ed)
 
 int8_t otPlatRadioGetRssi(otInstance *aInstance)
 {
-	s8_t ret_rssi = INT8_MAX;
+	int8_t ret_rssi = INT8_MAX;
 	int error = 0;
-	const u16_t energy_detection_time = 1;
+	const uint16_t energy_detection_time = 1;
 	enum ieee802154_hw_caps radio_caps;
 	ARG_UNUSED(aInstance);
 
@@ -531,7 +639,7 @@ int8_t otPlatRadioGetRssi(otInstance *aInstance)
 		if (error == 0) {
 			k_sem_take(&radio_sem, K_FOREVER);
 
-			ret_rssi = (s8_t)energy_detected_value;
+			ret_rssi = (int8_t)energy_detected_value;
 		}
 	}
 
@@ -554,12 +662,15 @@ otRadioCaps otPlatRadioGetCaps(otInstance *aInstance)
 	}
 
 	if (radio_caps & IEEE802154_HW_CSMA) {
-		caps |= OT_RADIO_CAPS_CSMA_BACKOFF |
-			OT_RADIO_CAPS_TRANSMIT_RETRIES;
+		caps |= OT_RADIO_CAPS_CSMA_BACKOFF;
 	}
 
 	if (radio_caps & IEEE802154_HW_TX_RX_ACK) {
 		caps |= OT_RADIO_CAPS_ACK_TIMEOUT;
+	}
+
+	if (radio_caps & IEEE802154_HW_SLEEP_TO_TX) {
+		caps |= OT_RADIO_CAPS_SLEEP_TO_TX;
 	}
 
 	return caps;
@@ -588,8 +699,8 @@ void otPlatRadioSetPromiscuous(otInstance *aInstance, bool aEnable)
 	radio_api->configure(radio_dev, IEEE802154_CONFIG_PROMISCUOUS, &config);
 }
 
-otError otPlatRadioEnergyScan(otInstance *aInstance, u8_t aScanChannel,
-			      u16_t aScanDuration)
+otError otPlatRadioEnergyScan(otInstance *aInstance, uint8_t aScanChannel,
+			      uint16_t aScanDuration)
 {
 	energy_detection_time    = aScanDuration;
 	energy_detection_channel = aScanChannel;
@@ -650,11 +761,11 @@ void otPlatRadioEnableSrcMatch(otInstance *aInstance, bool aEnable)
 }
 
 otError otPlatRadioAddSrcMatchShortEntry(otInstance *aInstance,
-					 const u16_t aShortAddress)
+					 const uint16_t aShortAddress)
 {
 	ARG_UNUSED(aInstance);
 
-	u8_t short_address[SHORT_ADDRESS_SIZE];
+	uint8_t short_address[SHORT_ADDRESS_SIZE];
 	struct ieee802154_config config = {
 		.ack_fpb.enabled = true,
 		.ack_fpb.addr = short_address,
@@ -678,7 +789,7 @@ otError otPlatRadioAddSrcMatchExtEntry(otInstance *aInstance,
 
 	struct ieee802154_config config = {
 		.ack_fpb.enabled = true,
-		.ack_fpb.addr = (u8_t *)aExtAddress->m8,
+		.ack_fpb.addr = (uint8_t *)aExtAddress->m8,
 		.ack_fpb.extended = true
 	};
 
@@ -691,11 +802,11 @@ otError otPlatRadioAddSrcMatchExtEntry(otInstance *aInstance,
 }
 
 otError otPlatRadioClearSrcMatchShortEntry(otInstance *aInstance,
-					   const u16_t aShortAddress)
+					   const uint16_t aShortAddress)
 {
 	ARG_UNUSED(aInstance);
 
-	u8_t short_address[SHORT_ADDRESS_SIZE];
+	uint8_t short_address[SHORT_ADDRESS_SIZE];
 	struct ieee802154_config config = {
 		.ack_fpb.enabled = false,
 		.ack_fpb.addr = short_address,
@@ -719,7 +830,7 @@ otError otPlatRadioClearSrcMatchExtEntry(otInstance *aInstance,
 
 	struct ieee802154_config config = {
 		.ack_fpb.enabled = false,
-		.ack_fpb.addr = (u8_t *)aExtAddress->m8,
+		.ack_fpb.addr = (uint8_t *)aExtAddress->m8,
 		.ack_fpb.extended = true
 	};
 

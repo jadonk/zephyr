@@ -42,10 +42,10 @@ void z_multiboot_init(struct multiboot_info *info)
 
 	if ((info->flags & MULTIBOOT_INFO_FLAGS_MMAP) &&
 	    (x86_memmap_source < X86_MEMMAP_SOURCE_MULTIBOOT_MMAP)) {
-		u32_t address = info->mmap_addr;
+		uint32_t address = info->mmap_addr;
 		struct multiboot_mmap *mmap;
 		int index = 0;
-		u32_t type;
+		uint32_t type;
 
 		while ((address < (info->mmap_addr + info->mmap_length)) &&
 		       (index < CONFIG_X86_MEMMAP_ENTRIES)) {
@@ -109,7 +109,7 @@ static struct framebuf_dev_data multiboot_framebuf_data = {
 	.height = CONFIG_MULTIBOOT_FRAMEBUF_Y
 };
 
-static int multiboot_framebuf_init(struct device *dev)
+static int multiboot_framebuf_init(const struct device *dev)
 {
 	struct framebuf_dev_data *data = FRAMEBUF_DATA(dev);
 	struct multiboot_info *info = &multiboot_info;
@@ -124,9 +124,9 @@ static int multiboot_framebuf_init(struct device *dev)
 		 * the pitch and adjust the start address center our canvas.
 		 */
 
-		u16_t adj_x;
-		u16_t adj_y;
-		u32_t *buffer;
+		uint16_t adj_x;
+		uint16_t adj_y;
+		uint32_t *buffer;
 
 		adj_x = info->fb_width - CONFIG_MULTIBOOT_FRAMEBUF_X;
 		adj_y = info->fb_height - CONFIG_MULTIBOOT_FRAMEBUF_Y;

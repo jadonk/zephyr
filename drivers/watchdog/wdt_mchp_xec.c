@@ -15,7 +15,6 @@ LOG_MODULE_REGISTER(wdt_mchp_xec);
 #include <drivers/watchdog.h>
 #include <soc.h>
 #include <errno.h>
-#include <assert.h>
 
 #define WDT_XEC_REG_BASE						\
 	((WDT_Type *)(DT_INST_REG_ADDR(0)))
@@ -26,12 +25,12 @@ struct wdt_xec_data {
 };
 
 
-DEVICE_DECLARE(wdt_xec);
+DEVICE_DT_INST_DECLARE(0);
 
-static int wdt_xec_setup(struct device *dev, u8_t options)
+static int wdt_xec_setup(const struct device *dev, uint8_t options)
 {
 	WDT_Type *wdt_regs = WDT_XEC_REG_BASE;
-	struct wdt_xec_data *data = dev->driver_data;
+	struct wdt_xec_data *data = dev->data;
 
 	if (wdt_regs->CTRL & MCHP_WDT_CTRL_EN) {
 		return -EBUSY;
@@ -60,10 +59,10 @@ static int wdt_xec_setup(struct device *dev, u8_t options)
 	return 0;
 }
 
-static int wdt_xec_disable(struct device *dev)
+static int wdt_xec_disable(const struct device *dev)
 {
 	WDT_Type *wdt_regs = WDT_XEC_REG_BASE;
-	struct wdt_xec_data *data = dev->driver_data;
+	struct wdt_xec_data *data = dev->data;
 
 	if (!(wdt_regs->CTRL & MCHP_WDT_CTRL_EN)) {
 		return -EALREADY;
@@ -77,11 +76,11 @@ static int wdt_xec_disable(struct device *dev)
 	return 0;
 }
 
-static int wdt_xec_install_timeout(struct device *dev,
+static int wdt_xec_install_timeout(const struct device *dev,
 				   const struct wdt_timeout_cfg *config)
 {
 	WDT_Type *wdt_regs = WDT_XEC_REG_BASE;
-	struct wdt_xec_data *data = dev->driver_data;
+	struct wdt_xec_data *data = dev->data;
 
 	if (wdt_regs->CTRL & MCHP_WDT_CTRL_EN) {
 		return -EBUSY;
@@ -121,7 +120,7 @@ static int wdt_xec_install_timeout(struct device *dev,
 	return 0;
 }
 
-static int wdt_xec_feed(struct device *dev, int channel_id)
+static int wdt_xec_feed(const struct device *dev, int channel_id)
 {
 	WDT_Type *wdt_regs = WDT_XEC_REG_BASE;
 
@@ -139,10 +138,10 @@ static int wdt_xec_feed(struct device *dev, int channel_id)
 	return 0;
 }
 
-static void wdt_xec_isr(struct device *dev)
+static void wdt_xec_isr(const struct device *dev)
 {
 	WDT_Type *wdt_regs = WDT_XEC_REG_BASE;
-	struct wdt_xec_data *data = dev->driver_data;
+	struct wdt_xec_data *data = dev->data;
 
 	LOG_DBG("WDT ISR");
 
@@ -161,7 +160,7 @@ static const struct wdt_driver_api wdt_xec_api = {
 	.feed = wdt_xec_feed,
 };
 
-static int wdt_xec_init(struct device *dev)
+static int wdt_xec_init(const struct device *dev)
 {
 	if (IS_ENABLED(CONFIG_WDT_DISABLE_AT_BOOT)) {
 		wdt_xec_disable(dev);
@@ -171,7 +170,7 @@ static int wdt_xec_init(struct device *dev)
 
 	IRQ_CONNECT(DT_INST_IRQN(0),
 		    DT_INST_IRQ(0, priority),
-		    wdt_xec_isr, DEVICE_GET(wdt_xec), 0);
+		    wdt_xec_isr, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQN(0));
 
 	return 0;
@@ -179,7 +178,7 @@ static int wdt_xec_init(struct device *dev)
 
 static struct wdt_xec_data wdt_xec_dev_data;
 
-DEVICE_AND_API_INIT(wdt_xec, DT_INST_LABEL(0),
-		    wdt_xec_init, &wdt_xec_dev_data, NULL,
+DEVICE_DT_INST_DEFINE(0, wdt_xec_init, device_pm_control_nop,
+		    &wdt_xec_dev_data, NULL,
 		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		    &wdt_xec_api);

@@ -28,14 +28,14 @@ LOG_MODULE_REGISTER(grove_light, CONFIG_SENSOR_LOG_LEVEL);
 
 
 struct gls_data {
-	struct device *adc;
+	const struct device *adc;
 	struct adc_channel_cfg ch_cfg;
-	u16_t raw;
+	uint16_t raw;
 };
 
 struct gls_config {
 	const char *adc_label;
-	u8_t adc_channel;
+	uint8_t adc_channel;
 };
 
 static struct adc_sequence_options options = {
@@ -47,19 +47,20 @@ static struct adc_sequence adc_table = {
 	.options = &options,
 };
 
-static int gls_sample_fetch(struct device *dev, enum sensor_channel chan)
+static int gls_sample_fetch(const struct device *dev,
+			    enum sensor_channel chan)
 {
-	struct gls_data *drv_data = dev->driver_data;
+	struct gls_data *drv_data = dev->data;
 
 	return adc_read(drv_data->adc, &adc_table);
 }
 
-static int gls_channel_get(struct device *dev,
+static int gls_channel_get(const struct device *dev,
 			   enum sensor_channel chan,
 			   struct sensor_value *val)
 {
-	struct gls_data *drv_data = dev->driver_data;
-	u16_t analog_val = drv_data->raw;
+	struct gls_data *drv_data = dev->data;
+	uint16_t analog_val = drv_data->raw;
 	double ldr_val, dval;
 
 	/*
@@ -70,8 +71,8 @@ static int gls_channel_get(struct device *dev,
 	ldr_val = (BIT(GROVE_RESOLUTION) - 1.0 - analog_val) * 10.0 / analog_val;
 	dval = 10000.0 / pow(ldr_val * 15.0, 4.0/3.0);
 
-	val->val1 = (s32_t)dval;
-	val->val2 = ((s32_t)(dval * 1000000)) % 1000000;
+	val->val1 = (int32_t)dval;
+	val->val2 = ((int32_t)(dval * 1000000)) % 1000000;
 
 	return 0;
 }
@@ -81,10 +82,10 @@ static const struct sensor_driver_api gls_api = {
 	.channel_get = &gls_channel_get,
 };
 
-static int gls_init(struct device *dev)
+static int gls_init(const struct device *dev)
 {
-	struct gls_data *drv_data = dev->driver_data;
-	const struct gls_config *cfg = dev->config_info;
+	struct gls_data *drv_data = dev->data;
+	const struct gls_config *cfg = dev->config;
 
 	drv_data->adc = device_get_binding(cfg->adc_label);
 

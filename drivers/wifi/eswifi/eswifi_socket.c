@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <logging/log.h>
-LOG_MODULE_REGISTER(wifi_eswifi, CONFIG_WIFI_LOG_LEVEL);
+#include "eswifi_log.h"
+LOG_MODULE_DECLARE(LOG_MODULE_NAME);
 
 #include <zephyr.h>
 #include <kernel.h>
@@ -87,7 +87,8 @@ static void eswifi_off_read_work(struct k_work *work)
 {
 	struct eswifi_off_socket *socket;
 	struct eswifi_dev *eswifi;
-	struct net_pkt *pkt;
+	struct net_pkt *pkt = NULL;
+	int next_timeout_ms = 100;
 	int err, len;
 	char *data;
 
@@ -109,8 +110,14 @@ static void eswifi_off_read_work(struct k_work *work)
 	len = __read_data(eswifi, 1460, &data); /* 1460 is max size */
 	if (len < 0) {
 		__stop_socket(eswifi, socket);
-		goto done;
-	} else if (!len || !socket->recv_cb) {
+
+		if (socket->recv_cb) {
+			/* send EOF (null pkt) */
+			goto do_recv_cb;
+		}
+	}
+
+	if (!len || !socket->recv_cb) {
 		goto done;
 	}
 
@@ -127,21 +134,25 @@ static void eswifi_off_read_work(struct k_work *work)
 		LOG_WRN("Incomplete buffer copy");
 	}
 
-	eswifi_unlock(eswifi);
-
 	net_pkt_cursor_init(pkt);
+
+do_recv_cb:
 	socket->recv_cb(socket->context, pkt,
 			NULL, NULL, 0, socket->recv_data);
 
-	eswifi_lock(eswifi);
+	if (!socket->context) {
+		/* something destroyed the socket in the recv path */
+		eswifi_unlock(eswifi);
+		return;
+	}
 
 	k_sem_give(&socket->read_sem);
-	k_yield();
+	next_timeout_ms = 0;
 
 done:
 	err = k_delayed_work_submit_to_queue(&eswifi->work_q,
 					     &socket->read_work,
-					     K_MSEC(500));
+					     K_MSEC(next_timeout_ms));
 	if (err) {
 		LOG_ERR("Rescheduling socket read error");
 	}
@@ -160,6 +171,14 @@ int __eswifi_off_start_client(struct eswifi_dev *eswifi,
 
 	__select_socket(eswifi, socket->index);
 
+	/* Stop any running client */
+	snprintk(eswifi->buf, sizeof(eswifi->buf), "P6=0\r");
+	err = eswifi_at_cmd(eswifi, eswifi->buf);
+	if (err < 0) {
+		LOG_ERR("Unable to stop running client");
+		return -EIO;
+	}
+
 	/* Set Remote IP */
 	snprintk(eswifi->buf, sizeof(eswifi->buf), "P3=%u.%u.%u.%u\r",
 		 sin_addr->s4_addr[0], sin_addr->s4_addr[1],
@@ -173,7 +192,7 @@ int __eswifi_off_start_client(struct eswifi_dev *eswifi,
 
 	/* Set Remote Port */
 	snprintk(eswifi->buf, sizeof(eswifi->buf), "P4=%d\r",
-		(u16_t)sys_be16_to_cpu(net_sin(addr)->sin_port));
+		(uint16_t)sys_be16_to_cpu(net_sin(addr)->sin_port));
 	err = eswifi_at_cmd(eswifi, eswifi->buf);
 	if (err < 0) {
 		LOG_ERR("Unable to set remote port");
@@ -217,11 +236,6 @@ int __eswifi_accept(struct eswifi_dev *eswifi, struct eswifi_off_socket *socket)
 int __eswifi_socket_free(struct eswifi_dev *eswifi,
 			 struct eswifi_off_socket *socket)
 {
-	if ((socket->type == ESWIFI_TRANSPORT_TCP ||
-	     socket->type == ESWIFI_TRANSPORT_TCP_SSL) &&
-	     socket->state != ESWIFI_SOCKET_STATE_CONNECTED)
-		return -ENOTCONN;
-
 	__select_socket(eswifi, socket->index);
 	k_delayed_work_cancel(&socket->read_work);
 

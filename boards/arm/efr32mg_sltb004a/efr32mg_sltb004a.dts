@@ -76,7 +76,7 @@
 	location-tx = <GECKO_LOCATION(29) GECKO_PORT_K GECKO_PIN(0)>;
 	location-clk = <GECKO_LOCATION(18) GECKO_PORT_F GECKO_PIN(7)>;
 
-	cs-gpios = <&gpiok 1 0>;
+	cs-gpios = <&gpiok 1 GPIO_ACTIVE_LOW>;
 
 	status = "okay";
 
@@ -86,8 +86,13 @@
 		reg = <0>;
 		spi-max-frequency = <80000000>;
 		size = <0x800000>;
-		has-be32k;
 		jedec-id = [c2 28 14];
+		sfdp-bfp = [
+			 e5 20 f1 ff  ff ff 7f 00  44 eb 08 6b  08 3b 04 bb
+			 ee ff ff ff  ff ff 00 ff  ff ff 00 ff  0c 20 0f 52
+			 10 d8 00 ff  23 72 f5 00  82 ed 04 b7  44 83 38 44
+			 30 b0 30 b0  f7 c4 d5 5c  00 be 29 ff  f0 d0 ff ff
+		];
 	};
 };
 
@@ -105,9 +110,16 @@
 };
 
 &i2c1 {
-	location-sda = <GECKO_LOCATION(17) GECKO_PORT_C GECKO_PIN(4)>;
-	location-scl = <GECKO_LOCATION(17) GECKO_PORT_C GECKO_PIN(5)>;
-	status = "okay";
+	location-sda = <GECKO_LOCATION(6) GECKO_PORT_B GECKO_PIN(6)>;
+	location-scl = <GECKO_LOCATION(6) GECKO_PORT_B GECKO_PIN(7)>;
+
+	ccs811: ccs811@5a {
+		compatible = "ams,ccs811";
+		reg = <0x5a>;
+		label = "CCS811";
+		irq-gpios = <&gpiof 13 GPIO_ACTIVE_LOW>;
+		wake-gpios = <&gpiof 15 GPIO_ACTIVE_LOW>;
+	};
 };
 
 &rtcc0 {
@@ -145,10 +157,7 @@
 };
 
 &flash0 {
-	/*
-	 * For more information, see:
-	 * http://docs.zephyrproject.org/latest/guides/dts/index.html#flash-partitions
-	 */
+
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;

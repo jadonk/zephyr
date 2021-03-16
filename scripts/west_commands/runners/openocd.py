@@ -5,6 +5,7 @@
 '''Runner for openocd.'''
 
 from os import path
+from pathlib import Path
 
 try:
     from elftools.elf.elffile import ELFFile
@@ -27,7 +28,7 @@ class OpenOcdBinaryRunner(ZephyrBinaryRunner):
                  tcl_port=DEFAULT_OPENOCD_TCL_PORT,
                  telnet_port=DEFAULT_OPENOCD_TELNET_PORT,
                  gdb_port=DEFAULT_OPENOCD_GDB_PORT):
-        super(OpenOcdBinaryRunner, self).__init__(cfg)
+        super().__init__(cfg)
 
         if not config:
             default = path.join(cfg.board_dir, 'support', 'openocd.cfg')
@@ -43,8 +44,10 @@ class OpenOcdBinaryRunner(ZephyrBinaryRunner):
         if cfg.openocd_search is not None:
             search_args.extend(['-s', cfg.openocd_search])
         self.openocd_cmd = [cfg.openocd] + search_args
-        self.hex_name = cfg.hex_file
-        self.elf_name = cfg.elf_file
+        # openocd doesn't cope with Windows path names, so convert
+        # them to POSIX style just to be sure.
+        self.hex_name = Path(cfg.hex_file).as_posix()
+        self.elf_name = Path(cfg.elf_file).as_posix()
         self.pre_init = pre_init or []
         self.pre_load = pre_load or []
         self.load_cmd = load_cmd
@@ -98,7 +101,7 @@ class OpenOcdBinaryRunner(ZephyrBinaryRunner):
                             help='openocd gdb port, defaults to 3333')
 
     @classmethod
-    def create(cls, cfg, args):
+    def do_create(cls, cfg, args):
         return OpenOcdBinaryRunner(
             cfg,
             pre_init=args.cmd_pre_init,

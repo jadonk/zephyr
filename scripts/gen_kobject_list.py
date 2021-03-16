@@ -77,25 +77,35 @@ from collections import OrderedDict
 #
 #  - The second item is a boolean indicating whether it is permissible for
 #    the object to be located in user-accessible memory.
+#
+#  - The third items is a boolean indicating whether this item can be
+#    dynamically allocated with k_object_alloc(). Keep this in sync with
+#    the switch statement in z_impl_k_object_alloc().
+#
+# Key names in all caps do not correspond to a specific data type but instead
+# indicate that objects of its type are of a family of compatible data
+# structures
 
 # Regular dictionaries are ordered only with Python 3.6 and
 # above. Good summary and pointers to official documents at:
 # https://stackoverflow.com/questions/39980323/are-dictionaries-ordered-in-python-3-6
 kobjects = OrderedDict([
-    ("k_mem_slab", (None, False)),
-    ("k_msgq", (None, False)),
-    ("k_mutex", (None, False)),
-    ("k_pipe", (None, False)),
-    ("k_queue", (None, False)),
-    ("k_poll_signal", (None, False)),
-    ("k_sem", (None, False)),
-    ("k_stack", (None, False)),
-    ("k_thread", (None, False)),
-    ("k_timer", (None, False)),
-    ("z_thread_stack_element", (None, False)),
-    ("device", (None, False)),
-    ("sys_mutex", (None, True)),
-    ("k_futex", (None, True))
+    ("k_mem_slab", (None, False, True)),
+    ("k_msgq", (None, False, True)),
+    ("k_mutex", (None, False, True)),
+    ("k_pipe", (None, False, True)),
+    ("k_queue", (None, False, True)),
+    ("k_poll_signal", (None, False, True)),
+    ("k_sem", (None, False, True)),
+    ("k_stack", (None, False, True)),
+    ("k_thread", (None, False, True)), # But see #
+    ("k_timer", (None, False, True)),
+    ("z_thread_stack_element", (None, False, False)),
+    ("device", (None, False, False)),
+    ("NET_SOCKET", (None, False, False)),
+    ("net_if", (None, False, False)),
+    ("sys_mutex", (None, True, False)),
+    ("k_futex", (None, True, False))
 ])
 
 def kobject_to_enum(kobj):
@@ -114,6 +124,9 @@ subsystems = [
     #    ....
     #};
 ]
+
+# Names of all structs tagged with __net_socket, found by parse_syscalls.py
+net_sockets = [ ]
 
 def subsystem_to_enum(subsys):
     return "K_OBJ_DRIVER_" + subsys[:-11].upper()
@@ -162,33 +175,13 @@ extern_env = {}
 
 class KobjectInstance:
     def __init__(self, type_obj, addr):
-        global thread_counter
-        global sys_mutex_counter
-        global futex_counter
-        global stack_counter
-
         self.addr = addr
         self.type_obj = type_obj
 
         # Type name determined later since drivers needs to look at the
         # API struct address
         self.type_name = None
-
-        if self.type_obj.name == "k_thread":
-            # Assign an ID for this thread object, used to track its
-            # permissions to other kernel objects
-            self.data = thread_counter
-            thread_counter = thread_counter + 1
-        elif self.type_obj.name == "sys_mutex":
-            self.data = "&kernel_mutexes[%d]" % sys_mutex_counter
-            sys_mutex_counter += 1
-        elif self.type_obj.name == "k_futex":
-            self.data = "&futex_data[%d]" % futex_counter
-            futex_counter += 1
-        elif self.type_obj.name == STACK_TYPE:
-            stack_counter += 1
-        else:
-            self.data = 0
+        self.data = 0
 
 
 class KobjectType:
@@ -399,6 +392,8 @@ def analyze_die_struct(die):
         type_env[offset] = KobjectType(offset, name, size)
     elif name in subsystems:
         type_env[offset] = KobjectType(offset, name, size, api=True)
+    elif name in net_sockets:
+        type_env[offset] = KobjectType(offset, "NET_SOCKET", size)
     else:
         at = AggregateType(offset, name, size)
         type_env[offset] = at
@@ -435,14 +430,25 @@ def analyze_die_array(die):
     for child in die.iter_children():
         if child.tag != "DW_TAG_subrange_type":
             continue
-        if "DW_AT_upper_bound" not in child.attributes:
-            continue
 
-        ub = child.attributes["DW_AT_upper_bound"]
-        if not ub.form.startswith("DW_FORM_data"):
-            continue
+        if "DW_AT_upper_bound" in child.attributes:
+            ub = child.attributes["DW_AT_upper_bound"]
 
-        elements.append(ub.value + 1)
+            if not ub.form.startswith("DW_FORM_data"):
+                continue
+
+            elements.append(ub.value + 1)
+        # in DWARF 4, e.g. ARC Metaware toolchain, DW_AT_count is used
+        # not DW_AT_upper_bound
+        elif "DW_AT_count" in child.attributes:
+            ub = child.attributes["DW_AT_count"]
+
+            if not ub.form.startswith("DW_FORM_data"):
+                continue
+
+            elements.append(ub.value)
+        else:
+            continue
 
     if not elements:
         if type_offset in type_env.keys():
@@ -497,11 +503,18 @@ def device_get_api_addr(elf, addr):
 
 
 def find_kobjects(elf, syms):
+    global thread_counter
+    global sys_mutex_counter
+    global futex_counter
+    global stack_counter
+
     if not elf.has_dwarf_info():
         sys.exit("ELF file has no DWARF information")
 
     app_smem_start = syms["_app_smem_start"]
     app_smem_end = syms["_app_smem_end"]
+    user_stack_start = syms["z_user_stacks_start"]
+    user_stack_end = syms["z_user_stacks_end"]
 
     di = elf.get_dwarf_info()
 
@@ -609,11 +622,31 @@ def find_kobjects(elf, syms):
         if ko.type_obj.api:
             continue
 
-        _, user_ram_allowed = kobjects[ko.type_obj.name]
+        _, user_ram_allowed, _ = kobjects[ko.type_obj.name]
         if not user_ram_allowed and app_smem_start <= addr < app_smem_end:
             debug("object '%s' found in invalid location %s"
                   % (ko.type_obj.name, hex(addr)))
             continue
+
+        if (ko.type_obj.name == STACK_TYPE and
+                (addr < user_stack_start or addr >= user_stack_end)):
+            debug("skip kernel-only stack at %s" % hex(addr))
+            continue
+
+        # At this point we know the object will be included in the gperf table
+        if ko.type_obj.name == "k_thread":
+            # Assign an ID for this thread object, used to track its
+            # permissions to other kernel objects
+            ko.data = thread_counter
+            thread_counter = thread_counter + 1
+        elif ko.type_obj.name == "sys_mutex":
+            ko.data = "&kernel_mutexes[%d]" % sys_mutex_counter
+            sys_mutex_counter += 1
+        elif ko.type_obj.name == "k_futex":
+            ko.data = "&futex_data[%d]" % futex_counter
+            futex_counter += 1
+        elif ko.type_obj.name == STACK_TYPE:
+            stack_counter += 1
 
         if ko.type_obj.name != "device":
             # Not a device struct so we immediately know its type
@@ -678,7 +711,7 @@ struct z_object;
 # turned into a string, we told gperf to expect binary strings that are not
 # NULL-terminated.
 footer = """%%
-struct z_object *z_object_gperf_find(void *obj)
+struct z_object *z_object_gperf_find(const void *obj)
 {
     return z_object_lookup((const char *)obj, sizeof(void *));
 }
@@ -695,7 +728,7 @@ void z_object_gperf_wordlist_foreach(_wordlist_cb_func_t func, void *context)
 }
 
 #ifndef CONFIG_DYNAMIC_OBJECTS
-struct z_object *z_object_find(void *obj)
+struct z_object *z_object_find(const void *obj)
 	ALIAS_OF(z_object_gperf_find);
 
 void z_object_wordlist_foreach(_wordlist_cb_func_t func, void *context)
@@ -733,9 +766,11 @@ def write_gperf_table(fp, syms, objs, little_endian, static_begin, static_end):
     if "CONFIG_GEN_PRIV_STACKS" in syms:
         metadata_names["K_OBJ_THREAD_STACK_ELEMENT"] = "stack_data"
         if stack_counter != 0:
-            fp.write("static u8_t Z_GENERIC_SECTION(.priv_stacks.noinit) "
-                     " __aligned(Z_PRIVILEGE_STACK_ALIGN)"
-                     " priv_stacks[%d][CONFIG_PRIVILEGED_STACK_SIZE];\n"
+            # Same as K_KERNEL_STACK_ARRAY_DEFINE, but routed to a different
+            # memory section.
+            fp.write("static uint8_t Z_GENERIC_SECTION(.priv_stacks.noinit) "
+                     " __aligned(Z_KERNEL_STACK_OBJ_ALIGN)"
+                     " priv_stacks[%d][Z_KERNEL_STACK_LEN(CONFIG_PRIVILEGED_STACK_SIZE)];\n"
                      % stack_counter)
 
             fp.write("static struct z_stack_data stack_data[%d] = {\n"
@@ -751,7 +786,7 @@ def write_gperf_table(fp, syms, objs, little_endian, static_begin, static_end):
                 # instead
                 size = ko.data
                 ko.data = "&stack_data[%d]" % counter
-                fp.write("\t{ %d, (u8_t *)(&priv_stacks[%d]) }"
+                fp.write("\t{ %d, (uint8_t *)(&priv_stacks[%d]) }"
                          % (size, counter))
                 if counter != (stack_counter - 1):
                     fp.write(",")
@@ -817,7 +852,7 @@ def write_gperf_table(fp, syms, objs, little_endian, static_begin, static_end):
     # Generate the array of already mapped thread indexes
     fp.write('\n')
     fp.write('Z_GENERIC_SECTION(.kobject_data.data) ')
-    fp.write('u8_t _thread_idx_map[%d] = {' % (thread_max_bytes))
+    fp.write('uint8_t _thread_idx_map[%d] = {' % (thread_max_bytes))
 
     for i in range(0, thread_max_bytes):
         fp.write(' 0x%x, ' % (thread_idx_map[i]))
@@ -853,7 +888,7 @@ def write_validation_output(fp):
 def write_kobj_types_output(fp):
     fp.write("/* Core kernel objects */\n")
     for kobj, obj_info in kobjects.items():
-        dep, _ = obj_info
+        dep, _, _ = obj_info
         if kobj == "device":
             continue
 
@@ -874,7 +909,7 @@ def write_kobj_types_output(fp):
 def write_kobj_otype_output(fp):
     fp.write("/* Core kernel objects */\n")
     for kobj, obj_info in kobjects.items():
-        dep, _ = obj_info
+        dep, _, _ = obj_info
         if kobj == "device":
             continue
 
@@ -898,10 +933,9 @@ def write_kobj_otype_output(fp):
 def write_kobj_size_output(fp):
     fp.write("/* Non device/stack objects */\n")
     for kobj, obj_info in kobjects.items():
-        dep, _ = obj_info
-        # device handled by default case. Stacks are not currently handled,
-        # if they eventually are it will be a special case.
-        if kobj in {"device", STACK_TYPE}:
+        dep, _, alloc = obj_info
+
+        if not alloc:
             continue
 
         if dep:
@@ -916,7 +950,8 @@ def write_kobj_size_output(fp):
 def parse_subsystems_list_file(path):
     with open(path, "r") as fp:
         subsys_list = json.load(fp)
-    subsystems.extend(subsys_list)
+    subsystems.extend(subsys_list["__subsystem"])
+    net_sockets.extend(subsys_list["__net_socket"])
 
 def parse_args():
     global args

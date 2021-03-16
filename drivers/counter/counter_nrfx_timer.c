@@ -28,7 +28,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, LOG_LEVEL);
 struct counter_nrfx_data {
 	counter_top_callback_t top_cb;
 	void *top_user_data;
-	u32_t guard_period;
+	uint32_t guard_period;
 	atomic_t cc_int_pending;
 };
 
@@ -50,19 +50,18 @@ struct counter_timer_config {
 	nrf_timer_frequency_t freq;
 };
 
-static inline struct counter_nrfx_data *get_dev_data(struct device *dev)
+static inline struct counter_nrfx_data *get_dev_data(const struct device *dev)
 {
-	return dev->driver_data;
+	return dev->data;
 }
 
-static inline const struct counter_nrfx_config *get_nrfx_config(
-							struct device *dev)
+static inline const struct counter_nrfx_config *get_nrfx_config(const struct device *dev)
 {
-	return CONTAINER_OF(dev->config_info,
+	return CONTAINER_OF(dev->config,
 				struct counter_nrfx_config, info);
 }
 
-static int start(struct device *dev)
+static int start(const struct device *dev)
 {
 	nrf_timer_task_trigger(get_nrfx_config(dev)->timer,
 			       NRF_TIMER_TASK_START);
@@ -70,7 +69,7 @@ static int start(struct device *dev)
 	return 0;
 }
 
-static int stop(struct device *dev)
+static int stop(const struct device *dev)
 {
 	nrf_timer_task_trigger(get_nrfx_config(dev)->timer,
 				NRF_TIMER_TASK_SHUTDOWN);
@@ -78,17 +77,17 @@ static int stop(struct device *dev)
 	return 0;
 }
 
-static u32_t get_top_value(struct device *dev)
+static uint32_t get_top_value(const struct device *dev)
 {
 	return nrf_timer_cc_get(get_nrfx_config(dev)->timer, TOP_CH);
 }
 
-static u32_t get_max_relative_alarm(struct device *dev)
+static uint32_t get_max_relative_alarm(const struct device *dev)
 {
 	return get_top_value(dev);
 }
 
-static u32_t read(struct device *dev)
+static uint32_t read(const struct device *dev)
 {
 	NRF_TIMER_Type *timer = get_nrfx_config(dev)->timer;
 
@@ -98,21 +97,21 @@ static u32_t read(struct device *dev)
 	return nrf_timer_cc_get(timer, COUNTER_READ_CC);
 }
 
-static int get_value(struct device *dev, u32_t *ticks)
+static int get_value(const struct device *dev, uint32_t *ticks)
 {
 	*ticks = read(dev);
 	return 0;
 }
 
 /* Return true if value equals 2^n - 1 */
-static inline bool is_bit_mask(u32_t val)
+static inline bool is_bit_mask(uint32_t val)
 {
 	return !(val & (val + 1));
 }
 
-static u32_t ticks_add(u32_t val1, u32_t val2, u32_t top)
+static uint32_t ticks_add(uint32_t val1, uint32_t val2, uint32_t top)
 {
-	u32_t to_top;
+	uint32_t to_top;
 
 	if (likely(is_bit_mask(top))) {
 		return (val1 + val2) & top;
@@ -123,7 +122,7 @@ static u32_t ticks_add(u32_t val1, u32_t val2, u32_t top)
 	return (val2 <= to_top) ? val1 + val2 : val2 - to_top;
 }
 
-static u32_t ticks_sub(u32_t val, u32_t old, u32_t top)
+static uint32_t ticks_sub(uint32_t val, uint32_t old, uint32_t top)
 {
 	if (likely(is_bit_mask(top))) {
 		return (val - old) & top;
@@ -133,26 +132,27 @@ static u32_t ticks_sub(u32_t val, u32_t old, u32_t top)
 	return (val >= old) ? (val - old) : val + top + 1 - old;
 }
 
-static void set_cc_int_pending(struct device *dev, u8_t chan)
+static void set_cc_int_pending(const struct device *dev, uint8_t chan)
 {
 	atomic_or(&get_dev_data(dev)->cc_int_pending, BIT(chan));
 	NRFX_IRQ_PENDING_SET(NRFX_IRQ_NUMBER_GET(get_nrfx_config(dev)->timer));
 }
 
-static int set_cc(struct device *dev, u8_t id, u32_t val, u32_t flags)
+static int set_cc(const struct device *dev, uint8_t id, uint32_t val,
+		  uint32_t flags)
 {
 	__ASSERT_NO_MSG(get_dev_data(dev)->guard_period < get_top_value(dev));
 	bool absolute = flags & COUNTER_ALARM_CFG_ABSOLUTE;
 	bool irq_on_late;
 	NRF_TIMER_Type  *reg = get_nrfx_config(dev)->timer;
-	u8_t chan = ID_TO_CC(id);
+	uint8_t chan = ID_TO_CC(id);
 	nrf_timer_event_t evt = nrf_timer_compare_event_get(chan);
-	u32_t top = get_top_value(dev);
+	uint32_t top = get_top_value(dev);
 	int err = 0;
-	u32_t prev_val;
-	u32_t now;
-	u32_t diff;
-	u32_t max_rel_val;
+	uint32_t prev_val;
+	uint32_t now;
+	uint32_t diff;
+	uint32_t max_rel_val;
 
 	__ASSERT(nrf_timer_int_enable_check(reg,
 				nrf_timer_compare_int_get(chan)) == 0,
@@ -212,7 +212,7 @@ static int set_cc(struct device *dev, u8_t id, u32_t val, u32_t flags)
 	return err;
 }
 
-static int set_alarm(struct device *dev, u8_t chan,
+static int set_alarm(const struct device *dev, uint8_t chan,
 			const struct counter_alarm_cfg *alarm_cfg)
 {
 	const struct counter_nrfx_config *nrfx_config = get_nrfx_config(dev);
@@ -232,10 +232,10 @@ static int set_alarm(struct device *dev, u8_t chan,
 	return set_cc(dev, chan, alarm_cfg->ticks, alarm_cfg->flags);
 }
 
-static int cancel_alarm(struct device *dev, u8_t chan_id)
+static int cancel_alarm(const struct device *dev, uint8_t chan_id)
 {
 	const struct counter_nrfx_config *config = get_nrfx_config(dev);
-	u32_t int_mask =  nrf_timer_compare_int_get(ID_TO_CC(chan_id));
+	uint32_t int_mask =  nrf_timer_compare_int_get(ID_TO_CC(chan_id));
 
 	nrf_timer_int_disable(config->timer, int_mask);
 	config->ch_data[chan_id].callback = NULL;
@@ -243,7 +243,8 @@ static int cancel_alarm(struct device *dev, u8_t chan_id)
 	return 0;
 }
 
-static int set_top_value(struct device *dev, const struct counter_top_cfg *cfg)
+static int set_top_value(const struct device *dev,
+			 const struct counter_top_cfg *cfg)
 {
 	const struct counter_nrfx_config *nrfx_config = get_nrfx_config(dev);
 	NRF_TIMER_Type *timer = get_nrfx_config(dev)->timer;
@@ -282,12 +283,12 @@ static int set_top_value(struct device *dev, const struct counter_top_cfg *cfg)
 	return err;
 }
 
-static u32_t get_pending_int(struct device *dev)
+static uint32_t get_pending_int(const struct device *dev)
 {
 	return 0;
 }
 
-static int init_timer(struct device *dev,
+static int init_timer(const struct device *dev,
 		      const struct counter_timer_config *config)
 {
 	NRF_TIMER_Type *reg = get_nrfx_config(dev)->timer;
@@ -303,12 +304,13 @@ static int init_timer(struct device *dev,
 	return 0;
 }
 
-static u32_t get_guard_period(struct device *dev, u32_t flags)
+static uint32_t get_guard_period(const struct device *dev, uint32_t flags)
 {
 	return get_dev_data(dev)->guard_period;
 }
 
-static int set_guard_period(struct device *dev, u32_t guard, u32_t flags)
+static int set_guard_period(const struct device *dev, uint32_t guard,
+			    uint32_t flags)
 {
 	__ASSERT_NO_MSG(guard < get_top_value(dev));
 
@@ -316,7 +318,7 @@ static int set_guard_period(struct device *dev, u32_t guard, u32_t flags)
 	return 0;
 }
 
-static void top_irq_handle(struct device *dev)
+static void top_irq_handle(const struct device *dev)
 {
 	NRF_TIMER_Type *reg = get_nrfx_config(dev)->timer;
 	counter_top_callback_t cb = get_dev_data(dev)->top_cb;
@@ -329,11 +331,11 @@ static void top_irq_handle(struct device *dev)
 	}
 }
 
-static void alarm_irq_handle(struct device *dev, u32_t id)
+static void alarm_irq_handle(const struct device *dev, uint32_t id)
 {
-	u32_t cc = ID_TO_CC(id);
+	uint32_t cc = ID_TO_CC(id);
 	NRF_TIMER_Type *reg = get_nrfx_config(dev)->timer;
-	u32_t int_mask = nrf_timer_compare_int_get(cc);
+	uint32_t int_mask = nrf_timer_compare_int_get(cc);
 	nrf_timer_event_t evt = nrf_timer_compare_event_get(cc);
 	bool hw_irq_pending = nrf_timer_event_check(reg, evt) &&
 			      nrf_timer_int_enable_check(reg, int_mask);
@@ -352,18 +354,18 @@ static void alarm_irq_handle(struct device *dev, u32_t id)
 		chdata->callback = NULL;
 
 		if (cb) {
-			u32_t cc_val = nrf_timer_cc_get(reg, cc);
+			uint32_t cc_val = nrf_timer_cc_get(reg, cc);
 
 			cb(dev, id, cc_val, chdata->user_data);
 		}
 	}
 }
 
-static void irq_handler(struct device *dev)
+static void irq_handler(const struct device *dev)
 {
 	top_irq_handle(dev);
 
-	for (u32_t i = 0; i < counter_get_num_of_channels(dev); i++) {
+	for (uint32_t i = 0; i < counter_get_num_of_channels(dev); i++) {
 		alarm_irq_handle(dev, i);
 	}
 }
@@ -396,7 +398,7 @@ static const struct counter_driver_api counter_nrfx_driver_api = {
 			TIMER_PRESCALER_PRESCALER_Msk,			       \
 		     "TIMER prescaler out of range");			       \
 	DEVICE_DECLARE(timer_##idx);					       \
-	static int counter_##idx##_init(struct device *dev)		       \
+	static int counter_##idx##_init(const struct device *dev)		       \
 	{								       \
 		IRQ_CONNECT(DT_IRQN(TIMER(idx)), DT_IRQ(TIMER(idx), priority), \
 			    irq_handler, DEVICE_GET(timer_##idx), 0);	       \

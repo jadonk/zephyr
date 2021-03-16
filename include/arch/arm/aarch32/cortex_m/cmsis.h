@@ -39,9 +39,9 @@ extern "C" {
 #define CPACR_CP11_RESERVED     (2UL << CPACR_CP11_Pos)
 #define CPACR_CP11_FULL_ACCESS  (3UL << CPACR_CP11_Pos)
 
-#define SCB_UFSR  (*((__IOM u16_t *) &SCB->CFSR + 1))
-#define SCB_BFSR  (*((__IOM u8_t *) &SCB->CFSR + 1))
-#define SCB_MMFSR (*((__IOM u8_t *) &SCB->CFSR))
+#define SCB_UFSR  (*((__IOM uint16_t *) &SCB->CFSR + 1))
+#define SCB_BFSR  (*((__IOM uint8_t *) &SCB->CFSR + 1))
+#define SCB_MMFSR (*((__IOM uint8_t *) &SCB->CFSR))
 
 /* Fill in CMSIS required values for non-CMSIS compliant SoCs.
  * Use __NVIC_PRIO_BITS as it is required and simple to check, but
@@ -70,6 +70,8 @@ typedef enum {
 #define __CM0_REV        0
 #elif defined(CONFIG_CPU_CORTEX_M0PLUS)
 #define __CM0PLUS_REV    0
+#elif defined(CONFIG_CPU_CORTEX_M1)
+#define __CM1_REV        0
 #elif defined(CONFIG_CPU_CORTEX_M3)
 #define __CM3_REV        0
 #elif defined(CONFIG_CPU_CORTEX_M4)
@@ -103,6 +105,8 @@ typedef enum {
 #include <core_cm0.h>
 #elif defined(CONFIG_CPU_CORTEX_M0PLUS)
 #include <core_cm0plus.h>
+#elif defined(CONFIG_CPU_CORTEX_M1)
+#include <core_cm1.h>
 #elif defined(CONFIG_CPU_CORTEX_M3)
 #include <core_cm3.h>
 #elif defined(CONFIG_CPU_CORTEX_M4)

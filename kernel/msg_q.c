@@ -32,7 +32,7 @@ struct k_msgq *_trace_list_k_msgq;
 /*
  * Complete initialization of statically defined message queues.
  */
-static int init_msgq_module(struct device *dev)
+static int init_msgq_module(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
@@ -47,7 +47,7 @@ SYS_INIT(init_msgq_module, PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_OBJECTS);
 #endif /* CONFIG_OBJECT_TRACING */
 
 void k_msgq_init(struct k_msgq *msgq, char *buffer, size_t msg_size,
-		 u32_t max_msgs)
+		 uint32_t max_msgs)
 {
 	msgq->msg_size = msg_size;
 	msgq->max_msgs = max_msgs;
@@ -66,7 +66,7 @@ void k_msgq_init(struct k_msgq *msgq, char *buffer, size_t msg_size,
 }
 
 int z_impl_k_msgq_alloc_init(struct k_msgq *msgq, size_t msg_size,
-			    u32_t max_msgs)
+			    uint32_t max_msgs)
 {
 	void *buffer;
 	int ret;
@@ -90,7 +90,7 @@ int z_impl_k_msgq_alloc_init(struct k_msgq *msgq, size_t msg_size,
 
 #ifdef CONFIG_USERSPACE
 int z_vrfy_k_msgq_alloc_init(struct k_msgq *q, size_t msg_size,
-			    u32_t max_msgs)
+			    uint32_t max_msgs)
 {
 	Z_OOPS(Z_SYSCALL_OBJ_NEVER_INIT(q, K_OBJ_MSGQ));
 
@@ -113,7 +113,7 @@ int k_msgq_cleanup(struct k_msgq *msgq)
 }
 
 
-int z_impl_k_msgq_put(struct k_msgq *msgq, void *data, k_timeout_t timeout)
+int z_impl_k_msgq_put(struct k_msgq *msgq, const void *data, k_timeout_t timeout)
 {
 	__ASSERT(!arch_is_in_isr() || K_TIMEOUT_EQ(timeout, K_NO_WAIT), "");
 
@@ -150,7 +150,7 @@ int z_impl_k_msgq_put(struct k_msgq *msgq, void *data, k_timeout_t timeout)
 		result = -ENOMSG;
 	} else {
 		/* wait for put message success, failure, or timeout */
-		_current->base.swap_data = data;
+		_current->base.swap_data = (void *) data;
 		return z_pend_curr(&msgq->lock, key, &msgq->wait_q, timeout);
 	}
 
@@ -160,7 +160,7 @@ int z_impl_k_msgq_put(struct k_msgq *msgq, void *data, k_timeout_t timeout)
 }
 
 #ifdef CONFIG_USERSPACE
-static inline int z_vrfy_k_msgq_put(struct k_msgq *q, void *data,
+static inline int z_vrfy_k_msgq_put(struct k_msgq *q, const void *data,
 				    k_timeout_t timeout)
 {
 	Z_OOPS(Z_SYSCALL_OBJ(q, K_OBJ_MSGQ));
@@ -312,14 +312,14 @@ static inline void z_vrfy_k_msgq_purge(struct k_msgq *q)
 }
 #include <syscalls/k_msgq_purge_mrsh.c>
 
-static inline u32_t z_vrfy_k_msgq_num_free_get(struct k_msgq *q)
+static inline uint32_t z_vrfy_k_msgq_num_free_get(struct k_msgq *q)
 {
 	Z_OOPS(Z_SYSCALL_OBJ(q, K_OBJ_MSGQ));
 	return z_impl_k_msgq_num_free_get(q);
 }
 #include <syscalls/k_msgq_num_free_get_mrsh.c>
 
-static inline u32_t z_vrfy_k_msgq_num_used_get(struct k_msgq *q)
+static inline uint32_t z_vrfy_k_msgq_num_used_get(struct k_msgq *q)
 {
 	Z_OOPS(Z_SYSCALL_OBJ(q, K_OBJ_MSGQ));
 	return z_impl_k_msgq_num_used_get(q);

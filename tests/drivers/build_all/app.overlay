@@ -22,6 +22,8 @@
 			#gpio-cells = <0x2>;
 			label = "TEST_GPIO_1";
 			status = "okay";
+
+			#include "gpio.dtsi"
 		};
 
 		test_i2c: i2c@11112222 {
@@ -45,7 +47,73 @@
 			status = "okay";
 			clock-frequency = <2000000>;
 
+			/* one entry for every devices at spi.dtsi */
+			cs-gpios = <&test_gpio 0 0>,	/* 0x00 */
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,	/* 0x10 */
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,	/* 0x20 */
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,	/* 0x30 */
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>,
+				   <&test_gpio 0 0>;
+
 			#include "spi.dtsi"
+		};
+
+		test_uart: uart@55556666 {
+			compatible = "vnd,serial";
+			reg = <0x55556666 0x1000>;
+			label = "TEST_UART_CTLR";
+			status = "okay";
+
+			#include "uart.dtsi"
 		};
 
 		dht22 {
@@ -136,6 +204,11 @@
 };
 
 /* disable device to conflict with i2c version */
+&test_spi_iis2iclx {
+	status = "disabled";
+};
+
+/* disable device to conflict with i2c version */
 &test_spi_iis2mdc {
 	status = "disabled";
 };
@@ -143,4 +216,9 @@
 /* setup valid params for the device */
 &test_spi_iis3dhhc {
 	irq-gpios = <&test_gpio 0 0>, <&test_gpio 0 0>;
+};
+
+/* disable device to conflict with i2c version */
+&test_spi_iis2dh {
+	status = "disabled";
 };

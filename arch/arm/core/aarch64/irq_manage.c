@@ -18,7 +18,7 @@
 #include <sw_isr_table.h>
 #include <drivers/interrupt_controller/gic.h>
 
-void z_arm64_fatal_error(unsigned int reason, const z_arch_esf_t *esf);
+void z_arm64_fatal_error(unsigned int reason, z_arch_esf_t *esf);
 
 #if !defined(CONFIG_ARM_CUSTOM_INTERRUPT_CONTROLLER)
 /*
@@ -47,7 +47,7 @@ int arch_irq_is_enabled(unsigned int irq)
 	return arm_gic_irq_is_enabled(irq);
 }
 
-void z_arm64_irq_priority_set(unsigned int irq, unsigned int prio, u32_t flags)
+void z_arm64_irq_priority_set(unsigned int irq, unsigned int prio, uint32_t flags)
 {
 	arm_gic_irq_set_priority(irq, prio, flags);
 }
@@ -55,8 +55,8 @@ void z_arm64_irq_priority_set(unsigned int irq, unsigned int prio, u32_t flags)
 
 #ifdef CONFIG_DYNAMIC_INTERRUPTS
 int arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
-			     void (*routine)(void *parameter), void *parameter,
-			     u32_t flags)
+			     void (*routine)(const void *parameter),
+			     const void *parameter, uint32_t flags)
 {
 	z_isr_install(irq, routine, parameter);
 	z_arm64_irq_priority_set(irq, priority, flags);
@@ -64,7 +64,7 @@ int arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
 }
 #endif
 
-void z_irq_spurious(void *unused)
+void z_irq_spurious(const void *unused)
 {
 	ARG_UNUSED(unused);
 

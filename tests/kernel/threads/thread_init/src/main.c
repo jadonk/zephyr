@@ -44,10 +44,10 @@ static K_THREAD_STACK_DEFINE(stack_coop, INIT_COOP_STACK_SIZE);
 static K_THREAD_STACK_DEFINE(stack_preempt, INIT_PREEMPT_STACK_SIZE);
 static struct k_thread thread_coop;
 static struct k_thread thread_preempt;
-static ZTEST_BMEM u64_t t_create;
+static ZTEST_BMEM uint64_t t_create;
 static ZTEST_BMEM struct thread_data {
 	int init_prio;
-	s32_t init_delay;
+	int32_t init_delay;
 	void *init_p1;
 	void *init_p2;
 	void *init_p3;
@@ -57,7 +57,7 @@ static ZTEST_BMEM struct thread_data {
 static void thread_entry(void *p1, void *p2, void *p3)
 {
 	if (t_create) {
-		u64_t t_delay = k_uptime_get() - t_create;
+		uint64_t t_delay = k_uptime_get() - t_create;
 		/**TESTPOINT: check delay start*/
 		zassert_true(t_delay >= expected.init_delay,
 			     "k_thread_create delay start failed");
@@ -209,8 +209,8 @@ void test_main(void)
 	k_thread_access_grant(k_current_get(), &thread_preempt, &stack_preempt,
 			      &start_sema, &end_sema);
 #ifdef CONFIG_USERSPACE
-	k_mem_domain_add_thread(&ztest_mem_domain, T_KDEFINE_COOP_THREAD);
-	k_mem_domain_add_thread(&ztest_mem_domain, T_KDEFINE_PREEMPT_THREAD);
+	k_mem_domain_add_thread(&k_mem_domain_default, T_KDEFINE_COOP_THREAD);
+	k_mem_domain_add_thread(&k_mem_domain_default, T_KDEFINE_PREEMPT_THREAD);
 #endif
 
 	ztest_test_suite(thread_init,

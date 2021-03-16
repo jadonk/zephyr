@@ -15,6 +15,7 @@
 	aliases {
 		led0 = &red0_led;
 		led2 = &red2_led;
+		dsa-spi = &spi1;
 	};
 
 	chosen {
@@ -41,6 +42,11 @@
 	clock-frequency = <120000000>;
 };
 
+&sim {
+	pllfll-select = <KINETIS_SIM_PLLFLLSEL_MCGPLLCLK>;
+	er32k-select = <KINETIS_SIM_ER32KSEL_RTC>;
+};
+
 &gpioa {
 	status = "okay";
 };
@@ -50,10 +56,7 @@
 };
 
 &flash0 {
-	/*
-	 * For more information, see:
-	 * http://docs.zephyrproject.org/latest/guides/dts/index.html#flash-partitions
-	 */
+
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
@@ -88,4 +91,31 @@
 			reg = <0x000e0000 0x00020000>;
 		};
 	};
+};
+
+&enet {
+	status = "okay";
+
+	fixed-link {
+		speed = <100>;
+		full-duplex;
+	};
+};
+
+&spi1 {
+	status = "okay";
+
+	clock-frequency = <44000000>;
+};
+
+&gpioa {
+	status = "okay";
+};
+
+&gpiob {
+	status = "okay";
+};
+
+&gpioe {
+	status = "okay";
 };

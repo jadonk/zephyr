@@ -15,38 +15,22 @@
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(main);
 
-/* change this to use another GPIO port */
-#if DT_NODE_HAS_PROP(DT_ALIAS(sw0), gpios)
-#define PORT0 DT_GPIO_LABEL(DT_ALIAS(sw0), gpios)
-#else
-#error DT_GPIO_LABEL(DT_ALIAS(sw0), gpios) needs to be set
-#endif
+#define SW0_NODE DT_ALIAS(sw0)
+#define SW1_NODE DT_ALIAS(sw1)
 
-/* change this to use another GPIO pin */
-#if DT_PHA_HAS_CELL(DT_ALIAS(sw0), gpios, pin)
-#define PIN0     DT_GPIO_PIN(DT_ALIAS(sw0), gpios)
+#if DT_NODE_HAS_STATUS(SW0_NODE, okay)
+#define PORT0		DT_GPIO_LABEL(SW0_NODE, gpios)
+#define PIN0		DT_GPIO_PIN(SW0_NODE, gpios)
+#define PIN0_FLAGS	DT_GPIO_FLAGS(SW0_NODE, gpios)
 #else
-#error DT_GPIO_PIN(DT_ALIAS(sw0), gpios) needs to be set
-#endif
-
-/* The switch pin pull-up/down flags */
-#if DT_PHA_HAS_CELL(DT_ALIAS(sw0), gpios, flags)
-#define PIN0_FLAGS DT_GPIO_FLAGS(DT_ALIAS(sw0), gpios)
-#else
-#error DT_GPIO_FLAGS(DT_ALIAS(sw0), gpios) needs to be set
+#error SW0 is not available
 #endif
 
 /* If second button exists, use it as right-click. */
-#if DT_PHA_HAS_CELL(DT_ALIAS(sw1), gpios, pin)
-#define PIN1	DT_GPIO_PIN(DT_ALIAS(sw1), gpios)
-#endif
-
-#if DT_NODE_HAS_PROP(DT_ALIAS(sw1), gpios)
-#define PORT1	DT_GPIO_LABEL(DT_ALIAS(sw1), gpios)
-#endif
-
-#if DT_PHA_HAS_CELL(DT_ALIAS(sw1), gpios, flags)
-#define PIN1_FLAGS DT_GPIO_FLAGS(DT_ALIAS(sw1), gpios)
+#if DT_NODE_HAS_STATUS(SW1_NODE, okay)
+#define PORT1		DT_GPIO_LABEL(SW1_NODE, gpios)
+#define PIN1		DT_GPIO_PIN(SW1_NODE, gpios)
+#define PIN1_FLAGS	DT_GPIO_FLAGS(SW1_NODE, gpios)
 #endif
 
 #define LED_PORT	DT_GPIO_LABEL(DT_ALIAS(led0), gpios)
@@ -58,10 +42,10 @@ LOG_MODULE_REGISTER(main);
 #define SENSOR_ACCEL_NAME DT_LABEL(DT_INST(0, nxp_fxos8700))
 #endif
 
-static const u8_t hid_report_desc[] = HID_MOUSE_REPORT_DESC(2);
+static const uint8_t hid_report_desc[] = HID_MOUSE_REPORT_DESC(2);
 
-static u32_t def_val[4];
-static volatile u8_t status[4];
+static uint32_t def_val[4];
+static volatile uint8_t status[4];
 static K_SEM_DEFINE(sem, 0, 1);	/* starts off "not available" */
 static struct gpio_callback callback[4];
 
@@ -74,11 +58,11 @@ static struct gpio_callback callback[4];
 #define MOUSE_BTN_MIDDLE	BIT(2)
 
 
-static void left_button(struct device *gpio, struct gpio_callback *cb,
-			u32_t pins)
+static void left_button(const struct device *gpio, struct gpio_callback *cb,
+			uint32_t pins)
 {
-	u32_t cur_val;
-	u8_t state = status[MOUSE_BTN_REPORT_POS];
+	uint32_t cur_val;
+	uint8_t state = status[MOUSE_BTN_REPORT_POS];
 
 	cur_val = gpio_pin_get(gpio, PIN0);
 	if (def_val[0] != cur_val) {
@@ -93,12 +77,12 @@ static void left_button(struct device *gpio, struct gpio_callback *cb,
 	}
 }
 
-#if DT_PHA_HAS_CELL(DT_ALIAS(sw1), gpios, pin)
-static void right_button(struct device *gpio, struct gpio_callback *cb,
-			 u32_t pins)
+#ifdef PORT1
+static void right_button(const struct device *gpio, struct gpio_callback *cb,
+			 uint32_t pins)
 {
-	u32_t cur_val;
-	u8_t state = status[MOUSE_BTN_REPORT_POS];
+	uint32_t cur_val;
+	uint8_t state = status[MOUSE_BTN_REPORT_POS];
 
 	cur_val = gpio_pin_get(gpio, PIN1);
 	if (def_val[0] != cur_val) {
@@ -114,9 +98,10 @@ static void right_button(struct device *gpio, struct gpio_callback *cb,
 }
 #endif
 
-int callbacks_configure(struct device *gpio, u32_t pin, int flags,
-			void (*handler)(struct device*, struct gpio_callback*,
-			u32_t), struct gpio_callback *callback, u32_t *val)
+int callbacks_configure(const struct device *gpio, uint32_t pin, int flags,
+			void (*handler)(const struct device *, struct gpio_callback*,
+					uint32_t),
+			struct gpio_callback *callback, uint32_t *val)
 {
 	int ret;
 
@@ -132,7 +117,7 @@ int callbacks_configure(struct device *gpio, u32_t pin, int flags,
 		return ret;
 	}
 
-	*val = (u32_t)ret;
+	*val = (uint32_t)ret;
 
 	gpio_init_callback(callback, handler, BIT(pin));
 	gpio_add_callback(gpio, callback);
@@ -141,7 +126,7 @@ int callbacks_configure(struct device *gpio, u32_t pin, int flags,
 	return 0;
 }
 
-static bool read_accel(struct device *dev)
+static bool read_accel(const struct device *dev)
 {
 	struct sensor_value val[3];
 	int ret;
@@ -174,7 +159,8 @@ static bool read_accel(struct device *dev)
 	}
 }
 
-static void trigger_handler(struct device *dev, struct sensor_trigger *tr)
+static void trigger_handler(const struct device *dev,
+			    struct sensor_trigger *tr)
 {
 	ARG_UNUSED(tr);
 
@@ -194,8 +180,8 @@ static void trigger_handler(struct device *dev, struct sensor_trigger *tr)
 void main(void)
 {
 	int ret;
-	u8_t report[4] = { 0x00 };
-	struct device *led_dev, *accel_dev, *hid_dev;
+	uint8_t report[4] = { 0x00 };
+	const struct device *led_dev, *accel_dev, *hid_dev;
 
 	led_dev = device_get_binding(LED_PORT);
 	if (led_dev == NULL) {
@@ -217,7 +203,7 @@ void main(void)
 		return;
 	}
 
-#if DT_PHA_HAS_CELL(DT_ALIAS(sw1), gpios, pin)
+#ifdef PORT1
 	if (callbacks_configure(device_get_binding(PORT1), PIN1, PIN1_FLAGS,
 				&right_button, &callback[1], &def_val[1])) {
 		LOG_ERR("Failed configuring right button callback.");

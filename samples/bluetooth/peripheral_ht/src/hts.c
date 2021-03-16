@@ -25,22 +25,27 @@
 #include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
 
-static struct device *temp_dev;
+static const struct device *temp_dev;
 
-static u8_t simulate_htm;
-static u8_t indicating;
+static uint8_t simulate_htm;
+static uint8_t indicating;
 static struct bt_gatt_indicate_params ind_params;
 
 static void htmc_ccc_cfg_changed(const struct bt_gatt_attr *attr,
-				 u16_t value)
+				 uint16_t value)
 {
 	simulate_htm = (value == BT_GATT_CCC_INDICATE) ? 1 : 0;
 }
 
-static void indicate_cb(struct bt_conn *conn, const struct bt_gatt_attr *attr,
-			u8_t err)
+static void indicate_cb(struct bt_conn *conn,
+			struct bt_gatt_indicate_params *params, uint8_t err)
 {
 	printk("Indication %s\n", err != 0U ? "fail" : "success");
+}
+
+static void indicate_destroy(struct bt_gatt_indicate_params *params)
+{
+	printk("Indication complete\n");
 	indicating = 0U;
 }
 
@@ -73,10 +78,10 @@ void hts_indicate(void)
 	struct sensor_value temp_value;
 
 	if (simulate_htm) {
-		static u8_t htm[5];
+		static uint8_t htm[5];
 		static double temperature = 20U;
-		u32_t mantissa;
-		u8_t exponent;
+		uint32_t mantissa;
+		uint8_t exponent;
 		int r;
 
 		if (indicating) {
@@ -108,15 +113,16 @@ void hts_indicate(void)
 gatt_indicate:
 		printf("temperature is %gC\n", temperature);
 
-		mantissa = (u32_t)(temperature * 100);
-		exponent = (u8_t)-2;
+		mantissa = (uint32_t)(temperature * 100);
+		exponent = (uint8_t)-2;
 
 		htm[0] = 0; /* temperature in celcius */
-		sys_put_le24(mantissa, (u8_t *)&htm[1]);
+		sys_put_le24(mantissa, (uint8_t *)&htm[1]);
 		htm[4] = exponent;
 
 		ind_params.attr = &hts_svc.attrs[2];
 		ind_params.func = indicate_cb;
+		ind_params.destroy = indicate_destroy;
 		ind_params.data = &htm;
 		ind_params.len = sizeof(htm);
 

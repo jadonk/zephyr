@@ -71,6 +71,9 @@ size_t _kernel_openocd_offsets[] = {
 #elif defined(CONFIG_RISCV)
 	[OPENOCD_OFFSET_T_STACK_PTR] = offsetof(struct k_thread,
 						callee_saved.sp),
+#elif defined(CONFIG_SPARC)
+	[OPENOCD_OFFSET_T_STACK_PTR] = offsetof(struct k_thread,
+						callee_saved.o6),
 #else
 	/* Use a special value so that OpenOCD knows that obtaining the stack
 	 * pointer is not possible on this particular architecture.
@@ -107,5 +110,5 @@ __attribute__((used, section(".openocd_dbg")))
 size_t _kernel_openocd_num_offsets = ARRAY_SIZE(_kernel_openocd_offsets);
 
 __attribute__((used, section(".openocd_dbg")))
-u8_t _kernel_openocd_size_t_size = (u8_t)sizeof(size_t);
+uint8_t _kernel_openocd_size_t_size = (uint8_t)sizeof(size_t);
 #endif

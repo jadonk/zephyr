@@ -6,12 +6,19 @@
 #include <ztest.h>
 #include <zephyr/types.h>
 #include <sys/time_units.h>
+#include <random/rand32.h>
 
 #define NUM_RANDOM 100
 
 enum units { UNIT_ticks, UNIT_cyc, UNIT_ms, UNIT_us, UNIT_ns };
 
 enum round { ROUND_floor, ROUND_ceil, ROUND_near };
+
+static const char *const round_s[] = {
+	[ROUND_floor] = "floor",
+	[ROUND_ceil] = "ceil",
+	[ROUND_near] = "near",
+};
 
 struct test_rec {
 	enum units src;
@@ -89,7 +96,7 @@ static struct test_rec tests[] = {
 	 TESTREC(ticks, ns, ceil, 64),
 	};
 
-u32_t get_hz(enum units u)
+uint32_t get_hz(enum units u)
 {
 	if (u == UNIT_ticks) {
 		return CONFIG_SYS_CLOCK_TICKS_PER_SEC;
@@ -106,24 +113,24 @@ u32_t get_hz(enum units u)
 	return 0;
 }
 
-void test_conversion(struct test_rec *t, u64_t val)
+void test_conversion(struct test_rec *t, uint64_t val)
 {
-	u32_t from_hz = get_hz(t->src), to_hz = get_hz(t->dst);
-	u64_t result;
+	uint32_t from_hz = get_hz(t->src), to_hz = get_hz(t->dst);
+	uint64_t result;
 
 	if (t->precision == 32) {
-		u32_t (*convert)(u32_t) = (u32_t (*)(u32_t)) t->func;
+		uint32_t (*convert)(uint32_t) = (uint32_t (*)(uint32_t)) t->func;
 
-		result = convert((u32_t) val);
+		result = convert((uint32_t) val);
 
 		/* If the input value legitimately overflows, then
 		 * there is nothing to test
 		 */
-		if ((val * to_hz) >= ((((u64_t)from_hz) << 32))) {
+		if ((val * to_hz) >= ((((uint64_t)from_hz) << 32))) {
 			return;
 		}
 	} else {
-		u64_t (*convert)(u64_t) = (u64_t (*)(u64_t)) t->func;
+		uint64_t (*convert)(uint64_t) = (uint64_t (*)(uint64_t)) t->func;
 
 		result = convert(val);
 	}
@@ -140,24 +147,25 @@ void test_conversion(struct test_rec *t, u64_t val)
 	 * up, or [-from_hz/2:from_hz/2] if we are rounding to the
 	 * nearest.
 	 */
-	s64_t diff = (s64_t)(val * to_hz - result * from_hz);
-	s64_t maxdiff, mindiff;
+	int64_t diff = (int64_t)(val * to_hz - result * from_hz);
+	int64_t maxdiff, mindiff;
 
 	if (t->round == ROUND_floor) {
 		maxdiff = from_hz - 1;
 		mindiff = 0;
 	} else if (t->round == ROUND_ceil) {
 		maxdiff = 0;
-		mindiff = -(s64_t)(from_hz-1);
+		mindiff = -(int64_t)(from_hz-1);
 	} else {
 		maxdiff = from_hz/2;
-		mindiff = -(s64_t)(from_hz/2);
+		mindiff = -(int64_t)(from_hz/2);
 	}
 
 	zassert_true(diff <= maxdiff && diff >= mindiff,
-		     "Convert %lld from %lldhz to %lldhz (= %lld) failed. "
-		     "diff %lld should be in [%lld:%lld]",
-		     val, from_hz, to_hz, result, diff, mindiff, maxdiff);
+		     "Convert %llu (%llx) from %u Hz to %u Hz %u-bit %s\n"
+		     "result %llu (%llx) diff %lld (%llx) should be in [%lld:%lld]",
+		     val, val, from_hz, to_hz, t->precision, round_s[t->round],
+		     result, result, diff, diff, mindiff, maxdiff);
 }
 
 void test_time_conversions(void)

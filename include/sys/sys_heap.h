@@ -55,10 +55,10 @@ struct sys_heap {
 };
 
 struct z_heap_stress_result {
-	u32_t total_allocs;
-	u32_t successful_allocs;
-	u32_t total_frees;
-	u64_t accumulated_in_use_bytes;
+	uint32_t total_allocs;
+	uint32_t successful_allocs;
+	uint32_t total_frees;
+	uint64_t accumulated_in_use_bytes;
 };
 
 /** @brief Initialize sys_heap
@@ -88,6 +88,21 @@ void sys_heap_init(struct sys_heap *h, void *mem, size_t bytes);
  */
 void *sys_heap_alloc(struct sys_heap *h, size_t bytes);
 
+/** @brief Allocate aligned memory from a sys_heap
+ *
+ * Behaves in all ways like sys_heap_alloc(), except that the returned
+ * memory (if available) will have a starting address in memory which
+ * is a multiple of the specified power-of-two alignment value in
+ * bytes.  The resulting memory can be returned to the heap using
+ * sys_heap_free().
+ *
+ * @param h Heap from which to allocate
+ * @param align Alignment in bytes, must be a power of two
+ * @param bytes Number of bytes requested
+ * @return Pointer to memory the caller can now use
+ */
+void *sys_heap_aligned_alloc(struct sys_heap *h, size_t align, size_t bytes);
+
 /** @brief Free memory into a sys_heap
  *
  * De-allocates a pointer to memory previously returned from
@@ -102,6 +117,30 @@ void *sys_heap_alloc(struct sys_heap *h, size_t bytes);
  * @param mem A pointer previously returned from sys_heap_alloc()
  */
 void sys_heap_free(struct sys_heap *h, void *mem);
+
+/** @brief Expand the size of an existing allocation
+ *
+ * Returns a pointer to a new memory region with the same contents,
+ * but a different allocated size.  If the new allocation can be
+ * expanded in place, the pointer returned will be identical.
+ * Otherwise the data will be copies to a new block and the old one
+ * will be freed as per sys_heap_free().  If the specified size is
+ * smaller than the original, the block will be truncated in place and
+ * the remaining memory returned to the heap.  If the allocation of a
+ * new block fails, then NULL will be returned and the old block will
+ * not be freed or modified.
+ *
+ * @note The return of a NULL on failure is a different behavior than
+ * POSIX realloc(), which specifies that the original pointer will be
+ * returned (i.e. it is not possible to safely detect realloc()
+ * failure in POSIX, but it is here).
+ *
+ * @param heap Heap from which to allocate
+ * @param ptr Original pointer returned from a previous allocation
+ * @param bytes Number of bytes requested for the new block
+ * @return Pointer to memory the caller can now use, or NULL
+ */
+void *sys_heap_realloc(struct sys_heap *heap, void *ptr, size_t bytes);
 
 /** @brief Validate heap integrity
  *
@@ -150,9 +189,18 @@ bool sys_heap_validate(struct sys_heap *h);
 void sys_heap_stress(void *(*alloc)(void *arg, size_t bytes),
 		     void (*free)(void *arg, void *p),
 		     void *arg, size_t total_bytes,
-		     u32_t op_count,
+		     uint32_t op_count,
 		     void *scratch_mem, size_t scratch_bytes,
 		     int target_percent,
 		     struct z_heap_stress_result *result);
+
+/** @brief Dump heap structure content for debugging to the console
+ *
+ * Print information on the heap structure such as its size, chunk buckets
+ * and chunk list.
+ *
+ * @param h Heap to print information about
+ */
+void sys_heap_dump(struct sys_heap *h);
 
 #endif /* ZEPHYR_INCLUDE_SYS_SYS_HEAP_H_ */

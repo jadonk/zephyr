@@ -15,17 +15,17 @@
 #define LOG_MODULE_NAME bt_hci_driver_nrf53
 #include "common/log.h"
 
-void bt_rpmsg_rx(u8_t *data, size_t len);
+void bt_rpmsg_rx(uint8_t *data, size_t len);
 
 static K_SEM_DEFINE(ready_sem, 0, 1);
 static K_SEM_DEFINE(rx_sem, 0, 1);
 
-static K_THREAD_STACK_DEFINE(bt_rpmsg_rx_thread_stack,
+static K_KERNEL_STACK_DEFINE(bt_rpmsg_rx_thread_stack,
 			     CONFIG_BT_RPMSG_NRF53_RX_STACK_SIZE);
 static struct k_thread bt_rpmsg_rx_thread_data;
 
-static struct device *ipm_tx_handle;
-static struct device *ipm_rx_handle;
+static const struct device *ipm_tx_handle;
+static const struct device *ipm_rx_handle;
 
 /* Configuration defines */
 
@@ -47,6 +47,9 @@ BUILD_ASSERT((SHM_START_ADDR + SHM_SIZE - SHM_BASE_ADDRESS)
 #define VRING_SIZE          16
 
 #define VDEV_STATUS_ADDR    SHM_BASE_ADDRESS
+
+BUILD_ASSERT(CONFIG_HEAP_MEM_POOL_SIZE >= 1024,
+	"Not enough heap memory for RPMsg queue allocation");
 
 /* End of configuration defines */
 
@@ -84,12 +87,12 @@ static void virtio_set_status(struct virtio_device *vdev, unsigned char status)
 	sys_write8(status, VDEV_STATUS_ADDR);
 }
 
-static u32_t virtio_get_features(struct virtio_device *vdev)
+static uint32_t virtio_get_features(struct virtio_device *vdev)
 {
 	return BIT(VIRTIO_RPMSG_F_NS);
 }
 
-static void virtio_set_features(struct virtio_device *vdev, u32_t features)
+static void virtio_set_features(struct virtio_device *vdev, uint32_t features)
 {
 	/* No need for implementation */
 }
@@ -112,14 +115,15 @@ const struct virtio_dispatch dispatch = {
 	.notify = virtio_notify,
 };
 
-static void ipm_callback(void *context, u32_t id, volatile void *data)
+static void ipm_callback(const struct device *dev, void *context,
+			 uint32_t id, volatile void *data)
 {
 	BT_DBG("Got callback of id %u", id);
 	k_sem_give(&rx_sem);
 }
 
 static int endpoint_cb(struct rpmsg_endpoint *ept, void *data, size_t len,
-	u32_t src, void *priv)
+	uint32_t src, void *priv)
 {
 	BT_DBG("Received message of %u bytes.", len);
 	BT_HEXDUMP_DBG((uint8_t *)data, len, "Data:");
@@ -134,7 +138,7 @@ static void rpmsg_service_unbind(struct rpmsg_endpoint *ep)
 	rpmsg_destroy_ept(ep);
 }
 
-static void ns_bind_cb(struct rpmsg_device *rdev, const char *name, u32_t dest)
+static void ns_bind_cb(struct rpmsg_device *rdev, const char *name, uint32_t dest)
 {
 	(void)rpmsg_create_ept(&ep,
 				rdev,
@@ -176,7 +180,7 @@ int bt_rpmsg_platform_init(void)
 
 	/* Setup thread for RX data processing. */
 	k_thread_create(&bt_rpmsg_rx_thread_data, bt_rpmsg_rx_thread_stack,
-			K_THREAD_STACK_SIZEOF(bt_rpmsg_rx_thread_stack),
+			K_KERNEL_STACK_SIZEOF(bt_rpmsg_rx_thread_stack),
 			bt_rpmsg_rx_thread, NULL, NULL, NULL,
 			K_PRIO_COOP(CONFIG_BT_RPMSG_NRF53_RX_PRIO),
 			0, K_NO_WAIT);
@@ -259,7 +263,11 @@ int bt_rpmsg_platform_init(void)
 	}
 
 	/* Wait til nameservice ep is setup */
-	k_sem_take(&ready_sem, K_FOREVER);
+	err = k_sem_take(&ready_sem, K_SECONDS(3));
+	if (err) {
+		BT_ERR("No contact with network core EP (err %d)", err);
+		return err;
+	}
 
 	return 0;
 }

@@ -35,9 +35,6 @@ More information about the board can be found at the
 `nRF52840 Dongle website`_. The `Nordic Semiconductor Infocenter`_
 contains the processor's information and the datasheet.
 
-.. note::
-
-   In previous Zephyr releases this board was named *nrf52840_pca10059*.
 
 Hardware
 ********
@@ -294,6 +291,10 @@ software. Further information can be found in :ref:`nordic_segger_flashing`.
 Locate the DTS file for the board under: boards/arm/nrf52840dongle_nrf52840.
 This file requires a small modification to use a different partition table.
 Edit the include directive to include "fstab-debugger" instead of "fstab-stock".
+
+In addition, the Kconfig file in the same directory must be modified by setting
+``BOARD_HAS_NRF5_BOOTLOADER`` to be default ``n``, otherwise the code will be
+flashed with an offset.
 
 Then build and flash applications as usual (see :ref:`build_an_application` and
 :ref:`application_run` for more details).

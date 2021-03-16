@@ -29,13 +29,16 @@
 BUILD_ASSERT(MIN_DELAY < CYC_PER_TICK);
 
 static struct k_spinlock lock;
-static u64_t last_count;
+static uint64_t last_count;
 
 static volatile struct soc_dsp_shim_regs *shim_regs =
 	(volatile struct soc_dsp_shim_regs *)SOC_DSP_SHIM_REG_BASE;
 
-static void set_compare(u64_t time)
+static void set_compare(uint64_t time)
 {
+	/* Disarm the comparator to prevent spurious triggers */
+	shim_regs->dspwctcs &= ~DSP_WCT_CS_TA(TIMER);
+
 #if (TIMER == 0)
 	/* Set compare register */
 	shim_regs->dspwct0c = time;
@@ -50,21 +53,21 @@ static void set_compare(u64_t time)
 	shim_regs->dspwctcs |= DSP_WCT_CS_TA(TIMER);
 }
 
-static u64_t count(void)
+static uint64_t count(void)
 {
 	return shim_regs->walclk;
 }
 
-static u32_t count32(void)
+static uint32_t count32(void)
 {
 	return shim_regs->walclk32_lo;
 }
 
-static void compare_isr(void *arg)
+static void compare_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
-	u64_t curr;
-	u32_t dticks;
+	uint64_t curr;
+	uint32_t dticks;
 
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
@@ -77,13 +80,13 @@ static void compare_isr(void *arg)
 	 * Since it has already been processed and
 	 * ticks announced, skip it.
 	 */
-	if ((count32() - (u32_t)last_count) < MIN_DELAY) {
+	if ((count32() - (uint32_t)last_count) < MIN_DELAY) {
 		k_spin_unlock(&lock, key);
 		return;
 	}
 #endif
 
-	dticks = (u32_t)((curr - last_count) / CYC_PER_TICK);
+	dticks = (uint32_t)((curr - last_count) / CYC_PER_TICK);
 
 	/* Clear the triggered bit */
 	shim_regs->dspwctcs |= DSP_WCT_CS_TT(TIMER);
@@ -91,9 +94,9 @@ static void compare_isr(void *arg)
 	last_count += dticks * CYC_PER_TICK;
 
 #ifndef CONFIG_TICKLESS_KERNEL
-	u64_t next = last_count + CYC_PER_TICK;
+	uint64_t next = last_count + CYC_PER_TICK;
 
-	if ((s64_t)(next - curr) < MIN_DELAY) {
+	if ((int64_t)(next - curr) < MIN_DELAY) {
 		next += CYC_PER_TICK;
 	}
 	set_compare(next);
@@ -104,9 +107,9 @@ static void compare_isr(void *arg)
 	z_clock_announce(dticks);
 }
 
-int z_clock_driver_init(struct device *device)
+int z_clock_driver_init(const struct device *device)
 {
-	u64_t curr = count();
+	uint64_t curr = count();
 
 	IRQ_CONNECT(TIMER_IRQ, 0, compare_isr, 0, 0);
 	set_compare(curr + CYC_PER_TICK);
@@ -115,21 +118,21 @@ int z_clock_driver_init(struct device *device)
 	return 0;
 }
 
-void z_clock_set_timeout(s32_t ticks, bool idle)
+void z_clock_set_timeout(int32_t ticks, bool idle)
 {
 	ARG_UNUSED(idle);
 
 #ifdef CONFIG_TICKLESS_KERNEL
 	ticks = ticks == K_TICKS_FOREVER ? MAX_TICKS : ticks;
-	ticks = MAX(MIN(ticks - 1, (s32_t)MAX_TICKS), 0);
+	ticks = CLAMP(ticks - 1, 0, (int32_t)MAX_TICKS);
 
 	k_spinlock_key_t key = k_spin_lock(&lock);
-	u64_t curr = count();
-	u64_t next;
-	u32_t adj, cyc = ticks * CYC_PER_TICK;
+	uint64_t curr = count();
+	uint64_t next;
+	uint32_t adj, cyc = ticks * CYC_PER_TICK;
 
 	/* Round up to next tick boundary */
-	adj = (u32_t)(curr - last_count) + (CYC_PER_TICK - 1);
+	adj = (uint32_t)(curr - last_count) + (CYC_PER_TICK - 1);
 	if (cyc <= MAX_CYC - adj) {
 		cyc += adj;
 	} else {
@@ -138,7 +141,7 @@ void z_clock_set_timeout(s32_t ticks, bool idle)
 	cyc = (cyc / CYC_PER_TICK) * CYC_PER_TICK;
 	next = last_count + cyc;
 
-	if (((u32_t)next - (u32_t)curr) < MIN_DELAY) {
+	if (((uint32_t)next - (uint32_t)curr) < MIN_DELAY) {
 		next += CYC_PER_TICK;
 	}
 
@@ -147,19 +150,19 @@ void z_clock_set_timeout(s32_t ticks, bool idle)
 #endif
 }
 
-u32_t z_clock_elapsed(void)
+uint32_t z_clock_elapsed(void)
 {
 	if (!IS_ENABLED(CONFIG_TICKLESS_KERNEL)) {
 		return 0;
 	}
 	k_spinlock_key_t key = k_spin_lock(&lock);
-	u32_t ret = (count32() - (u32_t)last_count) / CYC_PER_TICK;
+	uint32_t ret = (count32() - (uint32_t)last_count) / CYC_PER_TICK;
 
 	k_spin_unlock(&lock, key);
 	return ret;
 }
 
-u32_t z_timer_cycle_get_32(void)
+uint32_t z_timer_cycle_get_32(void)
 {
 	return count32();
 }

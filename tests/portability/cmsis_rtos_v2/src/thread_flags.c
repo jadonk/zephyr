@@ -20,7 +20,7 @@
 
 static void thread1(void *arg)
 {
-	u32_t flags;
+	uint32_t flags;
 
 	/* wait for FLAG1. It should return immediately as it is
 	 * already triggered.
@@ -48,7 +48,7 @@ static void thread1(void *arg)
 
 static void thread2(void *arg)
 {
-	u32_t flags;
+	uint32_t flags;
 
 	flags = osThreadFlagsWait(FLAG, osFlagsWaitAll, TIMEOUT_TICKS);
 	zassert_equal(flags & FLAG, FLAG,
@@ -89,7 +89,7 @@ static osThreadAttr_t thread2_attr = {
 void test_thread_flags_no_wait_timeout(void)
 {
 	osThreadId_t id1;
-	u32_t flags;
+	uint32_t flags;
 
 	id1 = osThreadNew(thread1, NULL, &thread1_attr);
 	zassert_true(id1 != NULL, "Failed creating thread1");
@@ -104,7 +104,7 @@ void test_thread_flags_no_wait_timeout(void)
 void test_thread_flags_signalled(void)
 {
 	osThreadId_t id;
-	u32_t flags;
+	uint32_t flags;
 
 	id = osThreadNew(thread2, osThreadGetId(), &thread2_attr);
 	zassert_true(id != NULL, "Failed creating thread2");
@@ -126,7 +126,7 @@ void test_thread_flags_signalled(void)
 }
 
 /* IRQ offload function handler to set Thread flag */
-static void offload_function(void *param)
+static void offload_function(const void *param)
 {
 	int flags;
 
@@ -140,10 +140,10 @@ static void offload_function(void *param)
 
 void test_thread_flags_from_isr(void *thread_id)
 {
-	u32_t flags;
+	uint32_t flags;
 
 	/**TESTPOINT: Offload to IRQ context*/
-	irq_offload(offload_function, (void *)osThreadGetId());
+	irq_offload(offload_function, (const void *)osThreadGetId());
 
 	flags = osThreadFlagsWait(ISR_FLAG, osFlagsWaitAll, TIMEOUT_TICKS);
 	zassert_equal((flags & ISR_FLAG),

@@ -59,17 +59,17 @@ LOG_MODULE_REGISTER(i2s_sample);
 static struct k_mem_slab i2s_mem_slab;
 __attribute__((section(".dma_buffers")))
 static char audio_buffers[AUDIO_FRAME_BUF_BYTES][I2S_PLAY_BUF_COUNT];
-static struct device *spk_i2s_dev;
-static struct device *host_i2s_dev;
-static struct device *codec_device;
+static const struct device *spk_i2s_dev;
+static const struct device *host_i2s_dev;
+static const struct device *codec_device;
 
 #ifndef AUDIO_PLAY_FROM_HOST
-static inline int audio_playback_buffer_fill(float phase_delta, s32_t *buffer,
+static inline int audio_playback_buffer_fill(float phase_delta, int32_t *buffer,
 		int channels, int samples)
 {
 	int channel;
-	s32_t sample;
-	s32_t *wr_ptr;
+	int32_t sample;
+	int32_t *wr_ptr;
 	int sample_index;
 	static float phase;
 
@@ -77,7 +77,7 @@ static inline int audio_playback_buffer_fill(float phase_delta, s32_t *buffer,
 	sample_index = 0;
 	while ((sample_index < samples) && (phase_delta != 0.0)) {
 		/* get sine(phase) and scale it */
-		sample = (s32_t)(SIGNAL_AMPLITUDE_SCALE * sinf(phase));
+		sample = (int32_t)(SIGNAL_AMPLITUDE_SCALE * sinf(phase));
 		/* update phase for next sample */
 		phase = fmodf(phase + phase_delta, FLOAT_VALUE_OF_2PI);
 		/* write same sample value to all channels */
@@ -208,7 +208,7 @@ static void i2s_start_audio(void)
 	}
 }
 
-static void i2s_prepare_audio(struct device *dev)
+static void i2s_prepare_audio(const struct device *dev)
 {
 	int frame_counter = 0;
 	void *buffer;
@@ -272,7 +272,7 @@ static void i2s_play_audio(void)
 #ifndef AUDIO_PLAY_FROM_HOST
 		/* fill buffer with audio samples */
 		if (audio_playback_buffer_fill(audio_playback_tone_get_next(),
-					(s32_t *)in_buf, AUDIO_NUM_CHANNELS,
+					(int32_t *)in_buf, AUDIO_NUM_CHANNELS,
 					size) < size) {
 			/* break if all tones are exhausted */
 			k_mem_slab_free(&i2s_mem_slab, &in_buf);

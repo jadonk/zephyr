@@ -23,11 +23,11 @@
 
 void main(void)
 {
-	struct device *dev;
-	u16_t rows;
-	u8_t ppt;
-	u8_t font_width;
-	u8_t font_height;
+	const struct device *dev;
+	uint16_t rows;
+	uint8_t ppt;
+	uint8_t font_width;
+	uint8_t font_height;
 
 	dev = device_get_binding(DISPLAY_DRIVER);
 

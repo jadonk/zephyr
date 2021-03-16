@@ -94,8 +94,8 @@
  */
 static void arm_v2m_beetle_pinmux_defaults(void)
 {
-	u32_t gpio_0 = 0U;
-	u32_t gpio_1 = 0U;
+	uint32_t gpio_0 = 0U;
+	uint32_t gpio_1 = 0U;
 
 	/* Set GPIO Alternate Functions */
 
@@ -135,7 +135,7 @@ static void arm_v2m_beetle_pinmux_defaults(void)
 	CMSDK_AHB_GPIO1_DEV->data |= (0x1 << 15);
 }
 
-static int arm_v2m_beetle_pinmux_init(struct device *port)
+static int arm_v2m_beetle_pinmux_init(const struct device *port)
 {
 	ARG_UNUSED(port);
 

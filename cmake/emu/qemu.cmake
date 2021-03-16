@@ -60,6 +60,12 @@ endif()
 # Connect monitor to the console chardev.
 list(APPEND QEMU_FLAGS -mon chardev=con,mode=readline)
 
+if(CONFIG_QEMU_ICOUNT)
+  list(APPEND QEMU_FLAGS
+	  -icount shift=${CONFIG_QEMU_ICOUNT_SHIFT},align=off,sleep=off
+	  -rtc clock=vm)
+endif()
+
 # Add a BT serial device when building for bluetooth, unless the
 # application explicitly opts out with NO_QEMU_SERIAL_BT_SERVER.
 if(CONFIG_BT)
@@ -238,7 +244,7 @@ if(CONFIG_X86_64)
     ${CMAKE_OBJCOPY}
     -O elf32-i386
     $<TARGET_FILE:${logical_target_for_zephyr_elf}>
-    ${CMAKE_BINARY_DIR}/zephyr-qemu.elf
+    ${ZEPHYR_BINARY_DIR}/zephyr-qemu.elf
     DEPENDS ${logical_target_for_zephyr_elf}
     )
 
@@ -251,8 +257,8 @@ if(CONFIG_X86_64)
     COMMAND
     ${CMAKE_OBJCOPY}
     -j .locore
-    ${CMAKE_BINARY_DIR}/zephyr-qemu.elf
-    ${CMAKE_BINARY_DIR}/zephyr-qemu-locore.elf
+    ${ZEPHYR_BINARY_DIR}/zephyr-qemu.elf
+    ${ZEPHYR_BINARY_DIR}/zephyr-qemu-locore.elf
     2>&1 | grep -iv \"empty loadable segment detected\" || true
     DEPENDS qemu_image_target
     )
@@ -261,8 +267,8 @@ if(CONFIG_X86_64)
     COMMAND
     ${CMAKE_OBJCOPY}
     -R .locore
-    ${CMAKE_BINARY_DIR}/zephyr-qemu.elf
-    ${CMAKE_BINARY_DIR}/zephyr-qemu-main.elf
+    ${ZEPHYR_BINARY_DIR}/zephyr-qemu.elf
+    ${ZEPHYR_BINARY_DIR}/zephyr-qemu-main.elf
     2>&1 | grep -iv \"empty loadable segment detected\" || true
     DEPENDS qemu_image_target
     )
@@ -272,10 +278,10 @@ if(CONFIG_X86_64)
     DEPENDS qemu_locore_image_target qemu_main_image_target
     )
 
-  set(QEMU_KERNEL_FILE "${CMAKE_BINARY_DIR}/zephyr-qemu-locore.elf")
+  set(QEMU_KERNEL_FILE "${ZEPHYR_BINARY_DIR}/zephyr-qemu-locore.elf")
 
   list(APPEND QEMU_EXTRA_FLAGS
-    "-device;loader,file=${CMAKE_BINARY_DIR}/zephyr-qemu-main.elf"
+    "-device;loader,file=${ZEPHYR_BINARY_DIR}/zephyr-qemu-main.elf"
     )
 endif()
 

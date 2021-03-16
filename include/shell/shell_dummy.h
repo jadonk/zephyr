@@ -24,7 +24,7 @@ struct shell_dummy {
 	size_t len;
 
 	/** output buffer to collect shell output */
-	char buf[100];
+	char buf[300];
 };
 
 #define SHELL_DUMMY_DEFINE(_name)					\
@@ -50,12 +50,19 @@ const struct shell *shell_backend_dummy_get_ptr(void);
  *
  * The returned data is always followed by a nul character at position *sizep
  *
- * @param shell		Shell pointer
- * @param sizep		Returns size of data in shell buffer
+ * @param shell	Shell pointer
+ * @param sizep	Returns size of data in shell buffer
  * @returns pointer to buffer containing shell output
  */
 const char *shell_backend_dummy_get_output(const struct shell *shell,
 					   size_t *sizep);
+
+/**
+ * @brief Clears the output buffer in the shell backend.
+ *
+ * @param shell	Shell pointer
+ */
+void shell_backend_dummy_clear_output(const struct shell *shell);
 
 #ifdef __cplusplus
 }

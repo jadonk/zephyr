@@ -31,7 +31,7 @@ void test_fd_set(void)
 	fd_set set;
 
 	/* Relies on specific value of CONFIG_POSIX_MAX_FDS in prj.conf */
-	zassert_equal(sizeof(set.bitset), sizeof(u32_t) * 2, "");
+	zassert_equal(sizeof(set.bitset), sizeof(uint32_t) * 2, "");
 
 	FD_ZERO(&set);
 	zassert_equal(set.bitset[0], 0, "");
@@ -69,7 +69,7 @@ void test_select(void)
 	struct sockaddr_in6 c_addr;
 	struct sockaddr_in6 s_addr;
 	fd_set readfds;
-	u32_t tstamp;
+	uint32_t tstamp;
 	ssize_t len;
 	char buf[10];
 	struct timeval tval;
@@ -167,6 +167,13 @@ void test_select(void)
 
 void test_main(void)
 {
+	if (IS_ENABLED(CONFIG_NET_TC_THREAD_COOPERATIVE)) {
+		k_thread_priority_set(k_current_get(),
+				K_PRIO_COOP(CONFIG_NUM_COOP_PRIORITIES - 1));
+	} else {
+		k_thread_priority_set(k_current_get(), K_PRIO_PREEMPT(9));
+	}
+
 	k_thread_system_pool_assign(k_current_get());
 
 	ztest_test_suite(socket_select,

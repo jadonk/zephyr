@@ -15,9 +15,9 @@
 LOG_MODULE_REGISTER(crypto_nrf_ecb, CONFIG_CRYPTO_LOG_LEVEL);
 
 struct ecb_data {
-	u8_t key[ECB_AES_KEY_SIZE];
-	u8_t cleartext[ECB_AES_BLOCK_SIZE];
-	u8_t ciphertext[ECB_AES_BLOCK_SIZE];
+	uint8_t key[ECB_AES_KEY_SIZE];
+	uint8_t cleartext[ECB_AES_BLOCK_SIZE];
+	uint8_t ciphertext[ECB_AES_BLOCK_SIZE];
 };
 
 struct nrf_ecb_drv_state {
@@ -63,7 +63,7 @@ static int do_ecb_encrypt(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
 	return 0;
 }
 
-static int nrf_ecb_driver_init(struct device *dev)
+static int nrf_ecb_driver_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
@@ -72,14 +72,15 @@ static int nrf_ecb_driver_init(struct device *dev)
 	return 0;
 }
 
-static int nrf_ecb_query_caps(struct device *dev)
+static int nrf_ecb_query_caps(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
 	return (CAP_RAW_KEY | CAP_SEPARATE_IO_BUFS | CAP_SYNC_OPS);
 }
 
-static int nrf_ecb_session_setup(struct device *dev, struct cipher_ctx *ctx,
+static int nrf_ecb_session_setup(const struct device *dev,
+				 struct cipher_ctx *ctx,
 				 enum cipher_algo algo, enum cipher_mode mode,
 				 enum cipher_op op_type)
 {
@@ -118,7 +119,8 @@ static int nrf_ecb_session_setup(struct device *dev, struct cipher_ctx *ctx,
 	return 0;
 }
 
-static int nrf_ecb_session_free(struct device *dev, struct cipher_ctx *sessn)
+static int nrf_ecb_session_free(const struct device *dev,
+				struct cipher_ctx *sessn)
 {
 	ARG_UNUSED(dev);
 	ARG_UNUSED(sessn);

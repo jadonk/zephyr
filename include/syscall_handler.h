@@ -26,6 +26,38 @@ enum _obj_init_check {
 };
 
 /**
+ * Return true if we are currently handling a system call from user mode
+ *
+ * Inside z_vrfy functions, we always know that we are handling
+ * a system call invoked from user context.
+ *
+ * However, some checks that are only relevant to user mode must
+ * instead be placed deeper within the implementation. This
+ * API is useful to conditionally make these checks.
+ *
+ * For performance reasons, whenever possible, checks should be placed
+ * in the relevant z_vrfy function since these are completely skipped
+ * when a syscall is invoked.
+ *
+ * This will return true only if we are handling a syscall for a
+ * user thread. If the system call was invoked from supervisor mode,
+ * or we are not handling a system call, this will return false.
+ *
+ * @return whether the current context is handling a syscall for a user
+ *         mode thread
+ */
+static inline bool z_is_in_user_syscall(void)
+{
+	/* This gets set on entry to the syscall's generasted z_mrsh
+	 * function and then cleared on exit. This code path is only
+	 * encountered when a syscall is made from user mode, system
+	 * calls from supervisor mode bypass everything directly to
+	 * the implementation function.
+	 */
+	return !k_is_in_isr() && _current->syscall_frame != NULL;
+}
+
+/**
  * Ensure a system object is a valid object of the expected type
  *
  * Searches for the object and ensures that it is indeed an object
@@ -57,8 +89,8 @@ int z_object_validate(struct z_object *ko, enum k_objects otype,
  * @param ko If retval=-EPERM, struct z_object * that was looked up, or NULL
  * @param otype Expected type of the kernel object
  */
-extern void z_dump_object_error(int retval, void *obj, struct z_object *ko,
-				enum k_objects otype);
+extern void z_dump_object_error(int retval, const void *obj,
+				struct z_object *ko, enum k_objects otype);
 
 /**
  * Kernel object validation function
@@ -70,7 +102,7 @@ extern void z_dump_object_error(int retval, void *obj, struct z_object *ko,
  * @return Kernel object's metadata, or NULL if the parameter wasn't the
  * memory address of a kernel object
  */
-extern struct z_object *z_object_find(void *obj);
+extern struct z_object *z_object_find(const void *obj);
 
 typedef void (*_wordlist_cb_func_t)(struct z_object *ko, void *context);
 
@@ -125,7 +157,7 @@ extern void z_thread_perms_all_clear(struct k_thread *thread);
  *
  * @param object Address of the kernel object
  */
-void z_object_uninit(void *obj);
+void z_object_uninit(const void *obj);
 
 /**
  * Initialize and reset permissions to only access by the caller
@@ -144,7 +176,7 @@ void z_object_uninit(void *obj);
  *
  * @param object Address of the kernel object
  */
-void z_object_recycle(void *obj);
+void z_object_recycle(const void *obj);
 
 /**
  * @brief Obtain the size of a C string passed from user mode
@@ -279,7 +311,7 @@ extern int z_user_string_copy(char *dst, const char *src, size_t maxlen);
 #define Z_SYSCALL_VERIFY_MSG(expr, fmt, ...) ({ \
 	bool expr_copy = !(expr); \
 	if (expr_copy) { \
-		LOG_MODULE_DECLARE(os); \
+		LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL); \
 		LOG_ERR("syscall %s failed check: " fmt, \
 			__func__, ##__VA_ARGS__); \
 	} \
@@ -394,7 +426,7 @@ extern int z_user_string_copy(char *dst, const char *src, size_t maxlen);
 	Z_SYSCALL_MEMORY_ARRAY(ptr, nmemb, size, 1)
 
 static inline int z_obj_validation_check(struct z_object *ko,
-					 void *obj,
+					 const void *obj,
 					 enum k_objects otype,
 					 enum _obj_init_check init)
 {
@@ -414,8 +446,10 @@ static inline int z_obj_validation_check(struct z_object *ko,
 }
 
 #define Z_SYSCALL_IS_OBJ(ptr, type, init) \
-	Z_SYSCALL_VERIFY_MSG(z_obj_validation_check(z_object_find((void *)ptr), (void *)ptr, \
-				   type, init) == 0, "access denied")
+	Z_SYSCALL_VERIFY_MSG(z_obj_validation_check(			\
+				     z_object_find((const void *)ptr),	\
+				     (const void *)ptr,			\
+				     type, init) == 0, "access denied")
 
 /**
  * @brief Runtime check driver object pointer for presence of operation
@@ -430,7 +464,7 @@ static inline int z_obj_validation_check(struct z_object *ko,
 #define Z_SYSCALL_DRIVER_OP(ptr, api_name, op) \
 	({ \
 		struct api_name *__device__ = (struct api_name *) \
-			((struct device *)ptr)->driver_api; \
+			((const struct device *)ptr)->api; \
 		Z_SYSCALL_VERIFY_MSG(__device__->op != NULL, \
 				    "Operation %s not defined for driver " \
 				    "instance %p", \
@@ -457,9 +491,9 @@ static inline int z_obj_validation_check(struct z_object *ko,
  */
 #define Z_SYSCALL_SPECIFIC_DRIVER(_device, _dtype, _api) \
 	({ \
-		struct device *_dev = (struct device *)_device; \
+		const struct device *_dev = (const struct device *)_device; \
 		Z_SYSCALL_OBJ(_dev, _dtype) || \
-			Z_SYSCALL_VERIFY_MSG(_dev->driver_api == _api, \
+			Z_SYSCALL_VERIFY_MSG(_dev->api == _api, \
 					     "API structure mismatch"); \
 	})
 

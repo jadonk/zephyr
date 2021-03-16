@@ -62,19 +62,19 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define LED_GPIO_FLAGS	0
 #endif
 
-static u8_t bat_idx = LWM2M_DEVICE_PWR_SRC_TYPE_BAT_INT;
+static uint8_t bat_idx = LWM2M_DEVICE_PWR_SRC_TYPE_BAT_INT;
 static int bat_mv = 3800;
 static int bat_ma = 125;
-static u8_t usb_idx = LWM2M_DEVICE_PWR_SRC_TYPE_USB;
+static uint8_t usb_idx = LWM2M_DEVICE_PWR_SRC_TYPE_USB;
 static int usb_mv = 5000;
 static int usb_ma = 900;
-static u8_t bat_level = 95;
-static u8_t bat_status = LWM2M_DEVICE_BATTERY_STATUS_CHARGING;
+static uint8_t bat_level = 95;
+static uint8_t bat_status = LWM2M_DEVICE_BATTERY_STATUS_CHARGING;
 static int mem_free = 15;
 static int mem_total = 25;
 
-static struct device *led_dev;
-static u32_t led_state;
+static const struct device *led_dev;
+static uint32_t led_state;
 
 static struct lwm2m_ctx client;
 
@@ -93,18 +93,18 @@ static const char client_psk_id[] = "Client_identity";
 static struct k_sem quit_lock;
 
 #if defined(CONFIG_LWM2M_FIRMWARE_UPDATE_OBJ_SUPPORT)
-static u8_t firmware_buf[64];
+static uint8_t firmware_buf[64];
 #endif
 
 /* TODO: Move to a pre write hook that can handle ret codes once available */
-static int led_on_off_cb(u16_t obj_inst_id, u16_t res_id, u16_t res_inst_id,
-			 u8_t *data, u16_t data_len,
+static int led_on_off_cb(uint16_t obj_inst_id, uint16_t res_id, uint16_t res_inst_id,
+			 uint8_t *data, uint16_t data_len,
 			 bool last_block, size_t total_size)
 {
 	int ret = 0;
-	u32_t led_val;
+	uint32_t led_val;
 
-	led_val = *(u8_t *) data;
+	led_val = *(uint8_t *) data;
 	if (led_val != led_state) {
 		ret = gpio_pin_set(led_dev, LED_GPIO_PIN, (int) led_val);
 		if (ret) {
@@ -144,7 +144,8 @@ static int init_led_device(void)
 	return 0;
 }
 
-static int device_reboot_cb(u16_t obj_inst_id)
+static int device_reboot_cb(uint16_t obj_inst_id,
+			    uint8_t *args, uint16_t args_len)
 {
 	LOG_INF("DEVICE: REBOOT");
 	/* Add an error for testing */
@@ -155,7 +156,8 @@ static int device_reboot_cb(u16_t obj_inst_id)
 	return 0;
 }
 
-static int device_factory_default_cb(u16_t obj_inst_id)
+static int device_factory_default_cb(uint16_t obj_inst_id,
+				     uint8_t *args, uint16_t args_len)
 {
 	LOG_INF("DEVICE: FACTORY DEFAULT");
 	/* Add an error for testing */
@@ -167,7 +169,8 @@ static int device_factory_default_cb(u16_t obj_inst_id)
 }
 
 #if defined(CONFIG_LWM2M_FIRMWARE_UPDATE_PULL_SUPPORT)
-static int firmware_update_cb(u16_t obj_inst_id)
+static int firmware_update_cb(uint16_t obj_inst_id,
+			      uint8_t *args, uint16_t args_len)
 {
 	LOG_DBG("UPDATE");
 
@@ -183,12 +186,12 @@ static int firmware_update_cb(u16_t obj_inst_id)
 #endif
 
 
-static void *temperature_get_buf(u16_t obj_inst_id, u16_t res_id,
-				 u16_t res_inst_id, size_t *data_len)
+static void *temperature_get_buf(uint16_t obj_inst_id, uint16_t res_id,
+				 uint16_t res_inst_id, size_t *data_len)
 {
 	/* Last read temperature value, will use 25.5C if no sensor available */
 	static struct float32_value v = { 25, 500000 };
-	struct device *dev = NULL;
+	const struct device *dev = NULL;
 
 #if defined(CONFIG_FXOS8700_TEMP)
 	dev = device_get_binding(DT_LABEL(DT_INST(0, nxp_fxos8700)));
@@ -212,16 +215,16 @@ static void *temperature_get_buf(u16_t obj_inst_id, u16_t res_id,
 
 
 #if defined(CONFIG_LWM2M_FIRMWARE_UPDATE_OBJ_SUPPORT)
-static void *firmware_get_buf(u16_t obj_inst_id, u16_t res_id,
-			      u16_t res_inst_id, size_t *data_len)
+static void *firmware_get_buf(uint16_t obj_inst_id, uint16_t res_id,
+			      uint16_t res_inst_id, size_t *data_len)
 {
 	*data_len = sizeof(firmware_buf);
 	return firmware_buf;
 }
 
-static int firmware_block_received_cb(u16_t obj_inst_id,
-				      u16_t res_id, u16_t res_inst_id,
-				      u8_t *data, u16_t data_len,
+static int firmware_block_received_cb(uint16_t obj_inst_id,
+				      uint16_t res_id, uint16_t res_inst_id,
+				      uint8_t *data, uint16_t data_len,
 				      bool last_block, size_t total_size)
 {
 	LOG_INF("FIRMWARE: BLOCK RECEIVED: len:%u last_block:%d",
@@ -230,9 +233,9 @@ static int firmware_block_received_cb(u16_t obj_inst_id,
 }
 #endif
 
-static int timer_digital_state_cb(u16_t obj_inst_id,
-				  u16_t res_id, u16_t res_inst_id,
-				  u8_t *data, u16_t data_len,
+static int timer_digital_state_cb(uint16_t obj_inst_id,
+				  uint16_t res_id, uint16_t res_inst_id,
+				  uint8_t *data, uint16_t data_len,
 				  bool last_block, size_t total_size)
 {
 	bool *digital_state = (bool *)data;
@@ -250,8 +253,8 @@ static int lwm2m_setup(void)
 {
 	int ret;
 	char *server_url;
-	u16_t server_url_len;
-	u8_t server_url_flags;
+	uint16_t server_url_len;
+	uint8_t server_url_flags;
 
 	/* setup SECURITY object */
 
@@ -281,11 +284,14 @@ static int lwm2m_setup(void)
 	/* Mark 1st instance of security object as a bootstrap server */
 	lwm2m_engine_set_u8("0/0/1", 1);
 
-	/* Create 2nd instance of server and security objects needed for
-	 * bootstrap process
-	 */
+	/* Create 2nd instance of security object needed for bootstrap */
 	lwm2m_engine_create_obj_inst("0/1");
-	lwm2m_engine_create_obj_inst("1/1");
+#else
+	/* Match Security object instance with a Server object instance with
+	 * Short Server ID.
+	 */
+	lwm2m_engine_set_u16("0/0/10", 101);
+	lwm2m_engine_set_u16("1/0/0", 101);
 #endif
 
 	/* setup SERVER object */
@@ -320,6 +326,7 @@ static int lwm2m_setup(void)
 	/* add power source resource instances */
 	lwm2m_engine_create_res_inst("3/0/6/0");
 	lwm2m_engine_set_res_data("3/0/6/0", &bat_idx, sizeof(bat_idx), 0);
+
 	lwm2m_engine_create_res_inst("3/0/7/0");
 	lwm2m_engine_set_res_data("3/0/7/0", &bat_mv, sizeof(bat_mv), 0);
 	lwm2m_engine_create_res_inst("3/0/8/0");
@@ -414,11 +421,18 @@ static void rd_client_event(struct lwm2m_ctx *client,
 	case LWM2M_RD_CLIENT_EVENT_QUEUE_MODE_RX_OFF:
 		LOG_DBG("Queue mode RX window closed");
 		break;
+
+	case LWM2M_RD_CLIENT_EVENT_NETWORK_ERROR:
+		LOG_ERR("LwM2M engine reported a network erorr.");
+		lwm2m_rd_client_stop(client, rd_client_event);
+		break;
 	}
 }
 
 void main(void)
 {
+	uint32_t flags = IS_ENABLED(CONFIG_LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP) ?
+				LWM2M_RD_CLIENT_FLAG_BOOTSTRAP : 0;
 	int ret;
 
 	LOG_INF(APP_BANNER);
@@ -437,7 +451,7 @@ void main(void)
 #endif
 
 #if defined(CONFIG_HWINFO)
-	u8_t dev_id[16];
+	uint8_t dev_id[16];
 	char dev_str[33];
 	ssize_t length;
 	int i;
@@ -457,10 +471,10 @@ void main(void)
 		sprintf(&dev_str[i*2], "%02x", dev_id[i]);
 	}
 
-	lwm2m_rd_client_start(&client, dev_str, rd_client_event);
+	lwm2m_rd_client_start(&client, dev_str, flags, rd_client_event);
 #else
 	/* client.sec_obj_inst is 0 as a starting point */
-	lwm2m_rd_client_start(&client, CONFIG_BOARD, rd_client_event);
+	lwm2m_rd_client_start(&client, CONFIG_BOARD, flags, rd_client_event);
 #endif
 
 	k_sem_take(&quit_lock, K_FOREVER);

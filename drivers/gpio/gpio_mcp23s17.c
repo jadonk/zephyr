@@ -37,15 +37,16 @@ LOG_MODULE_REGISTER(gpio_mcp23s17);
  *
  * @return 0 if successful, failed otherwise.
  */
-static int read_port_regs(struct device *dev, u8_t reg, u16_t *buf)
+static int read_port_regs(const struct device *dev, uint8_t reg,
+			  uint16_t *buf)
 {
 	struct mcp23s17_drv_data *const drv_data =
-		(struct mcp23s17_drv_data *const)dev->driver_data;
+		(struct mcp23s17_drv_data *const)dev->data;
 	int ret;
-	u16_t port_data;
+	uint16_t port_data;
 
-	u8_t addr = MCP23S17_ADDR | MCP23S17_READBIT;
-	u8_t buffer_tx[4] = { addr, reg, 0, 0 };
+	uint8_t addr = MCP23S17_ADDR | MCP23S17_READBIT;
+	uint8_t buffer_tx[4] = { addr, reg, 0, 0 };
 
 	const struct spi_buf tx_buf = {
 		.buf = buffer_tx,
@@ -61,7 +62,7 @@ static int read_port_regs(struct device *dev, u8_t reg, u16_t *buf)
 			.len = 2
 		},
 		{
-			.buf = (u8_t *)&port_data,
+			.buf = (uint8_t *)&port_data,
 			.len = 2
 		}
 	};
@@ -95,20 +96,21 @@ static int read_port_regs(struct device *dev, u8_t reg, u16_t *buf)
  *
  * @return 0 if successful, failed otherwise.
  */
-static int write_port_regs(struct device *dev, u8_t reg, u16_t value)
+static int write_port_regs(const struct device *dev, uint8_t reg,
+			   uint16_t value)
 {
 	struct mcp23s17_drv_data *const drv_data =
-		(struct mcp23s17_drv_data *const)dev->driver_data;
+		(struct mcp23s17_drv_data *const)dev->data;
 	int ret;
-	u16_t port_data;
+	uint16_t port_data;
 
 	LOG_DBG("MCP23S17: Write: REG[0x%X] = 0x%X, REG[0x%X] = 0x%X",
 		reg, (value & 0xFF), (reg + 1), (value >> 8));
 
 	port_data = sys_cpu_to_le16(value);
 
-	u8_t addr = MCP23S17_ADDR;
-	u8_t buffer_tx[2] = { addr, reg };
+	uint8_t addr = MCP23S17_ADDR;
+	uint8_t buffer_tx[2] = { addr, reg };
 
 	const struct spi_buf tx_buf[2] = {
 		{
@@ -116,7 +118,7 @@ static int write_port_regs(struct device *dev, u8_t reg, u16_t value)
 			.len = 2,
 		},
 		{
-			.buf = (u8_t *)&port_data,
+			.buf = (uint8_t *)&port_data,
 			.len = 2,
 		}
 	};
@@ -143,12 +145,12 @@ static int write_port_regs(struct device *dev, u8_t reg, u16_t value)
  *
  * @return 0 if successful, failed otherwise
  */
-static int setup_pin_dir(struct device *dev, u32_t pin, int flags)
+static int setup_pin_dir(const struct device *dev, uint32_t pin, int flags)
 {
 	struct mcp23s17_drv_data *const drv_data =
-		(struct mcp23s17_drv_data *const)dev->driver_data;
-	u16_t *dir = &drv_data->reg_cache.iodir;
-	u16_t *output = &drv_data->reg_cache.gpio;
+		(struct mcp23s17_drv_data *const)dev->data;
+	uint16_t *dir = &drv_data->reg_cache.iodir;
+	uint16_t *output = &drv_data->reg_cache.gpio;
 	int ret;
 
 	if ((flags & GPIO_OUTPUT) != 0U) {
@@ -181,11 +183,12 @@ static int setup_pin_dir(struct device *dev, u32_t pin, int flags)
  *
  * @return 0 if successful, failed otherwise
  */
-static int setup_pin_pullupdown(struct device *dev, u32_t pin, int flags)
+static int setup_pin_pullupdown(const struct device *dev, uint32_t pin,
+				int flags)
 {
 	struct mcp23s17_drv_data *const drv_data =
-		(struct mcp23s17_drv_data *const)dev->driver_data;
-	u16_t port;
+		(struct mcp23s17_drv_data *const)dev->data;
+	uint16_t port;
 	int ret;
 
 	/* Setup pin pull up or pull down */
@@ -206,11 +209,11 @@ static int setup_pin_pullupdown(struct device *dev, u32_t pin, int flags)
 	return ret;
 }
 
-static int mcp23s17_config(struct device *dev,
+static int mcp23s17_config(const struct device *dev,
 			   gpio_pin_t pin, gpio_flags_t flags)
 {
 	struct mcp23s17_drv_data *const drv_data =
-		(struct mcp23s17_drv_data *const)dev->driver_data;
+		(struct mcp23s17_drv_data *const)dev->data;
 	int ret;
 
 	/* Can't do SPI bus operations from an ISR */
@@ -242,11 +245,11 @@ done:
 	return ret;
 }
 
-static int mcp23s17_port_get_raw(struct device *dev, u32_t *value)
+static int mcp23s17_port_get_raw(const struct device *dev, uint32_t *value)
 {
 	struct mcp23s17_drv_data *const drv_data =
-		(struct mcp23s17_drv_data *const)dev->driver_data;
-	u16_t buf;
+		(struct mcp23s17_drv_data *const)dev->data;
+	uint16_t buf;
 	int ret;
 
 	/* Can't do SPI bus operations from an ISR */
@@ -268,12 +271,12 @@ done:
 	return ret;
 }
 
-static int mcp23s17_port_set_masked_raw(struct device *dev,
-					u32_t mask, u32_t value)
+static int mcp23s17_port_set_masked_raw(const struct device *dev,
+					uint32_t mask, uint32_t value)
 {
 	struct mcp23s17_drv_data *const drv_data =
-		(struct mcp23s17_drv_data *const)dev->driver_data;
-	u16_t buf;
+		(struct mcp23s17_drv_data *const)dev->data;
+	uint16_t buf;
 	int ret;
 
 	/* Can't do SPI bus operations from an ISR */
@@ -296,21 +299,22 @@ static int mcp23s17_port_set_masked_raw(struct device *dev,
 	return ret;
 }
 
-static int mcp23s17_port_set_bits_raw(struct device *dev, u32_t mask)
+static int mcp23s17_port_set_bits_raw(const struct device *dev, uint32_t mask)
 {
 	return mcp23s17_port_set_masked_raw(dev, mask, mask);
 }
 
-static int mcp23s17_port_clear_bits_raw(struct device *dev, u32_t mask)
+static int mcp23s17_port_clear_bits_raw(const struct device *dev,
+					uint32_t mask)
 {
 	return mcp23s17_port_set_masked_raw(dev, mask, 0);
 }
 
-static int mcp23s17_port_toggle_bits(struct device *dev, u32_t mask)
+static int mcp23s17_port_toggle_bits(const struct device *dev, uint32_t mask)
 {
 	struct mcp23s17_drv_data *const drv_data =
-		(struct mcp23s17_drv_data *const)dev->driver_data;
-	u16_t buf;
+		(struct mcp23s17_drv_data *const)dev->data;
+	uint16_t buf;
 	int ret;
 
 	/* Can't do SPI bus operations from an ISR */
@@ -333,7 +337,7 @@ static int mcp23s17_port_toggle_bits(struct device *dev, u32_t mask)
 	return ret;
 }
 
-static int mcp23s17_pin_interrupt_configure(struct device *dev,
+static int mcp23s17_pin_interrupt_configure(const struct device *dev,
 					    gpio_pin_t pin,
 					    enum gpio_int_mode mode,
 					    enum gpio_int_trig trig)
@@ -357,12 +361,12 @@ static const struct gpio_driver_api api_table = {
  * @param dev Device struct
  * @return 0 if successful, failed otherwise.
  */
-static int mcp23s17_init(struct device *dev)
+static int mcp23s17_init(const struct device *dev)
 {
 	const struct mcp23s17_config *const config =
-		dev->config_info;
+		dev->config;
 	struct mcp23s17_drv_data *const drv_data =
-		(struct mcp23s17_drv_data *const)dev->driver_data;
+		(struct mcp23s17_drv_data *const)dev->data;
 
 	drv_data->spi = device_get_binding((char *)config->spi_dev_name);
 	if (!drv_data->spi) {
@@ -380,6 +384,7 @@ static int mcp23s17_init(struct device *dev)
 		}
 
 		drv_data->mcp23s17_cs_ctrl.gpio_pin = config->cs_pin;
+		drv_data->mcp23s17_cs_ctrl.gpio_dt_flags = config->cs_flags;
 		drv_data->mcp23s17_cs_ctrl.delay = 0;
 
 		drv_data->spi_cfg.cs = &drv_data->mcp23s17_cs_ctrl;
@@ -415,6 +420,9 @@ static int mcp23s17_init(struct device *dev)
 		IF_ENABLED(DT_INST_SPI_DEV_HAS_CS_GPIOS(inst),		\
 			   (.cs_pin =					\
 			    DT_INST_SPI_DEV_CS_GPIOS_PIN(inst),))	\
+		IF_ENABLED(DT_INST_SPI_DEV_HAS_CS_GPIOS(inst),		\
+			   (.cs_flags =					\
+			    DT_INST_SPI_DEV_CS_GPIOS_FLAGS(inst),))	\
 	};								\
 									\
 	static struct mcp23s17_drv_data mcp23s17_##inst##_drvdata = {	\
@@ -433,8 +441,9 @@ static int mcp23s17_init(struct device *dev)
 	};								\
 									\
 	/* This has to init after SPI master */				\
-	DEVICE_AND_API_INIT(mcp23s17_##inst, DT_INST_LABEL(inst),	\
-			    mcp23s17_init, &mcp23s17_##inst##_drvdata,	\
+	DEVICE_DT_INST_DEFINE(inst, mcp23s17_init,			\
+			    device_pm_control_nop,			\
+			    &mcp23s17_##inst##_drvdata,			\
 			    &mcp23s17_##inst##_config,			\
 			    POST_KERNEL,				\
 			    CONFIG_GPIO_MCP23S17_INIT_PRIORITY,		\

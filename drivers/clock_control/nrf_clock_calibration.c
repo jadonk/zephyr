@@ -7,7 +7,7 @@
 #include <drivers/clock_control.h>
 #include "nrf_clock_calibration.h"
 #include <drivers/clock_control/nrf_clock_control.h>
-#include <hal/nrf_clock.h>
+#include <nrfx_clock.h>
 #include <logging/log.h>
 #include <stdlib.h>
 
@@ -32,26 +32,23 @@ LOG_MODULE_DECLARE(clock_control, CONFIG_CLOCK_CONTROL_LOG_LEVEL);
  */
 
 static atomic_t cal_process_in_progress;
-static s16_t prev_temperature; /* Previous temperature measurement. */
-static u8_t calib_skip_cnt; /* Counting down skipped calibrations. */
+static int16_t prev_temperature; /* Previous temperature measurement. */
+static uint8_t calib_skip_cnt; /* Counting down skipped calibrations. */
 static volatile int total_cnt; /* Total number of calibrations. */
 static volatile int total_skips_cnt; /* Total number of skipped calibrations. */
 
-/* Callback called on hfclk started. */
-static void cal_hf_on_callback(struct device *dev,
-				clock_control_subsys_t subsys,
-				void *user_data);
-static struct clock_control_async_data cal_hf_on_data = {
-	.cb = cal_hf_on_callback
-};
-static void cal_lf_on_callback(struct device *dev,
-				clock_control_subsys_t subsys, void *user_data);
-static struct clock_control_async_data cal_lf_on_data = {
-	.cb = cal_lf_on_callback
-};
 
-static struct device *clk_dev;
-static struct device *temp_sensor;
+static void cal_hf_callback(struct onoff_manager *mgr,
+			    struct onoff_client *cli,
+			    uint32_t state, int res);
+static void cal_lf_callback(struct onoff_manager *mgr,
+			    struct onoff_client *cli,
+			    uint32_t state, int res);
+
+static struct onoff_client cli;
+static struct onoff_manager *mgrs;
+
+static const struct device *temp_sensor;
 
 static void measure_temperature(struct k_work *work);
 static K_WORK_DEFINE(temp_measure_work, measure_temperature);
@@ -59,30 +56,47 @@ static K_WORK_DEFINE(temp_measure_work, measure_temperature);
 static void timeout_handler(struct k_timer *timer);
 static K_TIMER_DEFINE(backoff_timer, timeout_handler, NULL);
 
-static void hf_request(void)
+static void clk_request(struct onoff_manager *mgr, struct onoff_client *cli,
+			onoff_client_callback callback)
 {
-	clock_control_async_on(clk_dev, CLOCK_CONTROL_NRF_SUBSYS_HF,
-				&cal_hf_on_data);
+	int err;
+
+	sys_notify_init_callback(&cli->notify, callback);
+	err = onoff_request(mgr, cli);
+	__ASSERT_NO_MSG(err >= 0);
 }
 
-static void hf_release(void)
+static void clk_release(struct onoff_manager *mgr)
 {
-	clock_control_off(clk_dev, CLOCK_CONTROL_NRF_SUBSYS_HF);
+	int err;
+
+	err = onoff_release(mgr);
+	__ASSERT_NO_MSG(err >= 0);
+}
+
+static void hf_request(void)
+{
+	clk_request(&mgrs[CLOCK_CONTROL_NRF_TYPE_HFCLK], &cli, cal_hf_callback);
 }
 
 static void lf_request(void)
 {
-	clock_control_async_on(clk_dev, CLOCK_CONTROL_NRF_SUBSYS_LF,
-				&cal_lf_on_data);
+	clk_request(&mgrs[CLOCK_CONTROL_NRF_TYPE_LFCLK], &cli, cal_lf_callback);
+}
+
+static void hf_release(void)
+{
+	clk_release(&mgrs[CLOCK_CONTROL_NRF_TYPE_HFCLK]);
 }
 
 static void lf_release(void)
 {
-	clock_control_off(clk_dev, CLOCK_CONTROL_NRF_SUBSYS_LF);
+	clk_release(&mgrs[CLOCK_CONTROL_NRF_TYPE_LFCLK]);
 }
 
-static void cal_lf_on_callback(struct device *dev,
-				clock_control_subsys_t subsys, void *user_data)
+static void cal_lf_callback(struct onoff_manager *mgr,
+			    struct onoff_client *cli,
+			    uint32_t state, int res)
 {
 	hf_request();
 }
@@ -95,7 +109,7 @@ static void start_hw_cal(void)
 		*(volatile uint32_t *)0x40000C34 = 0x00000002;
 	}
 
-	nrf_clock_task_trigger(NRF_CLOCK, NRF_CLOCK_TASK_CAL);
+	nrfx_clock_calibration_start();
 	calib_skip_cnt = CONFIG_CLOCK_CONTROL_NRF_CALIBRATION_MAX_SKIP;
 }
 
@@ -106,7 +120,11 @@ static void start_cycle(void)
 		      K_MSEC(CONFIG_CLOCK_CONTROL_NRF_CALIBRATION_PERIOD),
 		      K_NO_WAIT);
 	hf_release();
-	lf_release();
+
+	if (!IS_ENABLED(CONFIG_CLOCK_CONTROL_NRF_CALIBRATION_LF_ALWAYS_ON)) {
+		lf_release();
+	}
+
 	cal_process_in_progress = 0;
 }
 
@@ -116,12 +134,17 @@ static void start_cal_process(void)
 		return;
 	}
 
-	/* LF clock is probably running but it is requested to ensure that
-	 * it is not released while calibration process in ongoing. If system
-	 * releases the clock during calibration process it will be released
-	 * at the end of calibration process and stopped in consequence.
-	 */
-	lf_request();
+	if (IS_ENABLED(CONFIG_CLOCK_CONTROL_NRF_CALIBRATION_LF_ALWAYS_ON)) {
+		hf_request();
+	} else {
+		/* LF clock is probably running but it is requested to ensure
+		 * that it is not released while calibration process in ongoing.
+		 * If system releases the clock during calibration process it
+		 * will be released at the end of calibration process and
+		 * stopped in consequence.
+		 */
+		lf_request();
+	}
 }
 
 static void timeout_handler(struct k_timer *timer)
@@ -132,8 +155,9 @@ static void timeout_handler(struct k_timer *timer)
 /* Called when HFCLK XTAL is on. Schedules temperature measurement or triggers
  * calibration.
  */
-static void cal_hf_on_callback(struct device *dev,
-				clock_control_subsys_t subsys, void *user_data)
+static void cal_hf_callback(struct onoff_manager *mgr,
+			    struct onoff_client *cli,
+			    uint32_t state, int res)
 {
 	if ((temp_sensor == NULL) || !IS_ENABLED(CONFIG_MULTITHREADING)) {
 		start_hw_cal();
@@ -142,27 +166,14 @@ static void cal_hf_on_callback(struct device *dev,
 	}
 }
 
-static void on_hw_cal_done(void)
-{
-	/* Workaround for Errata 192 */
-	if (IS_ENABLED(CONFIG_SOC_SERIES_NRF52X)) {
-		*(volatile uint32_t *)0x40000C34 = 0x00000000;
-	}
-
-	total_cnt++;
-	LOG_DBG("Calibration done.");
-
-	start_cycle();
-}
-
 /* Convert sensor value to 0.25'C units. */
-static inline s16_t sensor_value_to_temp_unit(struct sensor_value *val)
+static inline int16_t sensor_value_to_temp_unit(struct sensor_value *val)
 {
-	return (s16_t)(4 * val->val1 + val->val2 / 250000);
+	return (int16_t)(4 * val->val1 + val->val2 / 250000);
 }
 
 /* Function reads from temperature sensor and converts to 0.25'C units. */
-static int get_temperature(s16_t *tvp)
+static int get_temperature(int16_t *tvp)
 {
 	struct sensor_value sensor_val;
 	int rc = sensor_sample_fetch(temp_sensor);
@@ -183,8 +194,8 @@ static int get_temperature(s16_t *tvp)
  */
 static void measure_temperature(struct k_work *work)
 {
-	s16_t temperature = 0;
-	s16_t diff = 0;
+	int16_t temperature = 0;
+	int16_t diff = 0;
 	bool started = false;
 	int rc;
 
@@ -215,7 +226,7 @@ static void measure_temperature(struct k_work *work)
 #define TEMP_NODE DT_INST(0, nordic_nrf_temp)
 
 #if DT_NODE_HAS_STATUS(TEMP_NODE, okay)
-static inline struct device *temp_device(void)
+static inline const struct device *temp_device(void)
 {
 	return device_get_binding(DT_LABEL(TEMP_NODE));
 }
@@ -223,21 +234,15 @@ static inline struct device *temp_device(void)
 #define temp_device() NULL
 #endif
 
-void z_nrf_clock_calibration_init(struct device *dev)
+void z_nrf_clock_calibration_init(struct onoff_manager *onoff_mgrs)
 {
-	/* Anomaly 36: After watchdog timeout reset, CPU lockup reset, soft
-	 * reset, or pin reset EVENTS_DONE and EVENTS_CTTO are not reset.
-	 */
-	nrf_clock_event_clear(NRF_CLOCK, NRF_CLOCK_EVENT_DONE);
-	nrf_clock_int_enable(NRF_CLOCK, NRF_CLOCK_INT_DONE_MASK);
-
-	clk_dev = dev;
+	mgrs = onoff_mgrs;
 	total_cnt = 0;
 	total_skips_cnt = 0;
 }
 
 #if CONFIG_CLOCK_CONTROL_NRF_CALIBRATION_MAX_SKIP
-static int temp_sensor_init(struct device *arg)
+static int temp_sensor_init(const struct device *arg)
 {
 	temp_sensor = temp_device();
 
@@ -274,12 +279,12 @@ void z_nrf_clock_calibration_lfclk_stopped(void)
 	LOG_DBG("Calibration stopped");
 }
 
-void z_nrf_clock_calibration_isr(void)
+void z_nrf_clock_calibration_done_handler(void)
 {
-	if (nrf_clock_event_check(NRF_CLOCK, NRF_CLOCK_EVENT_DONE)) {
-		nrf_clock_event_clear(NRF_CLOCK, NRF_CLOCK_EVENT_DONE);
-		on_hw_cal_done();
-	}
+	total_cnt++;
+	LOG_DBG("Calibration done.");
+
+	start_cycle();
 }
 
 int z_nrf_clock_calibration_count(void)

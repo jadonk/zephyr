@@ -1,14 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_BEETLE              beetle_clock_control.c)
+zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_LPC11U6X            clock_control_lpc11u6x.c)
 zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_MCUX_CCM            clock_control_mcux_ccm.c)
 zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_MCUX_MCG            clock_control_mcux_mcg.c)
 zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_MCUX_PCC            clock_control_mcux_pcc.c)
 zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_MCUX_SCG            clock_control_mcux_scg.c)
 zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_MCUX_SIM            clock_control_mcux_sim.c)
-zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_NRF                 nrf_power_clock.c)
+zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_MCUX_SYSCON         clock_control_mcux_syscon.c)
+zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_NPCX                clock_control_npcx.c)
+zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_NRF                 clock_control_nrf.c)
 zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_NRF_K32SRC_RC_CALIBRATION nrf_clock_calibration.c)
 zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_RV32M1_PCC          clock_control_rv32m1_pcc.c)
+zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_ESP32               clock_control_esp32.c)
+zephyr_sources_ifdef(CONFIG_CLOCK_CONTROL_LITEX               clock_control_litex.c)
 
 if(CONFIG_CLOCK_CONTROL_STM32_CUBE)
 if(CONFIG_SOC_SERIES_STM32MP1X)

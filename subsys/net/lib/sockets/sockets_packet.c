@@ -68,14 +68,6 @@ static int zpacket_socket(int family, int type, int proto)
 
 	/* recv_q and accept_q are in union */
 	k_fifo_init(&ctx->recv_q);
-
-#ifdef CONFIG_USERSPACE
-	/* Set net context object as initialized and grant access to the
-	 * calling thread (and only the calling thread)
-	 */
-	z_object_recycle(ctx);
-#endif
-
 	z_finalize_fd(fd, ctx,
 		      (const struct fd_op_vtable *)&packet_sock_fd_op_vtable);
 
@@ -180,6 +172,25 @@ ssize_t zpacket_sendto_ctx(struct net_context *ctx, const void *buf, size_t len,
 	return status;
 }
 
+ssize_t zpacket_sendmsg_ctx(struct net_context *ctx, const struct msghdr *msg,
+			    int flags)
+{
+	k_timeout_t timeout = K_FOREVER;
+	int status;
+
+	if ((flags & ZSOCK_MSG_DONTWAIT) || sock_is_nonblock(ctx)) {
+		timeout = K_NO_WAIT;
+	}
+
+	status = net_context_sendmsg(ctx, msg, flags, NULL, timeout, NULL);
+	if (status < 0) {
+		errno = -status;
+		return -1;
+	}
+
+	return status;
+}
+
 ssize_t zpacket_recvfrom_ctx(struct net_context *ctx, void *buf, size_t max_len,
 			     int flags, struct sockaddr *src_addr,
 			     socklen_t *addrlen)
@@ -225,10 +236,11 @@ ssize_t zpacket_recvfrom_ctx(struct net_context *ctx, void *buf, size_t max_len,
 		return -1;
 	}
 
-	net_stats_update_tc_rx_time(net_pkt_iface(pkt),
-				    net_pkt_priority(pkt),
-				    net_pkt_timestamp(pkt)->nanosecond,
-				    k_cycle_get_32());
+
+	if (IS_ENABLED(CONFIG_NET_PKT_RXTIME_STATS) &&
+	    !(flags & ZSOCK_MSG_PEEK)) {
+		net_socket_update_tc_rx_time(pkt, k_cycle_get_32());
+	}
 
 	if (!(flags & ZSOCK_MSG_PEEK)) {
 		net_pkt_unref(pkt);
@@ -315,6 +327,12 @@ static ssize_t packet_sock_sendto_vmeth(void *obj, const void *buf, size_t len,
 	return zpacket_sendto_ctx(obj, buf, len, flags, dest_addr, addrlen);
 }
 
+static ssize_t packet_sock_sendmsg_vmeth(void *obj, const struct msghdr *msg,
+					 int flags)
+{
+	return zpacket_sendmsg_ctx(obj, msg, flags);
+}
+
 static ssize_t packet_sock_recvfrom_vmeth(void *obj, void *buf, size_t max_len,
 					  int flags, struct sockaddr *src_addr,
 					  socklen_t *addrlen)
@@ -346,6 +364,7 @@ static const struct socket_op_vtable packet_sock_fd_op_vtable = {
 	.listen = packet_sock_listen_vmeth,
 	.accept = packet_sock_accept_vmeth,
 	.sendto = packet_sock_sendto_vmeth,
+	.sendmsg = packet_sock_sendmsg_vmeth,
 	.recvfrom = packet_sock_recvfrom_vmeth,
 	.getsockopt = packet_sock_getsockopt_vmeth,
 	.setsockopt = packet_sock_setsockopt_vmeth,
@@ -353,11 +372,12 @@ static const struct socket_op_vtable packet_sock_fd_op_vtable = {
 
 static bool packet_is_supported(int family, int type, int proto)
 {
-	if (type != SOCK_RAW || proto != ETH_P_ALL) {
-		return false;
+	if (((type == SOCK_RAW) && (proto == ETH_P_ALL)) ||
+	    ((type == SOCK_DGRAM) && (proto > 0))) {
+		return true;
 	}
 
-	return true;
+	return false;
 }
 
 NET_SOCKET_REGISTER(af_packet, AF_PACKET, packet_is_supported, zpacket_socket);

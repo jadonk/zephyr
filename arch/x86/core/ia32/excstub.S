@@ -49,7 +49,7 @@
  *
  * C function prototype:
  *
- * void _exception_enter(u32_t error_code, void *handler)
+ * void _exception_enter(uint32_t error_code, void *handler)
  *
  */
 
@@ -121,6 +121,14 @@ SECTION_FUNC(TEXT, _exception_enter)
 	pushl	%eax             /* Save calculated ESP */
 #ifdef CONFIG_USERSPACE
 2:
+#endif
+
+#ifdef CONFIG_GDBSTUB
+	pushl %ds
+	pushl %es
+	pushl %fs
+	pushl %gs
+	pushl %ss
 #endif
 	/* ESP is pointing to the ESF at this point */
 
@@ -196,6 +204,13 @@ allDone:
 nestedException:
 #endif /* CONFIG_LAZY_FPU_SHARING */
 
+#ifdef CONFIG_GDBSTUB
+	popl %ss
+	popl %gs
+	popl %fs
+	popl %es
+	popl %ds
+#endif
 	/*
 	 * Pop the non-volatile registers from the stack.
 	 * Note that debug tools may have altered the saved register values while

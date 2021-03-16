@@ -30,9 +30,9 @@ static int write_read(const char *tag,
 	struct fs_dirent stat;
 	struct fs_file_t file;
 	size_t total = nbuf * buf_size;
-	u32_t t0;
-	u32_t t1;
-	u8_t *buf;
+	uint32_t t0;
+	uint32_t t1;
+	uint8_t *buf;
 	int rc;
 	int rv = TC_FAIL;
 
@@ -64,7 +64,7 @@ static int write_read(const char *tag,
 			 "data",
 			 TESTFS_PATH_END);
 
-	buf = calloc(buf_size, sizeof(u8_t));
+	buf = calloc(buf_size, sizeof(uint8_t));
 	if (buf == NULL) {
 		TC_PRINT("Failed to allocate %zu-byte buffer\n", buf_size);
 		goto out_mnt;
@@ -77,7 +77,7 @@ static int write_read(const char *tag,
 	TC_PRINT("creating and writing %zu %zu-byte blocks\n",
 		 nbuf, buf_size);
 
-	rc = fs_open(&file, path.path);
+	rc = fs_open(&file, path.path, FS_O_CREATE | FS_O_RDWR);
 	if (rc != 0) {
 		TC_PRINT("Failed to open %s for write: %d\n", path.path, rc);
 		goto out_buf;
@@ -113,10 +113,10 @@ static int write_read(const char *tag,
 	TC_PRINT("%s write %zu * %zu = %zu bytes in %u ms: "
 		 "%u By/s, %u KiBy/s\n",
 		 tag, nbuf, buf_size, total, (t1 - t0),
-		 (u32_t)(total * 1000U / (t1 - t0)),
-		 (u32_t)(total * 1000U / (t1 - t0) / 1024U));
+		 (uint32_t)(total * 1000U / (t1 - t0)),
+		 (uint32_t)(total * 1000U / (t1 - t0) / 1024U));
 
-	rc = fs_open(&file, path.path);
+	rc = fs_open(&file, path.path, FS_O_CREATE | FS_O_RDWR);
 	if (rc != 0) {
 		TC_PRINT("Failed to open %s for write: %d\n", path.path, rc);
 		goto out_buf;
@@ -139,8 +139,8 @@ static int write_read(const char *tag,
 	TC_PRINT("%s read %zu * %zu = %zu bytes in %u ms: "
 		 "%u By/s, %u KiBy/s\n",
 		 tag, nbuf, buf_size, total, (t1 - t0),
-		 (u32_t)(total * 1000U / (t1 - t0)),
-		 (u32_t)(total * 1000U / (t1 - t0) / 1024U));
+		 (uint32_t)(total * 1000U / (t1 - t0)),
+		 (uint32_t)(total * 1000U / (t1 - t0) / 1024U));
 
 	rv = TC_PASS;
 

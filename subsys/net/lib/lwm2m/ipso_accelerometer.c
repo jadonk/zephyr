@@ -78,7 +78,7 @@ static struct lwm2m_engine_res res[MAX_INSTANCE_COUNT][ACCEL_MAX_ID];
 static struct lwm2m_engine_res_inst
 		res_inst[MAX_INSTANCE_COUNT][RESOURCE_INSTANCE_COUNT];
 
-static struct lwm2m_engine_obj_inst *accel_create(u16_t obj_inst_id)
+static struct lwm2m_engine_obj_inst *accel_create(uint16_t obj_inst_id)
 {
 	int index, avail = -1, i = 0, j = 0;
 
@@ -142,7 +142,7 @@ static struct lwm2m_engine_obj_inst *accel_create(u16_t obj_inst_id)
 	return &inst[avail];
 }
 
-static int ipso_accel_init(struct device *dev)
+static int ipso_accel_init(const struct device *dev)
 {
 	accel.obj_id = IPSO_OBJECT_ACCELEROMETER_ID;
 	accel.fields = fields;

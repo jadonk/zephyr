@@ -24,3 +24,6 @@ supported:
   - sdhc
   - usb_device
   - kscan:touch
+  - dma
+  - can
+  - watchdog

@@ -16,20 +16,7 @@
 #ifndef DEVICETREE_H
 #define DEVICETREE_H
 
-#ifdef _LINKER
-/*
- * Linker scripts include this file too, and autoconf.h isn't
- * automatically included for those files the way it is for C source
- * files. Make sure we pull it in before using
- * CONFIG_LEGACY_DEVICETREE_MACROS in that case.
- */
-#include <autoconf.h>
-#endif
-
 #include <devicetree_unfixed.h>
-#ifdef CONFIG_LEGACY_DEVICETREE_MACROS
-#include <devicetree_legacy_unfixed.h>
-#endif
 #include <devicetree_fixups.h>
 
 #include <sys/util.h>
@@ -40,6 +27,15 @@
  * @{
  * @}
  */
+
+/**
+ * @brief Name for an invalid node identifier
+ *
+ * This supports cases where factored macros can be invoked from paths where
+ * devicetree data may or may not be available.  It is a preprocessor identifier
+ * that does not match any valid devicetree node identifier.
+ */
+#define DT_INVALID_NODE _
 
 /*
  * Property suffixes
@@ -53,8 +49,12 @@
  * are missing from this list, please add them. It should be complete.
  *
  * _ENUM_IDX: property's value as an index into bindings enum
+ * _ENUM_TOKEN: property's value as a token into bindings enum (string
+ *              enum values are identifiers)
+ * _ENUM_UPPER_TOKEN: like _ENUM_TOKEN, but uppercased
  * _EXISTS: property is defined
  * _IDX_<i>: logical index into property
+ * _IDX_<i>_EXISTS: logical index into property is defined
  * _IDX_<i>_PH: phandle array's phandle by index (or phandle, phandles)
  * _IDX_<i>_VAL_<val>: phandle array's specifier value by index
  * _IDX_<i>_VAL_<val>_EXISTS: cell value exists, by index
@@ -442,7 +442,7 @@
  *         into the given property, and 0 otherwise.
  */
 #define DT_PROP_HAS_IDX(node_id, prop, idx) \
-	((idx) < DT_PROP_LEN(node_id, prop))
+	IS_ENABLED(DT_CAT6(node_id, _P_, prop, _IDX_, idx, _EXISTS))
 
 /**
  * @brief Get the value at index "idx" in an array type property
@@ -467,6 +467,23 @@
  * @return a representation of the idx-th element of the property
  */
 #define DT_PROP_BY_IDX(node_id, prop, idx) DT_PROP(node_id, prop##_IDX_##idx)
+
+/**
+ * @brief Like DT_PROP(), but with a fallback to default_value
+ *
+ * If the value exists, this expands to DT_PROP(node_id, prop).
+ * The default_value parameter is not expanded in this case.
+ *
+ * Otherwise, this expands to default_value.
+ *
+ * @param node_id node identifier
+ * @param prop lowercase-and-underscores property name
+ * @param default_value a fallback value to expand to
+ * @return the property's value or default_value
+ */
+#define DT_PROP_OR(node_id, prop, default_value) \
+	COND_CODE_1(DT_NODE_HAS_PROP(node_id, prop), \
+		    (DT_PROP(node_id, prop)), (default_value))
 
 /**
  * @brief Equivalent to DT_PROP(node_id, label)
@@ -514,11 +531,152 @@
  */
 #define DT_ENUM_IDX(node_id, prop) DT_PROP(node_id, prop##_ENUM_IDX)
 
+/**
+ * @brief Like DT_ENUM_IDX(), but with a fallback to a default enum index
+ *
+ * If the value exists, this expands to its zero based index value thanks to
+ * DT_ENUM_IDX(node_id, prop).
+ *
+ * Otherwise, this expands to provided default index enum value.
+ *
+ * @param node_id node identifier
+ * @param prop lowercase-and-underscores property name
+ * @param default_idx_value a fallback index value to expand to
+ * @return zero-based index of the property's value in its enum if present,
+ *         default_idx_value ohterwise
+ */
+#define DT_ENUM_IDX_OR(node_id, prop, default_idx_value) \
+	COND_CODE_1(DT_NODE_HAS_PROP(node_id, prop), \
+		    (DT_ENUM_IDX(node_id, prop)), (default_idx_value))
+
+/**
+ * @brief Get an enumeration property's value as a token.
+ *
+ * This allows you to "remove the quotes" from some string-valued
+ * properties. That can be useful, for example, when pasting the
+ * values onto some other token to form an enum in C using the @p ##
+ * preprocessor operator.
+ *
+ * DT_ENUM_TOKEN() can only be used for properties with string type
+ * whose binding has an "enum:". The values in the binding's "enum:"
+ * list must be unique after converting non-alphanumeric characters to
+ * underscores.
+ *
+ * It is an error to use DT_ENUM_TOKEN() in other circumstances.
+ *
+ * Example devicetree fragment:
+ *
+ *     n1: node-1 {
+ *             prop = "foo";
+ *     };
+ *     n2: node-2 {
+ *             prop = "FOO";
+ *     }
+ *     n3: node-3 {
+ *             prop = "123 foo";
+ *     };
+ *
+ * Example bindings fragment:
+ *
+ *     properties:
+ *       prop:
+ *         type: string
+ *         enum:
+ *            - "foo"
+ *            - "FOO"
+ *            - "123 foo"
+ *
+ * Example usage:
+ *
+ *     DT_ENUM_TOKEN((DT_NODELABEL(n1), prop) // foo
+ *     DT_ENUM_TOKEN((DT_NODELABEL(n2), prop) // FOO
+ *     DT_ENUM_TOKEN((DT_NODELABEL(n3), prop) // 123_foo
+ *
+ * Notice how:
+ *
+ * - Unlike C identifiers, the property values may begin with a
+ *   number. It's the user's responsibility not to use such values as
+ *   the name of a C identifier.
+ *
+ * - The uppercased "FOO" in the DTS remains @p FOO as a token. It is
+     *not* converted to @p foo.
+ *
+ * - The whitespace in the DTS "123 foo" string is converted to @p
+ *   123_foo as a token.
+ *
+ * @param node_id node identifier
+ * @param prop lowercase-and-underscores property name with suitable
+ *             enumeration of values in its binding
+ * @return the value of @p prop as a token, i.e. without any quotes
+ *         and with special characters converted to underscores
+ */
+#define DT_ENUM_TOKEN(node_id, prop) \
+	DT_CAT4(node_id, _P_, prop, _ENUM_TOKEN)
+
+/**
+ * @brief Like DT_ENUM_TOKEN(), but uppercased
+ *
+ * This allows you to "remove the quotes and capitalize" some string-valued
+ * properties.
+ *
+ * DT_ENUM_UPPER_TOKEN() can only be used for properties with string type
+ * whose binding has an "enum:". The values in the binding's "enum:"
+ * list must be unique after converting non-alphanumeric characters to
+ * underscores and capitalizating any letters.
+ *
+ * It is an error to use DT_ENUM_UPPER_TOKEN() in other circumstances.
+ *
+ * Example devicetree fragment:
+ *
+ *     n1: node-1 {
+ *             prop = "foo";
+ *     };
+ *     n2: node-2 {
+ *             prop = "123 foo";
+ *     };
+ *
+ * Example bindings fragment:
+ *
+ *     properties:
+ *       prop:
+ *         type: string
+ *         enum:
+ *            - "foo"
+ *            - "123 foo"
+ *
+ * Example usage:
+ *
+ *     DT_ENUM_TOKEN((DT_NODELABEL(n1), prop) // FOO
+ *     DT_ENUM_TOKEN((DT_NODELABEL(n2), prop) // 123_FOO
+ *
+ * Notice how:
+ *
+ * - Unlike C identifiers, the property values may begin with a
+ *   number. It's the user's responsibility not to use such values as
+ *   the name of a C identifier.
+ *
+ * - The lowercased "foo" in the DTS becomes @p FOO as a token, i.e.
+ *   it is uppercased.
+ *
+ * - The whitespace in the DTS "123 foo" string is converted to @p
+ *   123_FOO as a token, i.e. it is uppercased and whitespace becomes
+ *   an underscore.
+ *
+ * @param node_id node identifier
+ * @param prop lowercase-and-underscores property name with suitable
+ *             enumeration of values in its binding
+ * @return the value of @p prop as a capitalized token, i.e. upper case,
+ *         without any quotes, and with special characters converted to
+ *         underscores
+ */
+#define DT_ENUM_UPPER_TOKEN(node_id, prop) \
+	DT_CAT4(node_id, _P_, prop, _ENUM_UPPER_TOKEN)
+
 /*
  * phandle properties
  *
  * These are special-cased to manage the impedance mismatch between
- * phandles, which are just u32_t node properties that only make sense
+ * phandles, which are just uint32_t node properties that only make sense
  * within the tree itself, and C values.
  */
 
@@ -563,6 +721,28 @@
  */
 #define DT_PROP_BY_PHANDLE_IDX(node_id, phs, idx, prop) \
 	DT_PROP(DT_PHANDLE_BY_IDX(node_id, phs, idx), prop)
+
+/**
+ * @brief Like DT_PROP_BY_PHANDLE_IDX(), but with a fallback to
+ * default_value.
+ *
+ * If the value exists, this expands to DT_PROP_BY_PHANDLE_IDX(node_id, phs,
+ * idx, prop). The default_value parameter is not expanded in this
+ * case.
+ *
+ * Otherwise, this expands to default_value.
+ *
+ * @param node_id node identifier
+ * @param phs lowercase-and-underscores property with type "phandle",
+ *            "phandles", or "phandle-array"
+ * @param idx logical index into "phs", which must be zero if "phs"
+ *            has type "phandle"
+ * @param prop lowercase-and-underscores property of the phandle's node
+ * @param default_value a fallback value to expand to
+ * @return the property's value
+ */
+#define DT_PROP_BY_PHANDLE_IDX_OR(node_id, phs, idx, prop, default_value) \
+	DT_PROP_OR(DT_PHANDLE_BY_IDX(node_id, phs, idx), prop, default_value)
 
 /**
  * @brief Get a property value from a phandle's node
@@ -630,6 +810,30 @@
 	DT_PROP(node_id, pha##_IDX_##idx##_VAL_##cell)
 
 /**
+ * @brief Like DT_PHA_BY_IDX(), but with a fallback to default_value.
+ *
+ * If the value exists, this expands to DT_PHA_BY_IDX(node_id, pha,
+ * idx, cell). The default_value parameter is not expanded in this
+ * case.
+ *
+ * Otherwise, this expands to default_value.
+ *
+ * @param node_id node identifier
+ * @param pha lowercase-and-underscores property with type "phandle-array"
+ * @param idx logical index into "pha"
+ * @param cell lowercase-and-underscores cell name within the specifier
+ *             at "pha" index "idx"
+ * @param default_value a fallback value to expand to
+ * @return the cell's value or "default_value"
+ */
+#define DT_PHA_BY_IDX_OR(node_id, pha, idx, cell, default_value) \
+	DT_PROP_OR(node_id, pha##_IDX_##idx##_VAL_##cell, default_value)
+/* Implementation note: the _IDX_##idx##_VAL_##cell##_EXISTS
+ * macros are defined, so it's safe to use DT_PROP_OR() here, because
+ * that uses an IS_ENABLED() on the _EXISTS macro.
+ */
+
+/**
  * @brief Equivalent to DT_PHA_BY_IDX(node_id, pha, 0, cell)
  * @param node_id node identifier
  * @param pha lowercase-and-underscores property with type "phandle-array"
@@ -637,6 +841,23 @@
  * @return the cell's value
  */
 #define DT_PHA(node_id, pha, cell) DT_PHA_BY_IDX(node_id, pha, 0, cell)
+
+/**
+ * @brief Like DT_PHA(), but with a fallback to default_value
+ *
+ * If the value exists, this expands to DT_PHA(node_id, pha, cell).
+ * The default_value parameter is not expanded in this case.
+ *
+ * Otherwise, this expands to default_value.
+ *
+ * @param node_id node identifier
+ * @param pha lowercase-and-underscores property with type "phandle-array"
+ * @param cell lowercase-and-underscores cell name
+ * @param default_value a fallback value to expand to
+ * @return the cell's value or default_value
+ */
+#define DT_PHA_OR(node_id, pha, cell, default_value) \
+	DT_PHA_BY_IDX_OR(node_id, pha, 0, cell, default_value)
 
 /**
  * @brief Get a value within a phandle-array specifier by name
@@ -674,6 +895,28 @@
  */
 #define DT_PHA_BY_NAME(node_id, pha, name, cell) \
 	DT_PROP(node_id, pha##_NAME_##name##_VAL_##cell)
+
+/**
+ * @brief Like DT_PHA_BY_NAME(), but with a fallback to default_value
+ *
+ * If the value exists, this expands to DT_PHA_BY_NAME(node_id, pha,
+ * name, cell). The default_value parameter is not expanded in this case.
+ *
+ * Otherwise, this expands to default_value.
+ *
+ * @param node_id node identifier
+ * @param pha lowercase-and-underscores property with type "phandle-array"
+ * @param name lowercase-and-underscores name of a specifier in "pha"
+ * @param cell lowercase-and-underscores cell name in the named specifier
+ * @param default_value a fallback value to expand to
+ * @return the cell's value or default_value
+ */
+#define DT_PHA_BY_NAME_OR(node_id, pha, name, cell, default_value) \
+	DT_PROP_OR(node_id, pha##_NAME_##name##_VAL_##cell, default_value)
+/* Implementation note: the _NAME_##name##_VAL_##cell##_EXISTS
+ * macros are defined, so it's safe to use DT_PROP_OR() here, because
+ * that uses an IS_ENABLED() on the _EXISTS macro.
+ */
 
 /**
  * @brief Get a phandle's node identifier from a phandle array by name
@@ -1368,14 +1611,12 @@
 #define DT_INST_PROP(inst, prop) DT_PROP(DT_DRV_INST(inst), prop)
 
 /**
- * @brief Get a DT_DRV_COMPAT element value in an array property
+ * @brief Get a DT_DRV_COMPAT property length
  * @param inst instance number
  * @param prop lowercase-and-underscores property name
- * @param idx the index to get
- * @return a representation of the idx-th element of the property
+ * @return logical length of the property
  */
-#define DT_INST_PROP_BY_IDX(inst, prop, idx) \
-	DT_PROP_BY_IDX(DT_DRV_INST(inst), prop, idx)
+#define DT_INST_PROP_LEN(inst, prop) DT_PROP_LEN(DT_DRV_INST(inst), prop)
 
 /**
  * @brief Is index "idx" valid for an array type property
@@ -1390,12 +1631,24 @@
 	DT_PROP_HAS_IDX(DT_DRV_INST(inst), prop, idx)
 
 /**
- * @brief Get a DT_DRV_COMPAT property length
+ * @brief Get a DT_DRV_COMPAT element value in an array property
  * @param inst instance number
  * @param prop lowercase-and-underscores property name
- * @return logical length of the property
+ * @param idx the index to get
+ * @return a representation of the idx-th element of the property
  */
-#define DT_INST_PROP_LEN(inst, prop) DT_PROP_LEN(DT_DRV_INST(inst), prop)
+#define DT_INST_PROP_BY_IDX(inst, prop, idx) \
+	DT_PROP_BY_IDX(DT_DRV_INST(inst), prop, idx)
+
+/**
+ * @brief Like DT_INST_PROP(), but with a fallback to default_value
+ * @param inst instance number
+ * @param prop lowercase-and-underscores property name
+ * @param default_value a fallback value to expand to
+ * @return DT_INST_PROP(inst, prop) or default_value
+ */
+#define DT_INST_PROP_OR(inst, prop, default_value) \
+	DT_PROP_OR(DT_DRV_INST(inst), prop, default_value)
 
 /**
  * @brief Get a DT_DRV_COMPAT instance's "label" property
@@ -1441,6 +1694,18 @@
 	DT_PHA_BY_IDX(DT_DRV_INST(inst), pha, idx, cell)
 
 /**
+ * @brief Like DT_INST_PHA_BY_IDX(), but with a fallback to default_value
+ * @param inst instance number
+ * @param pha lowercase-and-underscores property with type "phandle-array"
+ * @param idx logical index into the property "pha"
+ * @param cell binding's cell name within the specifier at index "idx"
+ * @param default_value a fallback value to expand to
+ * @return DT_INST_PHA_BY_IDX(inst, pha, idx, cell) or default_value
+ */
+#define DT_INST_PHA_BY_IDX_OR(inst, pha, idx, cell, default_value) \
+	DT_PHA_BY_IDX_OR(DT_DRV_INST(inst), pha, idx, cell, default_value)
+
+/**
  * @brief Get a DT_DRV_COMPAT instance's phandle-array specifier value
  * Equivalent to DT_INST_PHA_BY_IDX(inst, pha, 0, cell)
  * @param inst instance number
@@ -1449,6 +1714,17 @@
  * @return the cell value
  */
 #define DT_INST_PHA(inst, pha, cell) DT_INST_PHA_BY_IDX(inst, pha, 0, cell)
+
+/**
+ * @brief Like DT_INST_PHA(), but with a fallback to default_value
+ * @param inst instance number
+ * @param pha lowercase-and-underscores property with type "phandle-array"
+ * @param cell binding's cell name for the specifier at "pha" index 0
+ * @param default_value a fallback value to expand to
+ * @return DT_INST_PHA(inst, pha, cell) or default_value
+ */
+#define DT_INST_PHA_OR(inst, pha, cell, default_value) \
+	DT_INST_PHA_BY_IDX_OR(inst, pha, 0, cell, default_value)
 
 /**
  * @brief Get a DT_DRV_COMPAT instance's value within a phandle-array
@@ -1461,6 +1737,18 @@
  */
 #define DT_INST_PHA_BY_NAME(inst, pha, name, cell) \
 	DT_PHA_BY_NAME(DT_DRV_INST(inst), pha, name, cell)
+
+/**
+ * @brief Like DT_INST_PHA_BY_NAME(), but with a fallback to default_value
+ * @param inst instance number
+ * @param pha lowercase-and-underscores property with type "phandle-array"
+ * @param name lowercase-and-underscores name of a specifier in "pha"
+ * @param cell binding's cell name for the named specifier
+ * @param default_value a fallback value to expand to
+ * @return DT_INST_PHA_BY_NAME(inst, pha, name, cell) or default_value
+ */
+#define DT_INST_PHA_BY_NAME_OR(inst, pha, name, cell, default_value) \
+	DT_PHA_BY_NAME_OR(DT_DRV_INST(inst), pha, name, cell, default_value)
 
 /**
  * @brief Get a DT_DRV_COMPAT instance's phandle node identifier from a
@@ -1782,8 +2070,35 @@
 	UTIL_CAT(DT_ROOT, MACRO_MAP_CAT(DT_S_PREFIX, __VA_ARGS__))
 /** @internal helper for DT_PATH(): prepends _S_ to a node name */
 #define DT_S_PREFIX(name) _S_##name
-/** @internal concatenation helper, sometimes used to force expansion */
-#define DT_CAT(node_id, prop_suffix) node_id##prop_suffix
+
+/**
+ * @internal concatenation helper, 2 arguments
+ *
+ * This and the following macros are used to paste things together
+ * with "##" *after* forcing expansion on each argument.
+ *
+ * We could try to use something like UTIL_CAT(), but the compiler
+ * error messages from the util macros can be extremely long when they
+ * are misused. This unfortunately happens often with devicetree.h,
+ * since its macro-based API is fiddly and can be hard to get right.
+ *
+ * Keeping things brutally simple here hopefully makes some errors
+ * easier to read.
+ */
+#define DT_CAT(a1, a2) a1 ## a2
+/** @internal concatenation helper, 3 arguments */
+#define DT_CAT3(a1, a2, a3) a1 ## a2 ## a3
+/** @internal concatenation helper, 4 arguments */
+#define DT_CAT4(a1, a2, a3, a4) a1 ## a2 ## a3 ## a4
+/** @internal concatenation helper, 5 arguments */
+#define DT_CAT5(a1, a2, a3, a4, a5) a1 ## a2 ## a3 ## a4 ## a5
+/** @internal concatenation helper, 6 arguments */
+#define DT_CAT6(a1, a2, a3, a4, a5, a6) a1 ## a2 ## a3 ## a4 ## a5 ## a6
+/*
+ * If you need to define a bigger DT_CATN(), do so here. Don't leave
+ * any "holes" of undefined macros, please.
+ */
+
 /** @internal helper for node identifier macros to expand args */
 #define DT_DASH(...) MACRO_MAP_CAT(DT_DASH_PREFIX, __VA_ARGS__)
 /** @internal helper for DT_DASH(): prepends _ to a name */
@@ -1796,7 +2111,7 @@
 	IS_ENABLED(UTIL_CAT(DT_CAT(DT_COMPAT_, compat), _BUS_##bus))
 
 /* have these last so they have access to all previously defined macros */
-#include <devicetree/adc.h>
+#include <devicetree/io-channels.h>
 #include <devicetree/clocks.h>
 #include <devicetree/gpio.h>
 #include <devicetree/spi.h>
@@ -1804,5 +2119,6 @@
 #include <devicetree/pwms.h>
 #include <devicetree/fixed-partitions.h>
 #include <devicetree/zephyr.h>
+#include <devicetree/ordinals.h>
 
 #endif /* DEVICETREE_H */

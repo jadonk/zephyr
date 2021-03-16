@@ -76,14 +76,14 @@ enum rf2xx_trx_model_t {
 
 struct rf2xx_dt_gpio_t {
 	const char *devname;
-	u32_t pin;
-	u32_t flags;
+	uint32_t pin;
+	uint32_t flags;
 };
 
 struct rf2xx_dt_spi_t {
 	const char *devname;
-	u32_t freq;
-	u32_t addr;
+	uint32_t freq;
+	uint32_t addr;
 	struct rf2xx_dt_gpio_t cs;
 };
 
@@ -96,27 +96,29 @@ struct rf2xx_config {
 
 	struct rf2xx_dt_spi_t spi;
 
-	u8_t inst;
-	u8_t has_mac;
+	uint8_t inst;
+	uint8_t has_mac;
 };
 
 struct rf2xx_context {
 	struct net_if *iface;
 
-	struct device *irq_gpio;
-	struct device *reset_gpio;
-	struct device *slptr_gpio;
-	struct device *dig2_gpio;
-	struct device *clkm_gpio;
+	const struct device *dev;
 
-	struct device *spi;
+	const struct device *irq_gpio;
+	const struct device *reset_gpio;
+	const struct device *slptr_gpio;
+	const struct device *dig2_gpio;
+	const struct device *clkm_gpio;
+
+	const struct device *spi;
 	struct spi_config spi_cfg;
 	struct spi_cs_control spi_cs;
 
 	struct gpio_callback irq_cb;
 
 	struct k_thread trx_thread;
-	K_THREAD_STACK_MEMBER(trx_stack,
+	K_KERNEL_STACK_MEMBER(trx_stack,
 			      CONFIG_IEEE802154_RF2XX_RX_STACK_SIZE);
 	struct k_sem trx_isr_lock;
 	struct k_sem trx_tx_sync;
@@ -124,12 +126,12 @@ struct rf2xx_context {
 	enum rf2xx_trx_model_t trx_model;
 	enum rf2xx_trx_state_trac_t trx_trac;
 
-	u8_t mac_addr[8];
-	u8_t pkt_lqi;
-	u8_t pkt_ed;
-	s8_t trx_rssi_base;
-	u8_t trx_version;
-	u8_t rx_phr;
+	uint8_t mac_addr[8];
+	uint8_t pkt_lqi;
+	uint8_t pkt_ed;
+	int8_t trx_rssi_base;
+	uint8_t trx_version;
+	uint8_t rx_phr;
 };
 
 #endif /* ZEPHYR_DRIVERS_IEEE802154_IEEE802154_RF2XX_H_ */

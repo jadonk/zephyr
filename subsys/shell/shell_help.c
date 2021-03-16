@@ -107,28 +107,30 @@ static void formatted_text_print(const struct shell *shell, const char *str,
 }
 
 static void help_item_print(const struct shell *shell, const char *item_name,
-			    u16_t item_name_width, const char *item_help)
+			    uint16_t item_name_width, const char *item_help)
 {
-	static const u8_t tabulator[] = "  ";
-	const u16_t offset = 2 * strlen(tabulator) + item_name_width + 1;
+	static const uint8_t tabulator[] = "  ";
+	const uint16_t offset = 2 * strlen(tabulator) + item_name_width + 1;
 
 	if (item_name == NULL) {
 		return;
 	}
 
-	if (!IS_ENABLED(CONFIG_NEWLIB_LIBC) && !IS_ENABLED(CONFIG_ARCH_POSIX)) {
+	if (!IS_ENABLED(CONFIG_NEWLIB_LIBC) &&
+	    !IS_ENABLED(CONFIG_ARCH_POSIX)  &&
+	    !IS_ENABLED(CONFIG_CBPRINTF_NANO)) {
 		/* print option name */
 		shell_internal_fprintf(shell, SHELL_NORMAL, "%s%-*s%s:",
 				       tabulator,
 				       item_name_width, item_name,
 				       tabulator);
 	} else {
-		u16_t tmp = item_name_width - strlen(item_name);
+		uint16_t tmp = item_name_width - strlen(item_name);
 		char space = ' ';
 
 		shell_internal_fprintf(shell, SHELL_NORMAL, "%s%s", tabulator,
 				       item_name);
-		for (u16_t i = 0; i < tmp; i++) {
+		for (uint16_t i = 0; i < tmp; i++) {
 			shell_write(shell, &space, 1);
 		}
 		shell_internal_fprintf(shell, SHELL_NORMAL, "%s:", tabulator);
@@ -142,15 +144,16 @@ static void help_item_print(const struct shell *shell, const char *item_name,
 	formatted_text_print(shell, item_help, offset, false);
 }
 
-/* Function is printing command help, its subcommands name and subcommands
- * help string.
+/* Function prints all subcommands of the parent command together with their
+ * help string
  */
-void shell_help_subcmd_print(const struct shell *shell)
+void shell_help_subcmd_print(const struct shell *shell,
+			     const struct shell_static_entry *parent,
+			     const char *description)
 {
 	const struct shell_static_entry *entry = NULL;
-	const struct shell_static_entry *parent = &shell->ctx->active_cmd;
 	struct shell_static_entry dloc;
-	u16_t longest = 0U;
+	uint16_t longest = 0U;
 	size_t idx = 0;
 
 	/* Searching for the longest subcommand to print. */
@@ -163,7 +166,9 @@ void shell_help_subcmd_print(const struct shell *shell)
 		return;
 	}
 
-	shell_internal_fprintf(shell, SHELL_NORMAL, "Subcommands:\n");
+	if (description != NULL) {
+		shell_internal_fprintf(shell, SHELL_NORMAL, description);
+	}
 
 	/* Printing subcommands and help string (if exists). */
 	idx = 0;
@@ -173,16 +178,16 @@ void shell_help_subcmd_print(const struct shell *shell)
 	}
 }
 
-void shell_help_cmd_print(const struct shell *shell)
+void shell_help_cmd_print(const struct shell *shell,
+			  const struct shell_static_entry *cmd)
 {
-	static const char cmd_sep[] = " - ";	/* commands separator */
+	static const char cmd_sep[] = " - "; /* commands separator */
+	uint16_t field_width;
 
-	u16_t field_width = shell_strlen(shell->ctx->active_cmd.syntax) +
-							  shell_strlen(cmd_sep);
+	field_width = shell_strlen(cmd->syntax) + shell_strlen(cmd_sep);
 
 	shell_internal_fprintf(shell, SHELL_NORMAL, "%s%s",
-			       shell->ctx->active_cmd.syntax, cmd_sep);
+				cmd->syntax, cmd_sep);
 
-	formatted_text_print(shell, shell->ctx->active_cmd.help,
-			     field_width, false);
+	formatted_text_print(shell, cmd->help, field_width, false);
 }

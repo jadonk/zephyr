@@ -63,7 +63,7 @@ int net_ipv4_create(struct net_pkt *pkt,
 	return net_pkt_set_data(pkt, &ipv4_access);
 }
 
-int net_ipv4_finalize(struct net_pkt *pkt, u8_t next_header_proto)
+int net_ipv4_finalize(struct net_pkt *pkt, uint8_t next_header_proto)
 {
 	NET_PKT_DATA_ACCESS_CONTIGUOUS_DEFINE(ipv4_access, struct net_ipv4_hdr);
 	struct net_ipv4_hdr *ipv4_hdr;
@@ -111,8 +111,8 @@ int net_ipv4_parse_hdr_options(struct net_pkt *pkt,
 			       void *user_data)
 {
 	struct net_pkt_cursor cur;
-	u8_t opt_data[NET_IPV4_HDR_OPTNS_MAX_LEN];
-	u8_t total_opts_len;
+	uint8_t opt_data[NET_IPV4_HDR_OPTNS_MAX_LEN];
+	uint8_t total_opts_len;
 
 	if (!cb) {
 		return -EINVAL;
@@ -128,8 +128,8 @@ int net_ipv4_parse_hdr_options(struct net_pkt *pkt,
 	total_opts_len = net_pkt_ipv4_opts_len(pkt);
 
 	while (total_opts_len) {
-		u8_t opt_len = 0U;
-		u8_t opt_type;
+		uint8_t opt_len = 0U;
+		uint8_t opt_type;
 
 		if (net_pkt_read_u8(pkt, &opt_type)) {
 			return -EINVAL;
@@ -206,8 +206,8 @@ enum net_verdict net_ipv4_input(struct net_pkt *pkt)
 	union net_proto_header proto_hdr;
 	struct net_ipv4_hdr *hdr;
 	union net_ip_header ip;
-	u8_t hdr_len;
-	u8_t opts_len;
+	uint8_t hdr_len;
+	uint8_t opts_len;
 	int pkt_len;
 
 	net_stats_update_ipv4_recv(net_pkt_iface(pkt));
@@ -298,7 +298,10 @@ enum net_verdict net_ipv4_input(struct net_pkt *pkt)
 	switch (hdr->proto) {
 	case IPPROTO_ICMP:
 		verdict = net_icmpv4_input(pkt, hdr);
-		break;
+		if (verdict == NET_DROP) {
+			goto drop;
+		}
+		return verdict;
 	case IPPROTO_TCP:
 		proto_hdr.tcp = net_tcp_input(pkt, &tcp_access);
 		if (proto_hdr.tcp) {
@@ -315,8 +318,6 @@ enum net_verdict net_ipv4_input(struct net_pkt *pkt)
 
 	if (verdict == NET_DROP) {
 		goto drop;
-	} else if (hdr->proto == IPPROTO_ICMP) {
-		return verdict;
 	}
 
 	ip.ipv4 = hdr;

@@ -21,16 +21,17 @@
 
 LOG_MODULE_REGISTER(AMG88XX, CONFIG_SENSOR_LOG_LEVEL);
 
-static int amg88xx_sample_fetch(struct device *dev, enum sensor_channel chan)
+static int amg88xx_sample_fetch(const struct device *dev,
+				enum sensor_channel chan)
 {
-	struct amg88xx_data *drv_data = dev->driver_data;
-	const struct amg88xx_config *config = dev->config_info;
+	struct amg88xx_data *drv_data = dev->data;
+	const struct amg88xx_config *config = dev->config;
 
 	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_AMBIENT_TEMP);
 
 	if (i2c_burst_read(drv_data->i2c, config->i2c_address,
 			   AMG88XX_OUTPUT_BASE,
-			   (u8_t *)drv_data->sample,
+			   (uint8_t *)drv_data->sample,
 			   sizeof(drv_data->sample))) {
 		return -EIO;
 	}
@@ -38,11 +39,11 @@ static int amg88xx_sample_fetch(struct device *dev, enum sensor_channel chan)
 	return 0;
 }
 
-static int amg88xx_channel_get(struct device *dev,
+static int amg88xx_channel_get(const struct device *dev,
 			       enum sensor_channel chan,
 			       struct sensor_value *val)
 {
-	struct amg88xx_data *drv_data = dev->driver_data;
+	struct amg88xx_data *drv_data = dev->data;
 	size_t len = ARRAY_SIZE(drv_data->sample);
 
 	if (chan != SENSOR_CHAN_AMBIENT_TEMP) {
@@ -54,20 +55,20 @@ static int amg88xx_channel_get(struct device *dev,
 		if (drv_data->sample[idx] & (1 << 11)) {
 			drv_data->sample[idx] |= 0xF000;
 		}
-		val[idx].val1 = (((s32_t)drv_data->sample[idx]) *
+		val[idx].val1 = (((int32_t)drv_data->sample[idx]) *
 				  AMG88XX_TREG_LSB_SCALING) / 1000000;
-		val[idx].val2 = (((s32_t)drv_data->sample[idx]) *
+		val[idx].val2 = (((int32_t)drv_data->sample[idx]) *
 				  AMG88XX_TREG_LSB_SCALING) % 1000000;
 	}
 
 	return 0;
 }
 
-static int amg88xx_init_device(struct device *dev)
+static int amg88xx_init_device(const struct device *dev)
 {
-	struct amg88xx_data *drv_data = dev->driver_data;
-	const struct amg88xx_config *config = dev->config_info;
-	u8_t tmp;
+	struct amg88xx_data *drv_data = dev->data;
+	const struct amg88xx_config *config = dev->config;
+	uint8_t tmp;
 
 	if (i2c_reg_read_byte(drv_data->i2c, config->i2c_address,
 			      AMG88XX_PCLT, &tmp)) {
@@ -103,10 +104,10 @@ static int amg88xx_init_device(struct device *dev)
 	return 0;
 }
 
-int amg88xx_init(struct device *dev)
+int amg88xx_init(const struct device *dev)
 {
-	struct amg88xx_data *drv_data = dev->driver_data;
-	const struct amg88xx_config *config = dev->config_info;
+	struct amg88xx_data *drv_data = dev->data;
+	const struct amg88xx_config *config = dev->config;
 
 	drv_data->i2c = device_get_binding(config->i2c_name);
 	if (drv_data->i2c == NULL) {

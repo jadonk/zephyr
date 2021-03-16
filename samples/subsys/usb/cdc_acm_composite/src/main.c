@@ -25,29 +25,26 @@ LOG_MODULE_REGISTER(cdc_acm_composite, LOG_LEVEL_INF);
 
 #define RING_BUF_SIZE	(64 * 2)
 
-u8_t buffer0[RING_BUF_SIZE];
-u8_t buffer1[RING_BUF_SIZE];
+uint8_t buffer0[RING_BUF_SIZE];
+uint8_t buffer1[RING_BUF_SIZE];
 
 static struct serial_data {
-	struct device *dev;
-	struct device *peer;
+	const struct device *peer;
 	struct serial_data *peer_data;
 	struct ring_buf ringbuf;
 } peers[2];
 
-static void interrupt_handler(void *user_data)
+static void interrupt_handler(const struct device *dev, void *user_data)
 {
 	struct serial_data *dev_data = user_data;
-	struct device *dev = dev_data->dev;
-
 
 	while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
-		struct device *peer = dev_data->peer;
+		const struct device *peer = dev_data->peer;
 
 		LOG_DBG("dev %p dev_data %p", dev, dev_data);
 
 		if (uart_irq_rx_ready(dev)) {
-			u8_t buf[64];
+			uint8_t buf[64];
 			size_t read, wrote;
 			struct ring_buf *ringbuf =
 					&dev_data->peer_data->ringbuf;
@@ -67,7 +64,7 @@ static void interrupt_handler(void *user_data)
 		}
 
 		if (uart_irq_tx_ready(dev)) {
-			u8_t buf[64];
+			uint8_t buf[64];
 			size_t wrote, len;
 
 			len = ring_buf_get(&dev_data->ringbuf, buf,
@@ -83,9 +80,9 @@ static void interrupt_handler(void *user_data)
 	}
 }
 
-static void uart_line_set(struct device *dev)
+static void uart_line_set(const struct device *dev)
 {
-	u32_t baudrate;
+	uint32_t baudrate;
 	int ret;
 
 	/* They are optional, we use them to test the interrupt endpoint */
@@ -116,8 +113,8 @@ void main(void)
 
 	struct serial_data *dev_data0 = &peers[0];
 	struct serial_data *dev_data1 = &peers[1];
-	struct device *dev0, *dev1;
-	u32_t dtr = 0U;
+	const struct device *dev0, *dev1;
+	uint32_t dtr = 0U;
 
 	dev0 = device_get_binding("CDC_ACM_0");
 	if (!dev0) {
@@ -162,12 +159,10 @@ void main(void)
 	uart_line_set(dev0);
 	uart_line_set(dev1);
 
-	dev_data0->dev = dev0;
 	dev_data0->peer = dev1;
 	dev_data0->peer_data = dev_data1;
 	ring_buf_init(&dev_data0->ringbuf, sizeof(buffer0), buffer0);
 
-	dev_data1->dev = dev1;
 	dev_data1->peer = dev0;
 	dev_data1->peer_data = dev_data0;
 	ring_buf_init(&dev_data1->ringbuf, sizeof(buffer1), buffer1);

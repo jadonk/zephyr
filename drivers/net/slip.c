@@ -32,6 +32,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <net/net_core.h>
 #include <net/dummy.h>
 #include <drivers/console/uart_pipe.h>
+#include <random/rand32.h>
 
 #define SLIP_END     0300
 #define SLIP_ESC     0333
@@ -49,27 +50,27 @@ struct slip_context {
 	bool first;		/* SLIP received it's byte or not after
 				 * driver initialization or SLIP_END byte.
 				 */
-	u8_t buf[1];		/* SLIP data is read into this buf */
+	uint8_t buf[1];		/* SLIP data is read into this buf */
 	struct net_pkt *rx;	/* and then placed into this net_pkt */
 	struct net_buf *last;	/* Pointer to last buffer in the list */
-	u8_t *ptr;		/* Where in net_pkt to add data */
+	uint8_t *ptr;		/* Where in net_pkt to add data */
 	struct net_if *iface;
-	u8_t state;
+	uint8_t state;
 
-	u8_t mac_addr[6];
+	uint8_t mac_addr[6];
 	struct net_linkaddr ll_addr;
 
 #if defined(CONFIG_SLIP_STATISTICS)
 #define SLIP_STATS(statement)
 #else
-	u16_t garbage;
+	uint16_t garbage;
 #define SLIP_STATS(statement) statement
 #endif
 };
 
 static inline void slip_writeb(unsigned char c)
 {
-	u8_t buf[1] = { c };
+	uint8_t buf[1] = { c };
 
 	uart_pipe_send(&buf[0], 1);
 }
@@ -105,12 +106,12 @@ static void slip_writeb_esc(unsigned char c)
 	}
 }
 
-static int slip_send(struct device *dev, struct net_pkt *pkt)
+static int slip_send(const struct device *dev, struct net_pkt *pkt)
 {
 	struct net_buf *buf;
-	u8_t *ptr;
-	u16_t i;
-	u8_t c;
+	uint8_t *ptr;
+	uint16_t i;
+	uint8_t c;
 
 	ARG_UNUSED(dev);
 
@@ -153,7 +154,7 @@ static struct net_pkt *slip_poll_handler(struct slip_context *slip)
 }
 
 static inline struct net_if *get_iface(struct slip_context *context,
-				       u16_t vlan_tag)
+				       uint16_t vlan_tag)
 {
 #if defined(CONFIG_NET_VLAN)
 	struct net_if *iface;
@@ -173,7 +174,7 @@ static inline struct net_if *get_iface(struct slip_context *context,
 
 static void process_msg(struct slip_context *slip)
 {
-	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
+	uint16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 	struct net_pkt *pkt;
 
 	pkt = slip_poll_handler(slip);
@@ -316,7 +317,7 @@ static inline int slip_input_byte(struct slip_context *slip,
 	return 0;
 }
 
-static u8_t *recv_cb(u8_t *buf, size_t *off)
+static uint8_t *recv_cb(uint8_t *buf, size_t *off)
 {
 	struct slip_context *slip =
 		CONTAINER_OF(buf, struct slip_context, buf);
@@ -362,9 +363,9 @@ static u8_t *recv_cb(u8_t *buf, size_t *off)
 	return buf;
 }
 
-static int slip_init(struct device *dev)
+static int slip_init(const struct device *dev)
 {
-	struct slip_context *slip = dev->driver_data;
+	struct slip_context *slip = dev->data;
 
 	LOG_DBG("[%p] dev %p", slip, dev);
 
@@ -391,10 +392,10 @@ static inline struct net_linkaddr *slip_get_mac(struct slip_context *slip)
 
 static void slip_iface_init(struct net_if *iface)
 {
-	struct slip_context *slip = net_if_get_device(iface)->driver_data;
+	struct slip_context *slip = net_if_get_device(iface)->data;
 	struct net_linkaddr *ll_addr;
 
-#if defined(CONFIG_NET_L2_ETHERNET)
+#if defined(CONFIG_SLIP_TAP) && defined(CONFIG_NET_L2_ETHERNET)
 	ethernet_init(iface);
 #endif
 
@@ -433,7 +434,7 @@ use_random_mac:
 static struct slip_context slip_context_data;
 
 #if defined(CONFIG_SLIP_TAP)
-static enum ethernet_hw_caps eth_capabilities(struct device *dev)
+static enum ethernet_hw_caps eth_capabilities(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 

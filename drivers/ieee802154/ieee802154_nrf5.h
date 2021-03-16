@@ -8,18 +8,16 @@
 #ifndef ZEPHYR_DRIVERS_IEEE802154_IEEE802154_NRF5_H_
 #define ZEPHYR_DRIVERS_IEEE802154_IEEE802154_NRF5_H_
 
-#include "nrf_802154_config.h"
-
 #define NRF5_FCS_LENGTH   (2)
 #define NRF5_PSDU_LENGTH  (125)
 #define NRF5_PHR_LENGTH   (1)
 
 struct nrf5_802154_rx_frame {
 	void *fifo_reserved; /* 1st word reserved for use by fifo. */
-	u8_t *psdu; /* Pointer to a received frame. */
-	u32_t time; /* RX timestamp. */
-	u8_t lqi; /* Last received frame LQI value. */
-	s8_t rssi; /* Last received frame RSSI value. */
+	uint8_t *psdu; /* Pointer to a received frame. */
+	uint32_t time; /* RX timestamp. */
+	uint8_t lqi; /* Last received frame LQI value. */
+	int8_t rssi; /* Last received frame RSSI value. */
 	bool ack_fpb; /* FPB value in ACK sent for the received frame. */
 };
 
@@ -28,10 +26,10 @@ struct nrf5_802154_data {
 	struct net_if *iface;
 
 	/* 802.15.4 HW address. */
-	u8_t mac[8];
+	uint8_t mac[8];
 
 	/* RX thread stack. */
-	K_THREAD_STACK_MEMBER(rx_stack, CONFIG_IEEE802154_NRF5_RX_STACK_SIZE);
+	K_KERNEL_STACK_MEMBER(rx_stack, CONFIG_IEEE802154_NRF5_RX_STACK_SIZE);
 
 	/* RX thread control block. */
 	struct k_thread rx_thread;
@@ -42,7 +40,7 @@ struct nrf5_802154_data {
 	/* Buffers for passing received frame pointers and data to the
 	 * RX thread via rx_fifo object.
 	 */
-	struct nrf5_802154_rx_frame rx_frames[NRF_802154_RX_BUFFERS];
+	struct nrf5_802154_rx_frame rx_frames[CONFIG_NRF_802154_RX_BUFFERS];
 
 	/* Frame pending bit value in ACK sent for the last received frame. */
 	bool last_frame_ack_fpb;
@@ -61,10 +59,10 @@ struct nrf5_802154_data {
 	/* TX buffer. First byte is PHR (length), remaining bytes are
 	 * MPDU data.
 	 */
-	u8_t tx_psdu[NRF5_PHR_LENGTH + NRF5_PSDU_LENGTH + NRF5_FCS_LENGTH];
+	uint8_t tx_psdu[NRF5_PHR_LENGTH + NRF5_PSDU_LENGTH + NRF5_FCS_LENGTH];
 
 	/* TX result, updated in radio transmit callbacks. */
-	u8_t tx_result;
+	uint8_t tx_result;
 
 	/* A buffer for the received ACK frame. psdu pointer be NULL if no
 	 * ACK was requested/received.

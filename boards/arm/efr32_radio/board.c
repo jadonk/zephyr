@@ -9,12 +9,17 @@
 #include <sys/printk.h>
 
 /* This pin is used to enable the serial port using the board controller */
+#ifdef CONFIG_BOARD_EFR32_RADIO_BRD4180A
+#define VCOM_ENABLE_GPIO_NAME  "GPIO_D"
+#define VCOM_ENABLE_GPIO_PIN   4
+#else
 #define VCOM_ENABLE_GPIO_NAME  "GPIO_A"
 #define VCOM_ENABLE_GPIO_PIN   5
+#endif /* CONFIG_BOARD_EFR32_RADIO_BRD4180A */
 
-static int efr32_radio_init(struct device *dev)
+static int efr32_radio_init(const struct device *dev)
 {
-	struct device *vce_dev; /* Virtual COM Port Enable GPIO Device */
+	const struct device *vce_dev; /* Virtual COM Port Enable GPIO Device */
 
 	ARG_UNUSED(dev);
 

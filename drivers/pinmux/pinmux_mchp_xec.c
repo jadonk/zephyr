@@ -9,7 +9,7 @@
 #include <drivers/pinmux.h>
 #include <soc.h>
 
-static const u32_t valid_ctrl_masks[NUM_MCHP_GPIO_PORTS] = {
+static const uint32_t valid_ctrl_masks[NUM_MCHP_GPIO_PORTS] = {
 	(MCHP_GPIO_PORT_A_BITMAP),
 	(MCHP_GPIO_PORT_B_BITMAP),
 	(MCHP_GPIO_PORT_C_BITMAP),
@@ -19,16 +19,17 @@ static const u32_t valid_ctrl_masks[NUM_MCHP_GPIO_PORTS] = {
 };
 
 struct pinmux_xec_config {
-	__IO u32_t *pcr1_base;
-	u32_t port_num;
+	__IO uint32_t *pcr1_base;
+	uint32_t port_num;
 };
 
-static int pinmux_xec_set(struct device *dev, u32_t pin, u32_t func)
+static int pinmux_xec_set(const struct device *dev, uint32_t pin,
+			  uint32_t func)
 {
-	const struct pinmux_xec_config *config = dev->config_info;
-	__IO u32_t *current_pcr1;
-	u32_t pcr1 = 0;
-	u32_t mask = 0;
+	const struct pinmux_xec_config *config = dev->config;
+	__IO uint32_t *current_pcr1;
+	uint32_t pcr1 = 0;
+	uint32_t mask = 0;
 
 	/* Validate pin number in terms of current port */
 	if ((valid_ctrl_masks[config->port_num] & BIT(pin)) == 0) {
@@ -76,10 +77,11 @@ static int pinmux_xec_set(struct device *dev, u32_t pin, u32_t func)
 	return 0;
 }
 
-static int pinmux_xec_get(struct device *dev, u32_t pin, u32_t *func)
+static int pinmux_xec_get(const struct device *dev, uint32_t pin,
+			  uint32_t *func)
 {
-	const struct pinmux_xec_config *config = dev->config_info;
-	__IO u32_t *current_pcr1;
+	const struct pinmux_xec_config *config = dev->config;
+	__IO uint32_t *current_pcr1;
 
 	/* Validate pin number in terms of current port */
 	if ((valid_ctrl_masks[config->port_num] & BIT(pin)) == 0) {
@@ -94,17 +96,19 @@ static int pinmux_xec_get(struct device *dev, u32_t pin, u32_t *func)
 	return 0;
 }
 
-static int pinmux_xec_pullup(struct device *dev, u32_t pin, u8_t func)
+static int pinmux_xec_pullup(const struct device *dev, uint32_t pin,
+			     uint8_t func)
 {
 	return -ENOTSUP;
 }
 
-static int pinmux_xec_input(struct device *dev, u32_t pin, u8_t func)
+static int pinmux_xec_input(const struct device *dev, uint32_t pin,
+			    uint8_t func)
 {
 	return -ENOTSUP;
 }
 
-static int pinmux_xec_init(struct device *dev)
+static int pinmux_xec_init(const struct device *dev)
 {
 	/* Nothing to do. The PCR clock is enabled at reset. */
 	return 0;
@@ -121,7 +125,7 @@ static const struct pinmux_driver_api pinmux_xec_driver_api = {
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_000_036), okay)
 static const struct pinmux_xec_config pinmux_xec_port000_036_config = {
-	.pcr1_base = (u32_t *) PINMUX_ADDR(pinmux_000_036),
+	.pcr1_base = (uint32_t *) PINMUX_ADDR(pinmux_000_036),
 	.port_num = MCHP_GPIO_000_036,
 };
 
@@ -135,7 +139,7 @@ DEVICE_AND_API_INIT(pinmux_xec_port000_036,
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_040_076), okay)
 static const struct pinmux_xec_config pinmux_xec_port040_076_config = {
-	.pcr1_base = (u32_t *) PINMUX_ADDR(pinmux_040_076),
+	.pcr1_base = (uint32_t *) PINMUX_ADDR(pinmux_040_076),
 	.port_num = MCHP_GPIO_040_076,
 };
 
@@ -149,7 +153,7 @@ DEVICE_AND_API_INIT(pinmux_xec_port040_076,
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_100_136), okay)
 static const struct pinmux_xec_config pinmux_xec_port100_136_config = {
-	.pcr1_base = (u32_t *) PINMUX_ADDR(pinmux_100_136),
+	.pcr1_base = (uint32_t *) PINMUX_ADDR(pinmux_100_136),
 	.port_num = MCHP_GPIO_100_136,
 };
 
@@ -163,7 +167,7 @@ DEVICE_AND_API_INIT(pinmux_xec_port100_136,
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_140_176), okay)
 static const struct pinmux_xec_config pinmux_xec_port140_176_config = {
-	.pcr1_base = (u32_t *) PINMUX_ADDR(pinmux_140_176),
+	.pcr1_base = (uint32_t *) PINMUX_ADDR(pinmux_140_176),
 	.port_num = MCHP_GPIO_140_176,
 };
 
@@ -177,7 +181,7 @@ DEVICE_AND_API_INIT(pinmux_xec_port140_176,
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_200_236), okay)
 static const struct pinmux_xec_config pinmux_xec_port200_236_config = {
-	.pcr1_base = (u32_t *) PINMUX_ADDR(pinmux_200_236),
+	.pcr1_base = (uint32_t *) PINMUX_ADDR(pinmux_200_236),
 	.port_num = MCHP_GPIO_200_236,
 };
 
@@ -191,7 +195,7 @@ DEVICE_AND_API_INIT(pinmux_xec_port200_236,
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(pinmux_240_276), okay)
 static const struct pinmux_xec_config pinmux_xec_port240_276_config = {
-	.pcr1_base = (u32_t *) PINMUX_ADDR(pinmux_240_276),
+	.pcr1_base = (uint32_t *) PINMUX_ADDR(pinmux_240_276),
 	.port_num = MCHP_GPIO_240_276,
 };
 

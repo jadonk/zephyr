@@ -33,10 +33,10 @@ struct bt_conn;
 
 /** Connection parameters for LE connections */
 struct bt_le_conn_param {
-	u16_t interval_min;
-	u16_t interval_max;
-	u16_t latency;
-	u16_t timeout;
+	uint16_t interval_min;
+	uint16_t interval_max;
+	uint16_t latency;
+	uint16_t timeout;
 };
 
 /** @brief Initialize connection parameters
@@ -77,14 +77,27 @@ struct bt_le_conn_param {
 
 /** Connection PHY information for LE connections */
 struct bt_conn_le_phy_info {
-	u8_t tx_phy; /** Connection transmit PHY */
-	u8_t rx_phy; /** Connection receive PHY */
+	uint8_t tx_phy; /** Connection transmit PHY */
+	uint8_t rx_phy; /** Connection receive PHY */
+};
+
+/** Connection PHY options */
+enum {
+	/** Convenience value when no options are specified. */
+	BT_CONN_LE_PHY_OPT_NONE = 0,
+
+	/** LE Coded using S=2 coding preferred when transmitting. */
+	BT_CONN_LE_PHY_OPT_CODED_S2  = BIT(0),
+
+	/** LE Coded using S=8 coding preferred when transmitting. */
+	BT_CONN_LE_PHY_OPT_CODED_S8  = BIT(1),
 };
 
 /** Preferred PHY parameters for LE connections */
 struct bt_conn_le_phy_param {
-	u8_t pref_tx_phy; /** Bitmask of preferred transmit PHYs */
-	u8_t pref_rx_phy; /** Bitmask of preferred receive PHYs */
+	uint16_t options;     /** Connection PHY options. */
+	uint8_t  pref_tx_phy; /** Bitmask of preferred transmit PHYs */
+	uint8_t  pref_rx_phy; /** Bitmask of preferred receive PHYs */
 };
 
 /** Initialize PHY parameters
@@ -94,6 +107,7 @@ struct bt_conn_le_phy_param {
  */
 #define BT_CONN_LE_PHY_PARAM_INIT(_pref_tx_phy, _pref_rx_phy) \
 { \
+	.options = BT_CONN_LE_PHY_OPT_NONE, \
 	.pref_tx_phy = (_pref_tx_phy), \
 	.pref_rx_phy = (_pref_rx_phy), \
 }
@@ -131,21 +145,21 @@ struct bt_conn_le_phy_param {
 /** Connection data length information for LE connections */
 struct bt_conn_le_data_len_info {
 	/** Maximum Link Layer transmission payload size in bytes. */
-	u16_t tx_max_len;
+	uint16_t tx_max_len;
 	/** Maximum Link Layer transmission payload time in us. */
-	u16_t tx_max_time;
+	uint16_t tx_max_time;
 	/** Maximum Link Layer reception payload size in bytes. */
-	u16_t rx_max_len;
+	uint16_t rx_max_len;
 	/** Maximum Link Layer reception payload time in us. */
-	u16_t rx_max_time;
+	uint16_t rx_max_time;
 };
 
 /** Connection data length parameters for LE connections */
 struct bt_conn_le_data_len_param {
 	/** Maximum Link Layer transmission payload size in bytes. */
-	u16_t tx_max_len;
+	uint16_t tx_max_len;
 	/** Maximum Link Layer transmission payload time in us. */
-	u16_t tx_max_time;
+	uint16_t tx_max_time;
 };
 
 /** Initialize transmit data length parameters
@@ -183,9 +197,12 @@ struct bt_conn_le_data_len_param {
  *
  *  Increment the reference count of a connection object.
  *
+ *  @note Will return NULL if the reference count is zero.
+ *
  *  @param conn Connection object.
  *
- *  @return Connection object with incremented reference count.
+ *  @return Connection object with incremented reference count, or NULL if the
+ *          reference count is zero.
  */
 struct bt_conn *bt_conn_ref(struct bt_conn *conn);
 
@@ -218,7 +235,7 @@ void bt_conn_foreach(int type, void (*func)(struct bt_conn *conn, void *data),
  *
  *  @return Connection object or NULL if not found.
  */
-struct bt_conn *bt_conn_lookup_addr_le(u8_t id, const bt_addr_le_t *peer);
+struct bt_conn *bt_conn_lookup_addr_le(uint8_t id, const bt_addr_le_t *peer);
 
 /** @brief Get destination (peer) address of a connection.
  *
@@ -238,7 +255,7 @@ const bt_addr_le_t *bt_conn_get_dst(const struct bt_conn *conn);
  *  @return Index of the connection object.
  *          The range of the returned value is 0..CONFIG_BT_MAX_CONN-1
  */
-u8_t bt_conn_index(struct bt_conn *conn);
+uint8_t bt_conn_index(struct bt_conn *conn);
 
 /** Connection Type */
 enum {
@@ -248,8 +265,11 @@ enum {
 	BT_CONN_TYPE_BR = BIT(1),
 	/** SCO Connection Type */
 	BT_CONN_TYPE_SCO = BIT(2),
+	/** ISO Connection Type */
+	BT_CONN_TYPE_ISO = BIT(3),
 	/** All Connection Type */
-	BT_CONN_TYPE_ALL = BT_CONN_TYPE_LE | BT_CONN_TYPE_BR | BT_CONN_TYPE_SCO,
+	BT_CONN_TYPE_ALL = BT_CONN_TYPE_LE | BT_CONN_TYPE_BR |
+			   BT_CONN_TYPE_SCO | BT_CONN_TYPE_ISO,
 };
 
 /** LE Connection Info Structure */
@@ -264,9 +284,9 @@ struct bt_conn_le_info {
 	const bt_addr_le_t *local;
 	/** Remote device address used during connection setup. */
 	const bt_addr_le_t *remote;
-	u16_t interval; /** Connection interval */
-	u16_t latency; /** Connection slave latency */
-	u16_t timeout; /** Connection supervision timeout */
+	uint16_t interval; /** Connection interval */
+	uint16_t latency; /** Connection slave latency */
+	uint16_t timeout; /** Connection supervision timeout */
 
 #if defined(CONFIG_BT_USER_PHY_UPDATE)
 	const struct bt_conn_le_phy_info      *phy;
@@ -292,11 +312,11 @@ enum {
 /** Connection Info Structure */
 struct bt_conn_info {
 	/** Connection Type. */
-	u8_t type;
+	uint8_t type;
 	/** Connection Role. */
-	u8_t role;
+	uint8_t role;
 	/** Which local identity the connection was created with */
-	u8_t id;
+	uint8_t id;
 	/** Connection Type specific Info.*/
 	union {
 		/** LE Connection specific Info. */
@@ -310,36 +330,36 @@ struct bt_conn_info {
 struct bt_conn_le_remote_info {
 
 	/** Remote LE feature set (bitmask). */
-	const u8_t *features;
+	const uint8_t *features;
 };
 
 /** BR/EDR Connection Remote Info structure */
 struct bt_conn_br_remote_info {
 
 	/** Remote feature set (pages of bitmasks). */
-	const u8_t *features;
+	const uint8_t *features;
 
 	/** Number of pages in the remote feature set. */
-	u8_t num_pages;
+	uint8_t num_pages;
 };
 
 /** @brief Connection Remote Info Structure
  *
  *  @note The version, manufacturer and subversion fields will only contain
- *        valid data if :option:`CONFIG_BT_REMOTE_VERSION` is enabled.
+ *        valid data if @option{CONFIG_BT_REMOTE_VERSION} is enabled.
  */
 struct bt_conn_remote_info {
 	/** Connection Type */
-	u8_t  type;
+	uint8_t  type;
 
 	/** Remote Link Layer version */
-	u8_t  version;
+	uint8_t  version;
 
 	/** Remote manufacturer identifier */
-	u16_t manufacturer;
+	uint16_t manufacturer;
 
 	/** Per-manufacturer unique revision */
-	u16_t subversion;
+	uint16_t subversion;
 
 	union {
 		/** LE connection remote info */
@@ -348,6 +368,32 @@ struct bt_conn_remote_info {
 		/** BR/EDR connection remote info */
 		struct bt_conn_br_remote_info br;
 	};
+};
+
+enum bt_conn_le_tx_power_phy {
+	/** Convenience macro for when no PHY is set. */
+	BT_CONN_LE_TX_POWER_PHY_NONE,
+	/** LE 1M PHY */
+	BT_CONN_LE_TX_POWER_PHY_1M,
+	 /** LE 2M PHY */
+	BT_CONN_LE_TX_POWER_PHY_2M,
+	/** LE Coded PHY using S=8 coding. */
+	BT_CONN_LE_TX_POWER_PHY_CODED_S8,
+	/** LE Coded PHY using S=2 coding. */
+	BT_CONN_LE_TX_POWER_PHY_CODED_S2,
+};
+
+/** LE Transmit Power Level Structure */
+struct bt_conn_le_tx_power {
+
+	/** Input: 1M, 2M, Coded S2 or Coded S8 */
+	uint8_t phy;
+
+	/** Output: current transmit power level */
+	int8_t current_level;
+
+	/** Output: maximum transmit power level */
+	int8_t max_level;
 };
 
 /** @brief Get connection info
@@ -365,7 +411,7 @@ int bt_conn_get_info(const struct bt_conn *conn, struct bt_conn_info *info);
  *  @param remote_info Connection remote info object.
  *
  *  @note In order to retrieve the remote version (version, manufacturer
- *  and subversion) :option:`CONFIG_BT_REMOTE_VERSION` must be enabled
+ *  and subversion) @option{CONFIG_BT_REMOTE_VERSION} must be enabled
  *
  *  @note The remote information is exchanged directly after the connection has
  *  been established. The application can be notified about when the remote
@@ -377,7 +423,22 @@ int bt_conn_get_info(const struct bt_conn *conn, struct bt_conn_info *info);
 int bt_conn_get_remote_info(struct bt_conn *conn,
 			    struct bt_conn_remote_info *remote_info);
 
+/** @brief Get connection transmit power level.
+ *
+ *  @param conn           Connection object.
+ *  @param tx_power_level Transmit power level descriptor.
+ *
+ *  @return Zero on success or (negative) error code on failure.
+ *  @return -ENOBUFS HCI command buffer is not available.
+ */
+int bt_conn_le_get_tx_power_level(struct bt_conn *conn,
+				  struct bt_conn_le_tx_power *tx_power_level);
+
 /** @brief Update the connection parameters.
+ *
+ *  If the local device is in the peripheral role then updating the connection
+ *  parameters will be delayed. This delay can be configured by through the
+ *  @option{CONFIG_BT_CONN_PARAM_UPDATE_TIMEOUT} option.
  *
  *  @param conn Connection object.
  *  @param param Updated connection parameters.
@@ -399,6 +460,9 @@ int bt_conn_le_data_len_update(struct bt_conn *conn,
 
 /** @brief Update the connection PHY parameters.
  *
+ *  Update the preferred transmit and receive PHYs of the connection.
+ *  Use @ref BT_GAP_LE_PHY_NONE to indicate no preference.
+ *
  *  @param conn Connection object.
  *  @param param Updated connection parameters.
  *
@@ -417,7 +481,7 @@ int bt_conn_le_phy_update(struct bt_conn *conn,
  *
  *  @return Zero on success or (negative) error code on failure.
  */
-int bt_conn_disconnect(struct bt_conn *conn, u8_t reason);
+int bt_conn_disconnect(struct bt_conn *conn, uint8_t reason);
 
 enum {
 	/** Convenience value when no options are specified. */
@@ -441,34 +505,34 @@ enum {
 struct bt_conn_le_create_param {
 
 	/** Bit-field of create connection options. */
-	u32_t options;
+	uint32_t options;
 
 	/** Scan interval (N * 0.625 ms) */
-	u16_t interval;
+	uint16_t interval;
 
 	/** Scan window (N * 0.625 ms) */
-	u16_t window;
+	uint16_t window;
 
 	/** @brief Scan interval LE Coded PHY (N * 0.625 MS)
 	 *
 	 *  Set zero to use same as LE 1M PHY scan interval
 	 */
-	u16_t interval_coded;
+	uint16_t interval_coded;
 
 	/** @brief Scan window LE Coded PHY (N * 0.625 MS)
 	 *
 	 *  Set zero to use same as LE 1M PHY scan window.
 	 */
-	u16_t window_coded;
+	uint16_t window_coded;
 
 	/** @brief Connection initiation timeout (N * 10 MS)
 	 *
-	 *  Set zero to use the default :option:`CONFIG_BT_CREATE_CONN_TIMEOUT`
+	 *  Set zero to use the default @option{CONFIG_BT_CREATE_CONN_TIMEOUT}
 	 *  timeout.
 	 *
 	 *  @note Unused in @ref bt_conn_create_auto_le
 	 */
-	u16_t timeout;
+	uint16_t timeout;
 };
 
 /** @brief Initialize create connection parameters
@@ -672,14 +736,15 @@ typedef enum __packed {
 
 /** @brief Set security level for a connection.
  *
- *  This function enable security (encryption) for a connection. If device is
- *  already paired with sufficiently strong key encryption will be enabled. If
- *  link is already encrypted with sufficiently strong key this function does
- *  nothing.
+ *  This function enable security (encryption) for a connection. If the device
+ *  has bond information for the peer with sufficiently strong key encryption
+ *  will be enabled. If the connection is already encrypted with sufficiently
+ *  strong key this function does nothing.
  *
- *  If device is not paired pairing will be initiated. If device is paired and
- *  keys are too weak but input output capabilities allow for strong enough keys
- *  pairing will be initiated.
+ *  If the device has no bond information for the peer and is not already paired
+ *  then the pairing procedure will be initiated. If the device has bond
+ *  information or is already paired and the keys are too weak then the pairing
+ *  procedure will be initiated.
  *
  *  This function may return error if required level of security is not possible
  *  to achieve due to local or remote device limitation (e.g., input output
@@ -687,6 +752,12 @@ typedef enum __packed {
  *
  *  This function may return error if the pairing procedure has already been
  *  initiated by the local device or the peer device.
+ *
+ *  @note When @option{CONFIG_BT_SMP_SC_ONLY} is enabled then the security
+ *        level will always be level 4.
+ *
+ *  @note When @option{CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY} is enabled then the
+ *        security level will always be level 3.
  *
  *  @param conn Connection object.
  *  @param sec Requested security level.
@@ -716,7 +787,7 @@ static inline int __deprecated bt_conn_security(struct bt_conn *conn,
  *
  *  @return Encryption key size.
  */
-u8_t bt_conn_enc_key_size(struct bt_conn *conn);
+uint8_t bt_conn_enc_key_size(struct bt_conn *conn);
 
 enum bt_security_err {
 	/** Security procedure successful. */
@@ -772,12 +843,12 @@ struct bt_conn_cb {
 	 *    @ref bt_conn_create_le was canceled either by the user through
 	 *    @ref bt_conn_disconnect or by the timeout in the host through
 	 *    @ref bt_conn_le_create_param timeout parameter, which defaults to
-	 *    :option:`CONFIG_BT_CREATE_CONN_TIMEOUT` seconds.
+	 *    @option{CONFIG_BT_CREATE_CONN_TIMEOUT} seconds.
 	 *  - @p BT_HCI_ERR_ADV_TIMEOUT High duty cycle directed connectable
 	 *    advertiser started by @ref bt_le_adv_start failed to be connected
 	 *    within the timeout.
 	 */
-	void (*connected)(struct bt_conn *conn, u8_t err);
+	void (*connected)(struct bt_conn *conn, uint8_t err);
 
 	/** @brief A connection has been disconnected.
 	 *
@@ -791,12 +862,12 @@ struct bt_conn_cb {
 	 *  available.
 	 *  To avoid this issue it is recommended to either start connectable
 	 *  advertise or create a new connection using @ref k_work_submit or
-	 *  increase :option:`CONFIG_BT_MAX_CONN`.
+	 *  increase @option{CONFIG_BT_MAX_CONN}.
 	 *
 	 *  @param conn Connection object.
 	 *  @param reason HCI reason for the disconnection.
 	 */
-	void (*disconnected)(struct bt_conn *conn, u8_t reason);
+	void (*disconnected)(struct bt_conn *conn, uint8_t reason);
 
 	/** @brief LE connection parameter update request.
 	 *
@@ -832,8 +903,8 @@ struct bt_conn_cb {
 	 *  @param latency Connection latency.
 	 *  @param timeout Connection supervision timeout.
 	 */
-	void (*le_param_updated)(struct bt_conn *conn, u16_t interval,
-				 u16_t latency, u16_t timeout);
+	void (*le_param_updated)(struct bt_conn *conn, uint16_t interval,
+				 uint16_t latency, uint16_t timeout);
 #if defined(CONFIG_BT_SMP)
 	/** @brief Remote Identity Address has been resolved.
 	 *
@@ -851,8 +922,15 @@ struct bt_conn_cb {
 #if defined(CONFIG_BT_SMP) || defined(CONFIG_BT_BREDR)
 	/** @brief The security level of a connection has changed.
 	 *
-	 *  This callback notifies the application that the security level
-	 *  of a connection has changed.
+	 *  This callback notifies the application that the security of a
+	 *  connection has changed.
+	 *
+	 *  The security level of the connection can either have been increased
+	 *  or remain unchanged. An increased security level means that the
+	 *  pairing procedure has been performed or the bond information from
+	 *  a previous connection has been applied. If the security level
+	 *  remains unchanged this means that the encryption key has been
+	 *  refreshed for the connection.
 	 *
 	 *  @param conn Connection object.
 	 *  @param level New security level of the connection.
@@ -908,7 +986,7 @@ struct bt_conn_cb {
  *
  *  Register callbacks to monitor the state of connections.
  *
- *  @param cb Callback struct.
+ *  @param cb Callback struct. Must point to memory that remains valid.
  */
 void bt_conn_cb_register(struct bt_conn_cb *cb);
 
@@ -945,7 +1023,7 @@ void bt_set_oob_data_flag(bool enable);
  *
  *  @return Zero on success or -EINVAL if NULL
  */
-int bt_le_oob_set_legacy_tk(struct bt_conn *conn, const u8_t *tk);
+int bt_le_oob_set_legacy_tk(struct bt_conn *conn, const uint8_t *tk);
 
 /** @brief Set OOB data during LE Secure Connections (SC) pairing procedure
  *
@@ -1051,26 +1129,26 @@ struct bt_conn_oob_info {
  */
 struct bt_conn_pairing_feat {
 	/** IO Capability, Core Spec. Vol 3, Part H, 3.5.1, Table 3.4 */
-	u8_t io_capability;
+	uint8_t io_capability;
 
 	/** OOB data flag, Core Spec. Vol 3, Part H, 3.5.1, Table 3.5 */
-	u8_t oob_data_flag;
+	uint8_t oob_data_flag;
 
 	/** AuthReq, Core Spec. Vol 3, Part H, 3.5.1, Fig. 3.3 */
-	u8_t auth_req;
+	uint8_t auth_req;
 
 	/** Maximum Encryption Key Size, Core Spec. Vol 3, Part H, 3.5.1 */
-	u8_t max_enc_key_size;
+	uint8_t max_enc_key_size;
 
 	/** Initiator Key Distribution/Generation, Core Spec. Vol 3, Part H,
 	 *  3.6.1, Fig. 3.11
 	 */
-	u8_t init_key_dist;
+	uint8_t init_key_dist;
 
 	/** Responder Key Distribution/Generation, Core Spec. Vol 3, Part H
 	 *  3.6.1, Fig. 3.11
 	 */
-	u8_t resp_key_dist;
+	uint8_t resp_key_dist;
 };
 #endif /* CONFIG_BT_SMP_APP_PAIRING_ACCEPT */
 
@@ -1246,13 +1324,14 @@ struct bt_conn_auth_cb {
 	void (*pincode_entry)(struct bt_conn *conn, bool highsec);
 #endif
 
-	/** @brief notify that pairing process was complete.
+	/** @brief notify that pairing procedure was complete.
 	 *
-	 *  This callback notifies the application that the pairing process
+	 *  This callback notifies the application that the pairing procedure
 	 *  has been completed.
 	 *
 	 *  @param conn Connection object.
-	 *  @param bonded pairing is bonded or not.
+	 *  @param bonded Bond information has been distributed during the
+	 *                pairing procedure.
 	 */
 	void (*pairing_complete)(struct bt_conn *conn, bool bonded);
 
@@ -1263,6 +1342,16 @@ struct bt_conn_auth_cb {
 	 */
 	void (*pairing_failed)(struct bt_conn *conn,
 			       enum bt_security_err reason);
+
+	/** @brief Notify that bond has been deleted.
+	 *
+	 *  This callback notifies the application that the bond information
+	 *  for the remote peer has been deleted
+	 *
+	 *  @param id   Which local identity had the bond.
+	 *  @param peer Remote address.
+	 */
+	void (*bond_deleted)(uint8_t id, const bt_addr_le_t *peer);
 };
 
 /** @brief Register authentication callbacks.

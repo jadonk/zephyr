@@ -28,7 +28,7 @@
 #define TIMER_ENABLE	0x1
 #define UPDATE_TOTAL	0x1
 
-static void litex_timer_irq_handler(void *device)
+static void litex_timer_irq_handler(const void *device)
 {
 	ARG_UNUSED(device);
 	int key = irq_lock();
@@ -39,14 +39,14 @@ static void litex_timer_irq_handler(void *device)
 	irq_unlock(key);
 }
 
-u32_t z_timer_cycle_get_32(void)
+uint32_t z_timer_cycle_get_32(void)
 {
 	static struct k_spinlock lock;
-	u32_t timer_total;
+	uint32_t timer_total;
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
 	litex_write8(UPDATE_TOTAL, TIMER_TOTAL_UPDATE);
-	timer_total = (u32_t)litex_read64(TIMER_TOTAL);
+	timer_total = (uint32_t)litex_read64(TIMER_TOTAL);
 
 	k_spin_unlock(&lock, key);
 
@@ -54,12 +54,12 @@ u32_t z_timer_cycle_get_32(void)
 }
 
 /* tickless kernel is not supported */
-u32_t z_clock_elapsed(void)
+uint32_t z_clock_elapsed(void)
 {
 	return 0;
 }
 
-int z_clock_driver_init(struct device *device)
+int z_clock_driver_init(const struct device *device)
 {
 	ARG_UNUSED(device);
 	IRQ_CONNECT(TIMER_IRQ, DT_INST_IRQ(0, priority),

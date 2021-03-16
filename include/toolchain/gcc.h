@@ -165,6 +165,14 @@ do {                                                                    \
 			__attribute__((long_call, section(".ramfunc")))
 #endif /* !CONFIG_XIP */
 
+#ifndef __fallthrough
+#if __GNUC__ >= 7
+#define __fallthrough        __attribute__((fallthrough))
+#else
+#define __fallthrough
+#endif	/* __GNUC__ >= 7 */
+#endif
+
 #ifndef __packed
 #define __packed        __attribute__((__packed__))
 #endif
@@ -185,6 +193,10 @@ do {                                                                    \
 #define unlikely(x) __builtin_expect((bool)!!(x), false)
 
 #define popcount(x) __builtin_popcount(x)
+
+#ifndef __no_optimization
+#define __no_optimization __attribute__((optimize("-O0")))
+#endif
 
 #ifndef __weak
 #define __weak __attribute__((__weak__))
@@ -403,7 +415,7 @@ do {                                                                    \
 
 #define GEN_ABSOLUTE_SYM(name, value)               \
 	__asm__(".globl\t" #name "\n\t.equ\t" #name \
-		",%p0"                              \
+		",%c0"                              \
 		"\n\t.type\t" #name ",@object" :  : "n"(value))
 
 #elif defined(CONFIG_ARC) || defined(CONFIG_ARM64)
@@ -426,6 +438,13 @@ do {                                                                    \
 	__asm__(".globl\t" #name "\n\t.equ\t" #name \
 		",%c0"                              \
 		"\n\t.type\t" #name ",@object" :  : "n"(value))
+
+
+#elif defined(CONFIG_SPARC)
+#define GEN_ABSOLUTE_SYM(name, value)			\
+	__asm__(".global\t" #name "\n\t.equ\t" #name	\
+		",%0"					\
+		"\n\t.type\t" #name ",#object" : : "n"(value))
 #else
 #error processor architecture not supported
 #endif
@@ -441,7 +460,7 @@ do {                                                                    \
  * @note Macro has limited usage compared to the standard macro as it cannot be
  *	 used:
  *	 - to generate constant integer, e.g. __aligned(Z_MAX(4,5))
- *	 - static variable, e.g. array like static u8_t array[Z_MAX(...)];
+ *	 - static variable, e.g. array like static uint8_t array[Z_MAX(...)];
  */
 #define Z_MAX(a, b) ({ \
 		/* random suffix to avoid naming conflict */ \
@@ -461,6 +480,37 @@ do {                                                                    \
 		__typeof__(b) _value_b_ = (b); \
 		_value_a_ < _value_b_ ? _value_a_ : _value_b_; \
 	})
+
+/** @brief Return a value clamped to a given range.
+ *
+ * Macro ensures that expressions are evaluated only once. See @ref Z_MAX for
+ * macro limitations.
+ */
+#define Z_CLAMP(val, low, high) ({                                             \
+		/* random suffix to avoid naming conflict */                   \
+		__typeof__(val) _value_val_ = (val);                           \
+		__typeof__(low) _value_low_ = (low);                           \
+		__typeof__(high) _value_high_ = (high);                        \
+		(_value_val_ < _value_low_)  ? _value_low_ :                   \
+		(_value_val_ > _value_high_) ? _value_high_ :                  \
+					       _value_val_;                    \
+	})
+
+/**
+ * @brief Calculate power of two ceiling for some nonzero value
+ *
+ * @param x Nonzero unsigned long value
+ * @return X rounded up to the next power of two
+ */
+#ifdef CONFIG_64BIT
+#define Z_POW2_CEIL(x) ((1UL << (63U - __builtin_clzl(x))) < x ?  \
+		1UL << (63U - __builtin_clzl(x) + 1U) : \
+		1UL << (63U - __builtin_clzl(x)))
+#else
+#define Z_POW2_CEIL(x) ((1UL << (31U - __builtin_clzl(x))) < x ?  \
+		1UL << (31U - __builtin_clzl(x) + 1U) : \
+		1UL << (31U - __builtin_clzl(x)))
+#endif
 
 #endif /* !_LINKER */
 #endif /* ZEPHYR_INCLUDE_TOOLCHAIN_GCC_H_ */

@@ -8,11 +8,10 @@
  */
 #include <bluetooth/mesh.h>
 #include <bluetooth/conn.h>
-#include "prov.h"
 #include "net.h"
 #include "proxy.h"
 #include "adv.h"
-#include "prov_bearer.h"
+#include "prov.h"
 
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_MESH_DEBUG_PROV)
 #define LOG_MODULE_NAME bt_mesh_pb_gatt
@@ -32,10 +31,10 @@ static void reset_state(void)
 {
 	if (link.conn) {
 		bt_conn_unref(link.conn);
+		link.conn = NULL;
 	}
 
 	k_delayed_work_cancel(&link.prot_timer);
-	memset(&link, 0, offsetof(struct prov_link, prot_timer));
 
 	link.rx_buf = bt_mesh_proxy_get_buf();
 }
@@ -99,7 +98,7 @@ int bt_mesh_pb_gatt_close(struct bt_conn *conn)
 	BT_DBG("conn %p", conn);
 
 	if (link.conn != conn) {
-		BT_ERR("Not connected");
+		BT_DBG("Not connected");
 		return -ENOTCONN;
 	}
 
@@ -139,6 +138,11 @@ static void clear_tx(void)
 void pb_gatt_init(void)
 {
 	k_delayed_work_init(&link.prot_timer, protocol_timeout);
+}
+
+void pb_gatt_reset(void)
+{
+	reset_state();
 }
 
 const struct prov_bearer pb_gatt = {

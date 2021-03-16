@@ -17,6 +17,7 @@ LOG_MODULE_REGISTER(net_test, CONFIG_NET_ROUTE_LOG_LEVEL);
 #include <errno.h>
 #include <sys/printk.h>
 #include <linker/sections.h>
+#include <random/rand32.h>
 
 #include <tc_util.h>
 
@@ -88,18 +89,18 @@ K_SEM_DEFINE(wait_data, 0, UINT_MAX);
 #define WAIT_TIME K_MSEC(250)
 
 struct net_route_test {
-	u8_t mac_addr[sizeof(struct net_eth_addr)];
+	uint8_t mac_addr[sizeof(struct net_eth_addr)];
 	struct net_linkaddr ll_addr;
 };
 
-int net_route_dev_init(struct device *dev)
+int net_route_dev_init(const struct device *dev)
 {
 	return 0;
 }
 
-static u8_t *net_route_get_mac(struct device *dev)
+static uint8_t *net_route_get_mac(const struct device *dev)
 {
-	struct net_route_test *route = dev->driver_data;
+	struct net_route_test *route = dev->data;
 
 	if (route->mac_addr[2] == 0x00) {
 		/* 00-00-5E-00-53-xx Documentation RFC 7042 */
@@ -119,13 +120,13 @@ static u8_t *net_route_get_mac(struct device *dev)
 
 static void net_route_iface_init(struct net_if *iface)
 {
-	u8_t *mac = net_route_get_mac(net_if_get_device(iface));
+	uint8_t *mac = net_route_get_mac(net_if_get_device(iface));
 
 	net_if_set_link_addr(iface, mac, sizeof(struct net_eth_addr),
 			     NET_LINK_ETHERNET);
 }
 
-static int tester_send(struct device *dev, struct net_pkt *pkt)
+static int tester_send(const struct device *dev, struct net_pkt *pkt)
 {
 	if (!pkt->frags) {
 		TC_ERROR("No data to send!\n");
@@ -163,7 +164,7 @@ out:
 	return 0;
 }
 
-static int tester_send_peer(struct device *dev, struct net_pkt *pkt)
+static int tester_send_peer(const struct device *dev, struct net_pkt *pkt)
 {
 	if (!pkt->frags) {
 		TC_ERROR("No data to send!\n");

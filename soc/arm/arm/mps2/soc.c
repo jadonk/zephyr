@@ -11,6 +11,7 @@
 #include <drivers/gpio/gpio_mmio32.h>
 #include <init.h>
 #include <soc.h>
+#include <linker/linker-defs.h>
 
 
 /* Setup GPIO drivers for accessing FPGAIO registers */
@@ -43,25 +44,19 @@ FPGAIO_INIT(2);
  */
 #define CPU1_FLASH_OFFSET       (0x10000000)
 
-/* Space reserved for TF-M's secure bootloader on the secondary mcu.
- * This space is reserved whether BL2 is used or not.
- */
-#define BL2_HEADER_SIZE         (0x400)
-
 /**
  * @brief Wake up CPU 1 from another CPU, this is plaform specific.
  */
 void wakeup_cpu1(void)
 {
 	/* Set the Initial Secure Reset Vector Register for CPU 1 */
-	*(u32_t *)(SSE_200_SYSTEM_CTRL_INITSVTOR1) =
-		CONFIG_FLASH_BASE_ADDRESS +
-		BL2_HEADER_SIZE +
+	*(uint32_t *)(SSE_200_SYSTEM_CTRL_INITSVTOR1) =
+		(uint32_t)_vector_start +
 		CPU1_FLASH_ADDRESS -
 		CPU1_FLASH_OFFSET;
 
 	/* Set the CPU Boot wait control after reset */
-	*(u32_t *)(SSE_200_SYSTEM_CTRL_CPU_WAIT) = 0;
+	*(uint32_t *)(SSE_200_SYSTEM_CTRL_CPU_WAIT) = 0;
 }
 
 /**
@@ -69,11 +64,11 @@ void wakeup_cpu1(void)
  *
  * @return Current CPU ID
  */
-u32_t sse_200_platform_get_cpu_id(void)
+uint32_t sse_200_platform_get_cpu_id(void)
 {
-	volatile u32_t *p_cpu_id = (volatile u32_t *)SSE_200_CPU_ID_UNIT_BASE;
+	volatile uint32_t *p_cpu_id = (volatile uint32_t *)SSE_200_CPU_ID_UNIT_BASE;
 
-	return (u32_t)*p_cpu_id;
+	return (uint32_t)*p_cpu_id;
 }
 
 /**
@@ -81,7 +76,7 @@ u32_t sse_200_platform_get_cpu_id(void)
  *
  * @return 0
  */
-static int arm_mps2_init(struct device *arg)
+static int arm_mps2_init(const struct device *arg)
 {
 	ARG_UNUSED(arg);
 

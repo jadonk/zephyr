@@ -30,64 +30,67 @@ MALLOC_BSS static unsigned char __aligned(CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE)
 #define MAX_HEAP_SIZE CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE
 
 #else /* CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE */
-
-/* Heap base and size are determined based on the available unused SRAM. */
-
+/* Heap base and size are determined based on the available unused SRAM,
+ * in the interval from a properly aligned address after the linker symbol
+ * `_end`, to the end of SRAM
+ */
 #define USED_RAM_END_ADDR   POINTER_TO_UINT(&_end)
 
-#if CONFIG_X86
-#define PHYS_RAM_ADDR DT_REG_ADDR(DT_CHOSEN(zephyr_sram))
-#define PHYS_RAM_SIZE DT_REG_SIZE(DT_CHOSEN(zephyr_sram))
-#define USED_RAM_SIZE (USED_RAM_END_ADDR - PHYS_RAM_ADDR)
-#define MAX_HEAP_SIZE (PHYS_RAM_SIZE - USED_RAM_SIZE)
-#elif CONFIG_NIOS2
-#include <layout.h>
-#define RAM_ADDR DT_REG_ADDR(DT_CHOSEN(zephyr_sram))
-#define RAM_SIZE DT_REG_SIZE(DT_CHOSEN(zephyr_sram))
-#define USED_RAM_SIZE  (USED_RAM_END_ADDR - RAM_ADDR)
-#define MAX_HEAP_SIZE (RAM_SIZE - USED_RAM_SIZE)
-#elif CONFIG_RISCV
-#include <soc.h>
-#define USED_RAM_SIZE  (USED_RAM_END_ADDR - RISCV_RAM_BASE)
-#define MAX_HEAP_SIZE  (RISCV_RAM_SIZE - USED_RAM_SIZE)
-#elif CONFIG_ARM
-#include <soc.h>
-#if defined(CONFIG_USERSPACE)
-/* MPU shall program the heap area as user-accessible; therefore, heap base
- * (and size) shall take into account the ARM MPU minimum region granularity.
+#ifdef Z_MALLOC_PARTITION_EXISTS
+/* Need to be able to program a memory protection region from HEAP_BASE
+ * to the end of RAM so that user threads can get at it.
+ * Implies that the base address needs to be suitably aligned since the
+ * bounds have to go in a k_mem_partition.
  */
-#define HEAP_BASE ((USED_RAM_END_ADDR + \
-		CONFIG_ARM_MPU_REGION_MIN_ALIGN_AND_SIZE) & \
-	(~(CONFIG_ARM_MPU_REGION_MIN_ALIGN_AND_SIZE - 1)))
+#ifdef CONFIG_MMU
+/* Linker script may already have done this, but just to be safe */
+#define HEAP_BASE	ROUND_UP(USED_RAM_END_ADDR, CONFIG_MMU_PAGE_SIZE)
+#else /* MPU-based systems */
+/* TODO: Need a generic Kconfig for the MPU region granularity */
+#if defined(CONFIG_ARM)
+#define HEAP_BASE	ROUND_UP(USED_RAM_END_ADDR, \
+				 CONFIG_ARM_MPU_REGION_MIN_ALIGN_AND_SIZE)
+#elif defined(CONFIG_ARC)
+#define HEAP_BASE	ROUND_UP(USED_RAM_END_ADDR, Z_ARC_MPU_ALIGN)
 #else
-#define HEAP_BASE USED_RAM_END_ADDR
-#endif /* CONFIG_USERSPACE*/
-#define USED_RAM_SIZE  (HEAP_BASE - CONFIG_SRAM_BASE_ADDRESS)
-#define MAX_HEAP_SIZE ((KB(CONFIG_SRAM_SIZE)) - USED_RAM_SIZE)
-#elif CONFIG_XTENSA
+#error "Unsupported platform"
+#endif /* CONFIG_<arch> */
+#endif /* !CONFIG_MMU */
+#else /* !Z_MALLOC_PARTITION_EXISTS */
+/* No partition, heap can just start wherever _end is */
+#define HEAP_BASE	USED_RAM_END_ADDR
+#endif /* Z_MALLOC_PARTITION_EXISTS */
+
+#ifdef CONFIG_MMU
+/* Currently a placeholder, we're just setting up all unused RAM pages
+ * past the end of the kernel as the heap arena. SRAM_BASE_ADDRESS is
+ * a physical address so we can't use that.
+ *
+ * Later, we should do this much more like other VM-enabled operating systems:
+ * - Set up a core kernel ontology of free physical pages
+ * - Allow anonymous memoory mappings drawing from the pool of free physical
+ *   pages
+ * - Have _sbrk() map anonymous pages into the heap arena as needed
+ * - See: https://github.com/zephyrproject-rtos/zephyr/issues/29526
+ */
+#define MAX_HEAP_SIZE	(CONFIG_KERNEL_RAM_SIZE - (HEAP_BASE - \
+						   CONFIG_KERNEL_VM_BASE))
+#elif defined(CONFIG_XTENSA)
 extern void *_heap_sentry;
-#define MAX_HEAP_SIZE  (POINTER_TO_UINT(&_heap_sentry) - USED_RAM_END_ADDR)
+#define MAX_HEAP_SIZE	(POINTER_TO_UINT(&_heap_sentry) - HEAP_BASE)
 #else
-#define USED_RAM_SIZE  (USED_RAM_END_ADDR - CONFIG_SRAM_BASE_ADDRESS)
-#define MAX_HEAP_SIZE ((KB(CONFIG_SRAM_SIZE)) - USED_RAM_SIZE)
-#endif
+#define MAX_HEAP_SIZE	(KB(CONFIG_SRAM_SIZE) - (HEAP_BASE - \
+						 CONFIG_SRAM_BASE_ADDRESS))
+#endif /* CONFIG_MMU */
 
-#ifndef HEAP_BASE
-#define HEAP_BASE USED_RAM_END_ADDR
-#endif
-
-#ifdef CONFIG_USERSPACE
+#if Z_MALLOC_PARTITION_EXISTS
 struct k_mem_partition z_malloc_partition;
 
-static int malloc_prepare(struct device *unused)
+static int malloc_prepare(const struct device *unused)
 {
 	ARG_UNUSED(unused);
 
-#if CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE
-	z_malloc_partition.start = (u32_t)heap_base;
-#else
 	z_malloc_partition.start = HEAP_BASE;
-#endif
 	z_malloc_partition.size = MAX_HEAP_SIZE;
 	z_malloc_partition.attr = K_MEM_PARTITION_P_RW_U_RW;
 	return 0;
@@ -212,7 +215,7 @@ extern ssize_t write(int file, const char *buffer, size_t count);
 
 int _isatty(int file)
 {
-	return 1;
+	return file <= 2;
 }
 __weak FUNC_ALIAS(_isatty, isatty, int);
 
@@ -249,6 +252,7 @@ void *_sbrk(int count)
 {
 	void *ret, *ptr;
 
+	/* coverity[CHECKED_RETURN] */
 	sys_sem_take(&heap_sem, K_FOREVER);
 
 #if CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE
@@ -264,6 +268,7 @@ void *_sbrk(int count)
 		ret = (void *)-1;
 	}
 
+	/* coverity[CHECKED_RETURN] */
 	sys_sem_give(&heap_sem);
 
 	return ret;
@@ -273,6 +278,18 @@ __weak FUNC_ALIAS(_sbrk, sbrk, void *);
 __weak int *__errno(void)
 {
 	return z_errno();
+}
+
+/* This function gets called if static buffer overflow detection is enabled
+ * on stdlib side (Newlib here), in case such an overflow is detected. Newlib
+ * provides an implementation not suitable for us, so we override it here.
+ */
+__weak FUNC_NORETURN void __chk_fail(void)
+{
+	static const char chk_fail_msg[] = "* buffer overflow detected *\n";
+	_write(2, chk_fail_msg, sizeof(chk_fail_msg) - 1);
+	k_oops();
+	CODE_UNREACHABLE;
 }
 
 #if CONFIG_XTENSA

@@ -24,7 +24,6 @@
 #include <init.h>
 #include <linker/linker-defs.h>
 #include <ksched.h>
-#include <version.h>
 #include <string.h>
 #include <sys/dlist.h>
 #include <kernel_internal.h>
@@ -35,25 +34,13 @@
 #include <stdbool.h>
 #include <debug/gcov.h>
 #include <kswap.h>
-
-#define LOG_LEVEL CONFIG_KERNEL_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(os);
-
-/* boot banner items */
-#if defined(CONFIG_MULTITHREADING) && defined(CONFIG_BOOT_DELAY) \
-	&& CONFIG_BOOT_DELAY > 0
-#define BOOT_DELAY_BANNER " (delayed boot "	\
-	STRINGIFY(CONFIG_BOOT_DELAY) "ms)"
-#else
-#define BOOT_DELAY_BANNER ""
-#endif
+LOG_MODULE_REGISTER(os, CONFIG_KERNEL_LOG_LEVEL);
 
 /* boot time measurement items */
-
 #ifdef CONFIG_BOOT_TIME_MEASUREMENT
-u32_t __noinit z_timestamp_main;  /* timestamp when main task starts */
-u32_t __noinit z_timestamp_idle;  /* timestamp when CPU goes idle */
+uint32_t __noinit z_timestamp_main;  /* timestamp when main task starts */
+uint32_t __noinit z_timestamp_idle;  /* timestamp when CPU goes idle */
 #endif
 
 /* init/main and idle threads */
@@ -62,7 +49,7 @@ struct k_thread z_main_thread;
 
 #ifdef CONFIG_MULTITHREADING
 struct k_thread z_idle_threads[CONFIG_MP_NUM_CPUS];
-static K_THREAD_STACK_ARRAY_DEFINE(z_idle_stacks, CONFIG_MP_NUM_CPUS,
+static K_KERNEL_STACK_ARRAY_DEFINE(z_idle_stacks, CONFIG_MP_NUM_CPUS,
 				   CONFIG_IDLE_STACK_SIZE);
 #endif /* CONFIG_MULTITHREADING */
 
@@ -74,7 +61,7 @@ static K_THREAD_STACK_ARRAY_DEFINE(z_idle_stacks, CONFIG_MP_NUM_CPUS,
  * of this area is safe since interrupts are disabled until the kernel context
  * switches to the init thread.
  */
-K_THREAD_STACK_ARRAY_DEFINE(z_interrupt_stacks, CONFIG_MP_NUM_CPUS,
+K_KERNEL_STACK_ARRAY_DEFINE(z_interrupt_stacks, CONFIG_MP_NUM_CPUS,
 			    CONFIG_ISR_STACK_SIZE);
 
 #ifdef CONFIG_SYS_CLOCK_EXISTS
@@ -108,11 +95,11 @@ void z_bss_zero(void)
 	(void)memset(__bss_start, 0, __bss_end - __bss_start);
 #if DT_NODE_HAS_STATUS(DT_CHOSEN(zephyr_ccm), okay)
 	(void)memset(&__ccm_bss_start, 0,
-		     ((u32_t) &__ccm_bss_end - (u32_t) &__ccm_bss_start));
+		     ((uint32_t) &__ccm_bss_end - (uint32_t) &__ccm_bss_start));
 #endif
 #if DT_NODE_HAS_STATUS(DT_CHOSEN(zephyr_dtcm), okay)
 	(void)memset(&__dtcm_bss_start, 0,
-		     ((u32_t) &__dtcm_bss_end - (u32_t) &__dtcm_bss_start));
+		     ((uint32_t) &__dtcm_bss_end - (uint32_t) &__dtcm_bss_start));
 #endif
 #ifdef CONFIG_CODE_DATA_RELOCATION
 	extern void bss_zeroing_relocation(void);
@@ -121,7 +108,7 @@ void z_bss_zero(void)
 #endif	/* CONFIG_CODE_DATA_RELOCATION */
 #ifdef CONFIG_COVERAGE_GCOV
 	(void)memset(&__gcov_bss_start, 0,
-		 ((u32_t) &__gcov_bss_end - (u32_t) &__gcov_bss_start));
+		 ((uint32_t) &__gcov_bss_end - (uint32_t) &__gcov_bss_start));
 #endif
 }
 
@@ -129,67 +116,10 @@ void z_bss_zero(void)
 extern volatile uintptr_t __stack_chk_guard;
 #endif /* CONFIG_STACK_CANARIES */
 
-
-#ifdef CONFIG_XIP
-/**
- *
- * @brief Copy the data section from ROM to RAM
- *
- * This routine copies the data section from ROM to RAM.
- *
- * @return N/A
- */
-void z_data_copy(void)
-{
-	(void)memcpy(&__data_ram_start, &__data_rom_start,
-		 __data_ram_end - __data_ram_start);
-#ifdef CONFIG_ARCH_HAS_RAMFUNC_SUPPORT
-	(void)memcpy(&_ramfunc_ram_start, &_ramfunc_rom_start,
-		 (uintptr_t) &_ramfunc_ram_size);
-#endif /* CONFIG_ARCH_HAS_RAMFUNC_SUPPORT */
-#if DT_NODE_HAS_STATUS(DT_CHOSEN(zephyr_ccm), okay)
-	(void)memcpy(&__ccm_data_start, &__ccm_data_rom_start,
-		 __ccm_data_end - __ccm_data_start);
-#endif
-#if DT_NODE_HAS_STATUS(DT_CHOSEN(zephyr_dtcm), okay)
-	(void)memcpy(&__dtcm_data_start, &__dtcm_data_rom_start,
-		 __dtcm_data_end - __dtcm_data_start);
-#endif
-#ifdef CONFIG_CODE_DATA_RELOCATION
-	extern void data_copy_xip_relocation(void);
-
-	data_copy_xip_relocation();
-#endif	/* CONFIG_CODE_DATA_RELOCATION */
-#ifdef CONFIG_USERSPACE
-#ifdef CONFIG_STACK_CANARIES
-	/* stack canary checking is active for all C functions.
-	 * __stack_chk_guard is some uninitialized value living in the
-	 * app shared memory sections. Preserve it, and don't make any
-	 * function calls to perform the memory copy. The true canary
-	 * value gets set later in z_cstart().
-	 */
-	uintptr_t guard_copy = __stack_chk_guard;
-	u8_t *src = (u8_t *)&_app_smem_rom_start;
-	u8_t *dst = (u8_t *)&_app_smem_start;
-	u32_t count = _app_smem_end - _app_smem_start;
-
-	guard_copy = __stack_chk_guard;
-	while (count > 0) {
-		*(dst++) = *(src++);
-		count--;
-	}
-	__stack_chk_guard = guard_copy;
-#else
-	(void)memcpy(&_app_smem_start, &_app_smem_rom_start,
-		 _app_smem_end - _app_smem_start);
-#endif /* CONFIG_STACK_CANARIES */
-#endif /* CONFIG_USERSPACE */
-}
-#endif /* CONFIG_XIP */
-
 /* LCOV_EXCL_STOP */
 
 bool z_sys_post_kernel;
+extern void boot_banner(void);
 
 /**
  *
@@ -206,33 +136,13 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 	ARG_UNUSED(unused2);
 	ARG_UNUSED(unused3);
 
-#if defined(CONFIG_BOOT_DELAY) && CONFIG_BOOT_DELAY > 0
-	static const unsigned int boot_delay = CONFIG_BOOT_DELAY;
-#else
-	static const unsigned int boot_delay;
-#endif
-
 	z_sys_post_kernel = true;
 
 	z_sys_init_run_level(_SYS_INIT_LEVEL_POST_KERNEL);
 #if CONFIG_STACK_POINTER_RANDOM
 	z_stack_adjust_initialized = 1;
 #endif
-	if (boot_delay > 0 && IS_ENABLED(CONFIG_MULTITHREADING)) {
-		printk("***** delaying boot " STRINGIFY(CONFIG_BOOT_DELAY)
-		       "ms (per build configuration) *****\n");
-		k_busy_wait(CONFIG_BOOT_DELAY * USEC_PER_MSEC);
-	}
-
-#if defined(CONFIG_BOOT_BANNER)
-#ifdef BUILD_VERSION
-	printk("*** Booting Zephyr OS build %s %s ***\n",
-			STRINGIFY(BUILD_VERSION), BOOT_DELAY_BANNER);
-#else
-	printk("*** Booting Zephyr OS version %s %s ***\n",
-			KERNEL_VERSION_STRING, BOOT_DELAY_BANNER);
-#endif
-#endif
+	boot_banner();
 
 #ifdef CONFIG_CPLUSPLUS
 	/* Process the .ctors and .init_array sections */
@@ -246,6 +156,10 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 	z_sys_init_run_level(_SYS_INIT_LEVEL_APPLICATION);
 
 	z_init_static_threads();
+
+#ifdef KERNEL_COHERENCE
+	__ASSERT_NO_MSG(arch_mem_coherent(_kernel));
+#endif
 
 #ifdef CONFIG_SMP
 	z_smp_init();
@@ -294,15 +208,15 @@ static void init_idle_thread(int i)
 #endif /* CONFIG_THREAD_NAME */
 
 	z_setup_new_thread(thread, stack,
-			  CONFIG_IDLE_STACK_SIZE, idle, NULL, NULL, NULL,
-			  K_LOWEST_THREAD_PRIO, K_ESSENTIAL, tname);
+			  CONFIG_IDLE_STACK_SIZE, idle, &_kernel.cpus[i],
+			  NULL, NULL, K_LOWEST_THREAD_PRIO, K_ESSENTIAL,
+			  tname);
 	z_mark_thread_as_started(thread);
 
 #ifdef CONFIG_SMP
 	thread->base.is_idle = 1U;
 #endif
 }
-#endif /* CONFIG_MULTITHREADING */
 
 /**
  *
@@ -314,11 +228,13 @@ static void init_idle_thread(int i)
  * Note that all fields of "_kernel" are set to zero on entry, which may
  * be all the initialization many of them require.
  *
- * @return N/A
+ * @return initial stack pointer for the main thread
  */
-#ifdef CONFIG_MULTITHREADING
-static void prepare_multithreading(void)
+static char *prepare_multithreading(void)
 {
+	char *stack_ptr;
+	uint32_t opt;
+
 	/* _kernel.ready_q is all zeroes */
 	z_sched_init();
 
@@ -335,10 +251,17 @@ static void prepare_multithreading(void)
 	_kernel.ready_q.cache = &z_main_thread;
 #endif
 
-	z_setup_new_thread(&z_main_thread, z_main_stack,
-			   CONFIG_MAIN_STACK_SIZE, bg_thread_main,
-			   NULL, NULL, NULL,
-			   CONFIG_MAIN_THREAD_PRIORITY, K_ESSENTIAL, "main");
+	opt = K_ESSENTIAL;
+#if defined(CONFIG_FPU) && defined(CONFIG_FPU_SHARING)
+	/* Enable FPU in main thread */
+	opt |= K_FP_REGS;
+#endif
+
+	stack_ptr = z_setup_new_thread(&z_main_thread, z_main_stack,
+				       CONFIG_MAIN_STACK_SIZE, bg_thread_main,
+				       NULL, NULL, NULL,
+				       CONFIG_MAIN_THREAD_PRIORITY,
+				       opt, "main");
 	z_mark_thread_as_started(&z_main_thread);
 	z_ready_thread(&z_main_thread);
 
@@ -347,20 +270,21 @@ static void prepare_multithreading(void)
 		_kernel.cpus[i].idle_thread = &z_idle_threads[i];
 		_kernel.cpus[i].id = i;
 		_kernel.cpus[i].irq_stack =
-			(Z_THREAD_STACK_BUFFER(z_interrupt_stacks[i]) +
-			 K_THREAD_STACK_SIZEOF(z_interrupt_stacks[i]));
+			(Z_KERNEL_STACK_BUFFER(z_interrupt_stacks[i]) +
+			 K_KERNEL_STACK_SIZEOF(z_interrupt_stacks[i]));
 	}
 
 	initialize_timeouts();
+
+	return stack_ptr;
 }
 
-static FUNC_NORETURN void switch_to_main_thread(void)
+static FUNC_NORETURN void switch_to_main_thread(char *stack_ptr)
 {
 #ifdef CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN
-	arch_switch_to_main_thread(&z_main_thread, z_main_stack,
-				   K_THREAD_STACK_SIZEOF(z_main_stack),
-				   bg_thread_main);
+	arch_switch_to_main_thread(&z_main_thread, stack_ptr, bg_thread_main);
 #else
+	ARG_UNUSED(stack_ptr);
 	/*
 	 * Context switch to main task (entry function is _main()): the
 	 * current fake thread is not on a wait queue or ready queue, so it
@@ -373,11 +297,11 @@ static FUNC_NORETURN void switch_to_main_thread(void)
 #endif /* CONFIG_MULTITHREADING */
 
 #if defined(CONFIG_ENTROPY_HAS_DRIVER) || defined(CONFIG_TEST_RANDOM_GENERATOR)
-void z_early_boot_rand_get(u8_t *buf, size_t length)
+void z_early_boot_rand_get(uint8_t *buf, size_t length)
 {
-	int n = sizeof(u32_t);
+	int n = sizeof(uint32_t);
 #ifdef CONFIG_ENTROPY_HAS_DRIVER
-	struct device *entropy = device_get_binding(DT_CHOSEN_ZEPHYR_ENTROPY_LABEL);
+	const struct device *entropy = device_get_binding(DT_CHOSEN_ZEPHYR_ENTROPY_LABEL);
 	int rc;
 
 	if (entropy == NULL) {
@@ -410,12 +334,12 @@ sys_rand_fallback:
 	 */
 
 	while (length > 0) {
-		u32_t rndbits;
-		u8_t *p_rndbits = (u8_t *)&rndbits;
+		uint32_t rndbits;
+		uint8_t *p_rndbits = (uint8_t *)&rndbits;
 
 		rndbits = sys_rand32_get();
 
-		if (length < sizeof(u32_t)) {
+		if (length < sizeof(uint32_t)) {
 			n = length;
 		}
 
@@ -467,14 +391,25 @@ FUNC_NORETURN void z_cstart(void)
 #ifdef CONFIG_STACK_CANARIES
 	uintptr_t stack_guard;
 
-	z_early_boot_rand_get((u8_t *)&stack_guard, sizeof(stack_guard));
+	z_early_boot_rand_get((uint8_t *)&stack_guard, sizeof(stack_guard));
 	__stack_chk_guard = stack_guard;
 	__stack_chk_guard <<= 8;
 #endif	/* CONFIG_STACK_CANARIES */
 
+#ifdef CONFIG_THREAD_RUNTIME_STATS_USE_TIMING_FUNCTIONS
+	timing_init();
+	timing_start();
+#endif
+
 #ifdef CONFIG_MULTITHREADING
-	prepare_multithreading();
-	switch_to_main_thread();
+	switch_to_main_thread(prepare_multithreading());
+#else
+#ifdef ARCH_SWITCH_TO_MAIN_NO_MULTITHREADING
+	/* Custom ARCH-specific routine to switch to main()
+	 * in the case of no multi-threading.
+	 */
+	ARCH_SWITCH_TO_MAIN_NO_MULTITHREADING(bg_thread_main,
+		NULL, NULL, NULL);
 #else
 	bg_thread_main(NULL, NULL, NULL);
 
@@ -486,6 +421,7 @@ FUNC_NORETURN void z_cstart(void)
 	}
 	/* LCOV_EXCL_STOP */
 #endif
+#endif /* CONFIG_MULTITHREADING */
 
 	/*
 	 * Compiler can't tell that the above routines won't return and issues

@@ -55,6 +55,12 @@ void platformRadioProcess(otInstance *aInstance);
 void platformUartProcess(otInstance *aInstance);
 
 /**
+ * Outer component calls this method to notify UART driver that it should
+ * switch to panic mode and work in synchronous way.
+ */
+void platformUartPanic(void);
+
+/**
  * Get current channel from radio driver.
  *
  * @param[in]  aInstance  The OpenThread instance structure.
@@ -81,5 +87,10 @@ void platformShellInit(otInstance *aInstance);
  * Notify OpenThread task about new rx message.
  */
 int notify_new_rx_frame(struct net_pkt *pkt);
+
+/**
+ * Notify OpenThread task about new tx message.
+ */
+int notify_new_tx_frame(struct net_pkt *pkt);
 
 #endif  /* PLATFORM_POSIX_H_ */

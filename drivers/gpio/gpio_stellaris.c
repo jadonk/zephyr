@@ -13,13 +13,13 @@
 #include <sys/sys_io.h>
 #include "gpio_utils.h"
 
-typedef void (*config_func_t)(struct device *dev);
+typedef void (*config_func_t)(const struct device *dev);
 
 struct gpio_stellaris_config {
 	/* gpio_driver_config needs to be first */
 	struct gpio_driver_config common;
-	u32_t base;
-	u32_t port_map;
+	uint32_t base;
+	uint32_t port_map;
 	config_func_t config_func;
 };
 
@@ -31,11 +31,11 @@ struct gpio_stellaris_runtime {
 
 #define DEV_CFG(dev)                                     \
 	((const struct gpio_stellaris_config *const)     \
-	(dev)->config_info)
+	(dev)->config)
 
 #define DEV_DATA(dev)					 \
 	((struct gpio_stellaris_runtime *const)          \
-	(dev)->driver_data)
+	(dev)->data)
 
 #define GPIO_REG_ADDR(base, offset) (base + offset)
 
@@ -57,25 +57,24 @@ enum gpio_regs {
 	GPIO_ICR_OFFSET = 0x41C,
 };
 
-static void gpio_stellaris_isr(void *arg)
+static void gpio_stellaris_isr(const struct device *dev)
 {
-	struct device *dev = (struct device *)arg;
 	const struct gpio_stellaris_config * const cfg = DEV_CFG(dev);
 	struct gpio_stellaris_runtime *context = DEV_DATA(dev);
-	u32_t base = cfg->base;
-	u32_t int_stat = sys_read32(GPIO_REG_ADDR(base, GPIO_MIS_OFFSET));
+	uint32_t base = cfg->base;
+	uint32_t int_stat = sys_read32(GPIO_REG_ADDR(base, GPIO_MIS_OFFSET));
 
 	gpio_fire_callbacks(&context->cb, dev, int_stat);
 
 	sys_write32(int_stat, GPIO_REG_ADDR(base, GPIO_ICR_OFFSET));
 }
 
-static int gpio_stellaris_configure(struct device *dev,
+static int gpio_stellaris_configure(const struct device *dev,
 				    gpio_pin_t pin, gpio_flags_t flags)
 {
 	const struct gpio_stellaris_config *cfg = DEV_CFG(dev);
-	u32_t base = cfg->base;
-	u32_t port_map = cfg->port_map;
+	uint32_t base = cfg->base;
+	uint32_t port_map = cfg->port_map;
 
 	if ((flags & (GPIO_PULL_UP | GPIO_PULL_DOWN)) != 0) {
 		return -ENOTSUP;
@@ -86,7 +85,7 @@ static int gpio_stellaris_configure(struct device *dev,
 	}
 
 	/* Check for pin availability */
-	if (!sys_test_bit((u32_t)&port_map, pin)) {
+	if (!sys_test_bit((uint32_t)&port_map, pin)) {
 		return -EINVAL;
 	}
 
@@ -114,52 +113,57 @@ static int gpio_stellaris_configure(struct device *dev,
 	return 0;
 }
 
-static int gpio_stellaris_port_get_raw(struct device *dev, u32_t *value)
+static int gpio_stellaris_port_get_raw(const struct device *dev,
+				       uint32_t *value)
 {
 	const struct gpio_stellaris_config *cfg = DEV_CFG(dev);
-	u32_t base = cfg->base;
+	uint32_t base = cfg->base;
 
 	*value = sys_read32(GPIO_RW_MASK_ADDR(base, GPIO_DATA_OFFSET, 0xff));
 
 	return 0;
 }
 
-static int gpio_stellaris_port_set_masked_raw(struct device *dev, u32_t mask,
-					 u32_t value)
+static int gpio_stellaris_port_set_masked_raw(const struct device *dev,
+					      uint32_t mask,
+					      uint32_t value)
 {
 	const struct gpio_stellaris_config *cfg = DEV_CFG(dev);
-	u32_t base = cfg->base;
+	uint32_t base = cfg->base;
 
 	sys_write32(value, GPIO_RW_MASK_ADDR(base, GPIO_DATA_OFFSET, mask));
 
 	return 0;
 }
 
-static int gpio_stellaris_port_set_bits_raw(struct device *dev, u32_t mask)
+static int gpio_stellaris_port_set_bits_raw(const struct device *dev,
+					    uint32_t mask)
 {
 	const struct gpio_stellaris_config *cfg = DEV_CFG(dev);
-	u32_t base = cfg->base;
+	uint32_t base = cfg->base;
 
 	sys_write32(mask, GPIO_RW_MASK_ADDR(base, GPIO_DATA_OFFSET, mask));
 
 	return 0;
 }
 
-static int gpio_stellaris_port_clear_bits_raw(struct device *dev, u32_t mask)
+static int gpio_stellaris_port_clear_bits_raw(const struct device *dev,
+					      uint32_t mask)
 {
 	const struct gpio_stellaris_config *cfg = DEV_CFG(dev);
-	u32_t base = cfg->base;
+	uint32_t base = cfg->base;
 
 	sys_write32(0, GPIO_RW_MASK_ADDR(base, GPIO_DATA_OFFSET, mask));
 
 	return 0;
 }
 
-static int gpio_stellaris_port_toggle_bits(struct device *dev, u32_t mask)
+static int gpio_stellaris_port_toggle_bits(const struct device *dev,
+					   uint32_t mask)
 {
 	const struct gpio_stellaris_config *cfg = DEV_CFG(dev);
-	u32_t base = cfg->base;
-	u32_t value;
+	uint32_t base = cfg->base;
+	uint32_t value;
 
 	value = sys_read32(GPIO_RW_MASK_ADDR(base, GPIO_DATA_OFFSET, 0xff));
 	value ^= mask;
@@ -168,12 +172,13 @@ static int gpio_stellaris_port_toggle_bits(struct device *dev, u32_t mask)
 	return 0;
 }
 
-static int gpio_stellaris_pin_interrupt_configure(struct device *dev,
-		gpio_pin_t pin, enum gpio_int_mode mode,
-		enum gpio_int_trig trig)
+static int gpio_stellaris_pin_interrupt_configure(const struct device *dev,
+						  gpio_pin_t pin,
+						  enum gpio_int_mode mode,
+						  enum gpio_int_trig trig)
 {
 	const struct gpio_stellaris_config *cfg = DEV_CFG(dev);
-	u32_t base = cfg->base;
+	uint32_t base = cfg->base;
 
 	/* Check if GPIO port needs interrupt support */
 	if (mode == GPIO_INT_MODE_DISABLED) {
@@ -201,7 +206,7 @@ static int gpio_stellaris_pin_interrupt_configure(struct device *dev,
 	return 0;
 }
 
-static int gpio_stellaris_init(struct device *dev)
+static int gpio_stellaris_init(const struct device *dev)
 {
 	const struct gpio_stellaris_config *cfg = DEV_CFG(dev);
 
@@ -209,29 +214,7 @@ static int gpio_stellaris_init(struct device *dev)
 	return 0;
 }
 
-static int gpio_stellaris_enable_callback(struct device *dev,
-					  gpio_pin_t pin)
-{
-	const struct gpio_stellaris_config * const cfg = DEV_CFG(dev);
-	u32_t base = cfg->base;
-
-	sys_set_bit(GPIO_REG_ADDR(base, GPIO_IM_OFFSET), pin);
-
-	return 0;
-}
-
-static int gpio_stellaris_disable_callback(struct device *dev,
-					   gpio_pin_t pin)
-{
-	const struct gpio_stellaris_config * const cfg = DEV_CFG(dev);
-	u32_t base = cfg->base;
-
-	sys_clear_bit(GPIO_REG_ADDR(base, GPIO_IM_OFFSET), pin);
-
-	return 0;
-}
-
-static int gpio_stellaris_manage_callback(struct device *dev,
+static int gpio_stellaris_manage_callback(const struct device *dev,
 					  struct gpio_callback *callback,
 					  bool set)
 {
@@ -251,12 +234,10 @@ static const struct gpio_driver_api gpio_stellaris_driver_api = {
 	.port_toggle_bits = gpio_stellaris_port_toggle_bits,
 	.pin_interrupt_configure = gpio_stellaris_pin_interrupt_configure,
 	.manage_callback = gpio_stellaris_manage_callback,
-	.enable_callback = gpio_stellaris_enable_callback,
-	.disable_callback = gpio_stellaris_disable_callback,
 };
 
 #define STELLARIS_GPIO_DEVICE(n)							\
-	static void port_## n ##_stellaris_config_func(struct device *dev);		\
+	static void port_## n ##_stellaris_config_func(const struct device *dev);		\
 											\
 	static struct gpio_stellaris_runtime port_## n ##_stellaris_runtime;		\
 											\
@@ -269,20 +250,20 @@ static const struct gpio_driver_api gpio_stellaris_driver_api = {
 		.config_func = port_## n ##_stellaris_config_func,			\
 	};										\
 											\
-	DEVICE_AND_API_INIT(gpio_stellaris_port_## n,					\
-			    DT_INST_LABEL(n),						\
+	DEVICE_DT_INST_DEFINE(n,							\
 			    gpio_stellaris_init,					\
+			    device_pm_control_nop,					\
 			    &port_## n ##_stellaris_runtime,				\
 			    &gpio_stellaris_port_## n ##_config,			\
 			    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,		\
 			    &gpio_stellaris_driver_api);				\
 											\
-	static void port_## n ##_stellaris_config_func(struct device *dev)		\
+	static void port_## n ##_stellaris_config_func(const struct device *dev)		\
 	{										\
 		IRQ_CONNECT(DT_INST_IRQN(n),			\
 			    DT_INST_IRQ(n, priority),		\
 			    gpio_stellaris_isr,						\
-			    DEVICE_GET(gpio_stellaris_port_## n), 0);			\
+			    DEVICE_DT_INST_GET(n), 0);					\
 											\
 		irq_enable(DT_INST_IRQN(n));			\
 	}

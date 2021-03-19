@@ -8,5 +8,3 @@ menuconfig SGP30
 	depends on I2C
 	help
 	  Enable driver for SGP30 I2C-based based eCO2 and TVOC sensor.
-
-endif # SGP30

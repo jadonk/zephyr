@@ -20,6 +20,7 @@
 #include <sys/__assert.h>
 #include <drivers/sensor.h>
 #include <net/net_ip.h>
+#include <stdio.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(sgp30, CONFIG_SENSOR_LOG_LEVEL);
@@ -125,9 +126,8 @@ static int sgp30_sample_fetch(const struct device *dev)
 	return 0;
 }
 
-static int sgp30_sample_read(const struct device *dev)
+static int sgp30_sample_read(struct sgp30_data *data)
 {
-	struct sgp30_data *data = dev->data;
 	uint16_t reply[3]; /* Size must include extra bytes for CRC */
 	int ret;
 
@@ -225,7 +225,8 @@ static void sgp30_sample_worker(struct k_work *work)
 
 static void sgp30_timer(struct k_timer *timer)
 {
-	struct sgp30_data *data = timer->user_data;
+	struct sgp30_data *data = 
+		CONTAINER_OF(timer, struct sgp30_data, sample_timer);
 	k_work_submit(&data->sample_worker);
 }
 
@@ -247,10 +248,9 @@ static int sgp30_init(const struct device *dev)
 		return -EINVAL;
 	}
 
-	k_work_init(data->sample_worker, sgp30_sample_worker);
-	k_timer_init(data->timer, sgp30_timer, NULL);
-	data->timer->user_data = data;
-	k_timer_start(data->timer, K_SECONDS(1), K_SECONDS(1));
+	k_work_init(&data->sample_worker, sgp30_sample_worker);
+	k_timer_init(&data->sample_timer, sgp30_timer, NULL);
+	k_timer_start(&data->sample_timer, K_SECONDS(1), K_SECONDS(1));
 
 	return 0;
 }

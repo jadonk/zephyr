@@ -18,8 +18,9 @@
 #define SGP30_CRC8_INIT                 0xFF
 #define SGP30_WORD_LEN                  0x31
 
-struct sgp_data {
+struct sgp30_data {
 	struct k_work sample_worker;
+	struct k_timer sample_timer;
 	const struct device *i2c_master;
 	uint16_t i2c_slave_addr;
 	uint16_t serialid[3];

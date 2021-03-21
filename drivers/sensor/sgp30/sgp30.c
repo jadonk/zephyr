@@ -123,7 +123,6 @@ static void sgp30_calc_iaq(struct sgp30_data *data, uint32_t adc_temp)
 static int sgp30_sample_fetch(const struct device *dev)
 {
 	// NOP
-	LOG_INF("SGP30 Sample Fetch");
 	return 0;
 }
 
@@ -158,8 +157,6 @@ static int sgp30_channel_get(const struct device *dev,
 {
 	struct sgp30_data *data = dev->data;
 
-	LOG_INF("SGP30 Channel Get");
-
 	switch (chan) {
 	case SENSOR_CHAN_VOC:
 		/*
@@ -186,8 +183,6 @@ static int sgp30_chip_init(const struct device *dev)
 {
 	struct sgp30_data *data = (struct sgp30_data *)dev->data;
 	int err;
-
-	LOG_INF("SGP30 Chip Init");
 
 	/* Clear absoluteHumidity */
 	data->absoluteHumidity = 0;
@@ -222,8 +217,6 @@ static void sgp30_sample_worker(struct k_work *work)
 	struct sgp30_data *data = 
 		CONTAINER_OF(work, struct sgp30_data, sample_worker);
 
-	//LOG_INF("SGP30 Sample Read");
-
 	err = sgp30_sample_read(data);
 	if (err < 0) {
 		printf("sgp30_sample_read error: %d\n", err);
@@ -240,8 +233,6 @@ static void sgp30_timer(struct k_timer *timer)
 static int sgp30_init(const struct device *dev)
 {
 	struct sgp30_data *data = dev->data;
-
-	LOG_INF("SGP30 Init");
 
 	data->i2c_master = device_get_binding(
 		DT_INST_BUS_LABEL(0));

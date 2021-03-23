@@ -29,7 +29,7 @@ static uint8_t hm3301_validateChecksum(uint8_t *data, size_t size)
 		sum += data[i];
 	}
 
-	if (data[size] != sum & 0xFF) {
+	if (data[size - 1] != (sum & 0xFF)) {
 		return -EBADMSG;
 	}
 
@@ -39,14 +39,13 @@ static uint8_t hm3301_validateChecksum(uint8_t *data, size_t size)
 static int hm3301_do_read(struct hm3301_data *data, uint8_t *rb, size_t size)
 {
 	int ret;
-	size_t i;
 	uint8_t wb[] = { 0x88, 29 };
 
 	if (size != 29) {
-		return = -ENOTSUP;
+		return -ENOTSUP;
 	}
 
-	ret = i2c_write_read(data->i2c_master, wb, 1, rb, size);
+	ret = i2c_write_read(data->i2c_ctrl, data->i2c_addr, wb, 1, rb, size);
 	if (ret < 0) {
 		return ret;
 	}
@@ -54,12 +53,14 @@ static int hm3301_do_read(struct hm3301_data *data, uint8_t *rb, size_t size)
 	return 0;
 }
 
-static int hm3301_sample_fetch(const struct device *dev)
+static int hm3301_sample_fetch(const struct device *dev,
+			       enum sensor_channel chan)
 {
 	int ret;
 	struct hm3301_data *data = dev->data;
 	uint8_t rb[29];
-	uint8_t checksum;
+
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL);
 
 	ret = hm3301_do_read(data, rb, 29);
 	if (ret < 0) {
@@ -71,13 +72,13 @@ static int hm3301_sample_fetch(const struct device *dev)
 		return ret;
 	}
 
-	data->pm1p0_std = sys_be16_to_cpu(*(uint16_t *)(data+4));
-	data->pm2p5_std = sys_be16_to_cpu(*(uint16_t *)(data+6));
-	data->pm10_std = sys_be16_to_cpu(*(uint16_t *)(data+8));
+	data->pm1p0_std = sys_be16_to_cpu(*(uint16_t *)(rb+4));
+	data->pm2p5_std = sys_be16_to_cpu(*(uint16_t *)(rb+6));
+	data->pm10_std = sys_be16_to_cpu(*(uint16_t *)(rb+8));
 
-	data->pm1p0_atm = sys_be16_to_cpu(*(uint16_t *)(data+10));
-	data->pm2p5_atm = sys_be16_to_cpu(*(uint16_t *)(data+12));
-	data->pm10_atm = sys_be16_to_cpu(*(uint16_t *)(data+14));
+	data->pm1p0_atm = sys_be16_to_cpu(*(uint16_t *)(rb+10));
+	data->pm2p5_atm = sys_be16_to_cpu(*(uint16_t *)(rb+12));
+	data->pm10_atm = sys_be16_to_cpu(*(uint16_t *)(rb+14));
 
 	return 0;
 }
@@ -122,19 +123,19 @@ static int hm3301_init(const struct device *dev)
 	int err;
 	struct hm3301_data *data = dev->data;
 
-	data->i2c_master = device_get_binding(
+	data->i2c_ctrl = device_get_binding(
 		DT_INST_BUS_LABEL(0));
-	if (!data->i2c_master) {
-		LOG_ERR("I2C master not found: %s",
+	if (!data->i2c_ctrl) {
+		LOG_ERR("I2C controller not found: %s",
 			    DT_INST_BUS_LABEL(0));
 		return -EINVAL;
 	}
 
-	data->i2c_slave_addr = DT_INST_REG_ADDR(0);
+	data->i2c_addr = DT_INST_REG_ADDR(0);
 
-	ret = hm3301_sample_fetch(dev);
-	if (ret < 0) {
-		return ret;
+	err = hm3301_sample_fetch(dev, SENSOR_CHAN_ALL);
+	if (err < 0) {
+		return err;
 	}
 
 	return 0;

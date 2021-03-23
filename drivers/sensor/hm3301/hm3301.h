@@ -11,8 +11,8 @@
 #include <zephyr/types.h>
 
 struct hm3301_data {
-	const struct device *i2c_master;
-	uint16_t i2c_slave_addr;
+	const struct device *i2c_ctrl;
+	uint16_t i2c_addr;
 
 	uint16_t pm1p0_std;
 	uint16_t pm2p5_std;

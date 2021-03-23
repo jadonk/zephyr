@@ -116,13 +116,11 @@ static int sgp30_write(struct sgp30_data *data, uint16_t command,
 	return 0;
 }
 
-static void sgp30_calc_iaq(struct sgp30_data *data, uint32_t adc_temp)
+static int sgp30_sample_fetch(const struct device *dev,
+			      enum sensor_channel chan)
 {
-}
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL);
 
-static int sgp30_sample_fetch(const struct device *dev)
-{
-	// NOP
 	return 0;
 }
 
@@ -130,8 +128,6 @@ static int sgp30_sample_read(struct sgp30_data *data)
 {
 	uint16_t reply[3]; /* Size must include extra bytes for CRC */
 	int ret;
-
-	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL);
 
 	ret = sgp30_cmd(data, 0x2008, 12, reply, 2);
 	if (ret < 0) {
@@ -259,7 +255,7 @@ static int sgp30_attr_set(const struct device *dev, enum sensor_channel chan,
 			   enum sensor_attribute attr,
 			   const struct sensor_value *val)
 {
-	struct sgp30_data *data = dev->data;
+	//struct sgp30_data *data = dev->data;
 
 	return 0;
 }

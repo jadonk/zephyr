@@ -9,7 +9,6 @@
 
 #define DT_DRV_COMPAT seeed_hm3301
 
-#include "hm3301.h"
 #include <drivers/i2c.h>
 #include <init.h>
 #include <kernel.h>
@@ -21,6 +20,21 @@
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(hm3301, CONFIG_SENSOR_LOG_LEVEL);
+
+#include <device.h>
+#include <zephyr/types.h>
+struct hm3301_data {
+	const struct device *i2c_ctrl;
+	uint16_t i2c_addr;
+
+	uint16_t pm1p0_std;
+	uint16_t pm2p5_std;
+	uint16_t pm10_std;
+
+	uint16_t pm1p0_atm;
+	uint16_t pm2p5_atm;
+	uint16_t pm10_atm;
+};
 
 static uint8_t hm3301_validateChecksum(uint8_t *data, size_t size)
 {
@@ -134,8 +148,6 @@ static int hm3301_init(const struct device *dev)
 	}
 
 	data->i2c_addr = DT_INST_REG_ADDR(0);
-
-	return -EINVAL;
 
 	err = hm3301_sample_fetch(dev, SENSOR_CHAN_ALL);
 	if (err < 0) {

@@ -64,11 +64,13 @@ static int hm3301_sample_fetch(const struct device *dev,
 
 	ret = hm3301_do_read(data, rb, 29);
 	if (ret < 0) {
+		LOG_ERR("Read error: %d", ret);
 		return ret;
 	}
 
 	ret = hm3301_validateChecksum(rb, 29);
 	if (ret < 0) {
+		LOG_ERR("Checksum error: %d", ret);
 		return ret;
 	}
 
@@ -133,8 +135,11 @@ static int hm3301_init(const struct device *dev)
 
 	data->i2c_addr = DT_INST_REG_ADDR(0);
 
+	return -EINVAL;
+
 	err = hm3301_sample_fetch(dev, SENSOR_CHAN_ALL);
 	if (err < 0) {
+		LOG_ERR("Initial read error: %d", err);
 		return err;
 	}
 

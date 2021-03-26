@@ -57,7 +57,7 @@ static int sgp30_cmd(struct sgp30_data *data, uint16_t command, uint16_t delay_m
 	LOG_DBG("Writing 2 bytes to %d", data->i2c_addr);
 	ret = i2c_write(data->i2c_ctrl, cmdp, 2, data->i2c_addr);
 	if (ret < 0) {
-		LOG_ERR("Faild to send command %d: %d", command_be, ret);
+		LOG_ERR("Failed to send command %04x: %d", command_be, ret);
 		return ret;
 	}
 
@@ -74,16 +74,20 @@ static int sgp30_cmd(struct sgp30_data *data, uint16_t command, uint16_t delay_m
 		return -EOVERFLOW;
 	}
 
+	LOG_DBG("Reading %d bytes from %d", rb_size, data->i2c_addr);
 	ret = i2c_read(data->i2c_ctrl, read_buf, rb_size,
 		       	data->i2c_addr);
 	if (ret < 0) {
+		LOG_ERR("Failed to read: %d", ret);
 		return ret;
 	}
 
 	for (i = 0; i < size; i++) {
 		crc = sgp30_generateCRC(read_buf + i * 3);
-		if (crc != read_buf[i * 3 + 2])
+		if (crc != read_buf[i * 3 + 2]) {
+			LOG_ERR("CRC error: %d != %d", read_buf[i * 3 + 2], crc);
 			return -EBADMSG;
+		}
 		reply_buf[i] = ntohs(*(uint16_t *)(read_buf + i * 3));
 	}
 
@@ -113,6 +117,7 @@ static int sgp30_write(struct sgp30_data *data, uint16_t command,
 
 	ret = i2c_write(data->i2c_ctrl, write_buf, wb_size, data->i2c_addr);
 	if (ret < 0) {
+		LOG_ERR("Write error: %d", ret);
 		return ret;
 	}
 
@@ -185,6 +190,8 @@ static int sgp30_chip_init(const struct device *dev)
 
 	/* Clear absoluteHumidity */
 	data->absoluteHumidity = 0;
+
+	return -EINVAL;
 
 	/* Get Serial ID */
 	err = sgp30_cmd(data, 0x3682, 1, data->serialid, 3);

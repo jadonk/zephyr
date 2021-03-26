@@ -54,11 +54,14 @@ static int sgp30_cmd(struct sgp30_data *data, uint16_t command, uint16_t delay_m
 	uint16_t command_be = htons(command); /* make sure it is big endian */
 	uint8_t *cmdp = (uint8_t *)&command_be;
 
-	ret = i2c_write(data->i2c_master, cmdp, 2, data->i2c_slave_addr);
+	LOG_DBG("Writing 2 bytes to %d", data->i2c_addr);
+	ret = i2c_write(data->i2c_ctrl, cmdp, 2, data->i2c_addr);
 	if (ret < 0) {
+		LOG_ERR("Faild to send command %d: %d", command_be, ret);
 		return ret;
 	}
 
+	LOG_DBG("Sleeping %d ms", delay_ms);
 	if (delay_ms > 0) {
 		k_msleep((uint32_t)delay_ms);
 	}
@@ -71,8 +74,8 @@ static int sgp30_cmd(struct sgp30_data *data, uint16_t command, uint16_t delay_m
 		return -EOVERFLOW;
 	}
 
-	ret = i2c_read(data->i2c_master, read_buf, rb_size,
-		       	data->i2c_slave_addr);
+	ret = i2c_read(data->i2c_ctrl, read_buf, rb_size,
+		       	data->i2c_addr);
 	if (ret < 0) {
 		return ret;
 	}
@@ -108,7 +111,7 @@ static int sgp30_write(struct sgp30_data *data, uint16_t command,
 		write_buf[4 + i * 3] = sgp30_generateCRC(bep);
 	}
 
-	ret = i2c_write(data->i2c_master, write_buf, wb_size, data->i2c_slave_addr);
+	ret = i2c_write(data->i2c_ctrl, write_buf, wb_size, data->i2c_addr);
 	if (ret < 0) {
 		return ret;
 	}
@@ -230,15 +233,15 @@ static int sgp30_init(const struct device *dev)
 {
 	struct sgp30_data *data = dev->data;
 
-	data->i2c_master = device_get_binding(
+	data->i2c_ctrl = device_get_binding(
 		DT_INST_BUS_LABEL(0));
-	if (!data->i2c_master) {
-		LOG_ERR("I2C master not found: %s",
+	if (!data->i2c_ctrl) {
+		LOG_ERR("I2C controller not found: %s",
 			    DT_INST_BUS_LABEL(0));
 		return -EINVAL;
 	}
 
-	data->i2c_slave_addr = DT_INST_REG_ADDR(0);
+	data->i2c_addr = DT_INST_REG_ADDR(0);
 
 	if (sgp30_chip_init(dev) < 0) {
 		return -EINVAL;

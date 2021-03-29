@@ -12,7 +12,6 @@
 
 #define DT_DRV_COMPAT sensiron_sgp30
 
-#include "sgp30.h"
 #include <drivers/i2c.h>
 #include <init.h>
 #include <kernel.h>
@@ -21,6 +20,30 @@
 #include <drivers/sensor.h>
 #include <net/net_ip.h>
 #include <stdio.h>
+
+#include <device.h>
+#include <zephyr/types.h>
+
+#define SGP30_FEATURESET                0x0020
+#define SGP30_CRC8_POLYNOMIAL           0x31
+#define SGP30_CRC8_INIT                 0xFF
+#define SGP30_WORD_LEN                  0x31
+
+struct sgp30_data {
+	struct k_work sample_worker;
+	struct k_timer sample_timer;
+	const struct device *i2c_ctrl;
+	uint16_t i2c_addr;
+	uint16_t serialid[3];
+	uint16_t featureset;
+
+	uint16_t TVOC;
+	uint16_t eCO2;
+	uint16_t rawH2;
+	uint16_t rawEthanol;
+
+	uint16_t absoluteHumidity;
+};
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(sgp30, CONFIG_SENSOR_LOG_LEVEL);
@@ -54,14 +77,14 @@ static int sgp30_cmd(struct sgp30_data *data, uint16_t command, uint16_t delay_m
 	uint16_t command_be = htons(command); /* make sure it is big endian */
 	uint8_t *cmdp = (uint8_t *)&command_be;
 
-	LOG_DBG("Writing 2 bytes to %d", data->i2c_addr);
+	//LOG_DBG("Writing 2 bytes to %d", data->i2c_addr);
 	ret = i2c_write(data->i2c_ctrl, cmdp, 2, data->i2c_addr);
 	if (ret < 0) {
 		LOG_ERR("Failed to send command %04x: %d", command_be, ret);
 		return ret;
 	}
 
-	LOG_DBG("Sleeping %d ms", delay_ms);
+	//LOG_DBG("Sleeping %d ms", delay_ms);
 	if (delay_ms > 0) {
 		k_msleep((uint32_t)delay_ms);
 	}
@@ -74,7 +97,7 @@ static int sgp30_cmd(struct sgp30_data *data, uint16_t command, uint16_t delay_m
 		return -EOVERFLOW;
 	}
 
-	LOG_DBG("Reading %d bytes from %d", rb_size, data->i2c_addr);
+	//LOG_DBG("Reading %d bytes from %d", rb_size, data->i2c_addr);
 	ret = i2c_read(data->i2c_ctrl, read_buf, rb_size,
 		       	data->i2c_addr);
 	if (ret < 0) {
@@ -191,24 +214,31 @@ static int sgp30_chip_init(const struct device *dev)
 	/* Clear absoluteHumidity */
 	data->absoluteHumidity = 0;
 
-	return -EINVAL;
-
 	/* Get Serial ID */
+	LOG_DBG("Fetching Serial ID");
 	err = sgp30_cmd(data, 0x3682, 1, data->serialid, 3);
 	if (err < 0) {
+		LOG_ERR("Failed to fetch Serial ID: %d", err);
 		return err;
 	}
+	LOG_DBG("Serial ID: %04x%04x%04x", data->serialid[0],
+			data->serialid[1], data->serialid[2]);
 
 	/* Check FEATURESET */
+	LOG_DBG("Fetching FEATURESET");
 	err = sgp30_cmd(data, 0x202F, 10, &data->featureset, 1);
 	if (err < 0) {
+		LOG_ERR("Failed to fetch FEATURESET: %d", err);
 		return err;
 	}
+	LOG_DBG("FEATURESET: %04x", data->featureset);
 	if ((data->featureset & 0xF0) != SGP30_FEATURESET) {
+		LOG_ERR("Bad FEATURESET: %d", err);
 		return -ENOTSUP;
 	}
 
 	/* Start IAQ algorithm */
+	LOG_DBG("Starting IAQ algorithm");
 	err = sgp30_cmd(data, 0x2003, 0, NULL, 0);
 	if (err < 0) {
 		return err;
@@ -225,7 +255,7 @@ static void sgp30_sample_worker(struct k_work *work)
 
 	err = sgp30_sample_read(data);
 	if (err < 0) {
-		printf("sgp30_sample_read error: %d\n", err);
+		LOG_ERR("sgp30_sample_read error: %d", err);
 	}
 }
 

@@ -77,14 +77,14 @@ static int sgp30_cmd(struct sgp30_data *data, uint16_t command, uint16_t delay_m
 	uint16_t command_be = htons(command); /* make sure it is big endian */
 	uint8_t *cmdp = (uint8_t *)&command_be;
 
-	//LOG_DBG("Writing 2 bytes to %d", data->i2c_addr);
+	LOG_DBG("Writing 0x%02x 0x%02x to 0x%02x", cmdp[0], cmdp[1], data->i2c_addr);
 	ret = i2c_write(data->i2c_ctrl, cmdp, 2, data->i2c_addr);
 	if (ret < 0) {
-		LOG_ERR("Failed to send command %04x: %d", command_be, ret);
+		LOG_ERR("Failed to send command %04x: %d", command, ret);
 		return ret;
 	}
 
-	//LOG_DBG("Sleeping %d ms", delay_ms);
+	LOG_DBG("Sleeping %d ms", delay_ms);
 	if (delay_ms > 0) {
 		k_msleep((uint32_t)delay_ms);
 	}
@@ -97,7 +97,7 @@ static int sgp30_cmd(struct sgp30_data *data, uint16_t command, uint16_t delay_m
 		return -EOVERFLOW;
 	}
 
-	//LOG_DBG("Reading %d bytes from %d", rb_size, data->i2c_addr);
+	LOG_DBG("Reading %d bytes from %d", rb_size, data->i2c_addr);
 	ret = i2c_read(data->i2c_ctrl, read_buf, rb_size,
 		       	data->i2c_addr);
 	if (ret < 0) {
@@ -138,6 +138,7 @@ static int sgp30_write(struct sgp30_data *data, uint16_t command,
 		write_buf[4 + i * 3] = sgp30_generateCRC(bep);
 	}
 
+	LOG_DBG("Writing %d bytes to 0x%02x", wb_size, data->i2c_addr);
 	ret = i2c_write(data->i2c_ctrl, write_buf, wb_size, data->i2c_addr);
 	if (ret < 0) {
 		LOG_ERR("Write error: %d", ret);
@@ -278,10 +279,18 @@ static int sgp30_init(const struct device *dev)
 		return -EINVAL;
 	}
 
+	//uint32_t i2c_cfg = I2C_SPEED_SET(I2C_SPEED_STANDARD) | I2C_MODE_MASTER;
+	//if (i2c_configure(data->i2c_ctrl, i2c_cfg))
+	//{
+	//	LOG_ERR("I2C config failed");
+	//	goto recover;
+	//}
+
 	data->i2c_addr = DT_INST_REG_ADDR(0);
 
 	if (sgp30_chip_init(dev) < 0) {
-		return -EINVAL;
+		LOG_ERR("SGP30 init failed");
+		goto recover;
 	}
 
 	k_work_init(&data->sample_worker, sgp30_sample_worker);
@@ -289,6 +298,10 @@ static int sgp30_init(const struct device *dev)
 	k_timer_start(&data->sample_timer, K_SECONDS(1), K_SECONDS(1));
 
 	return 0;
+
+recover:
+	i2c_recover_bus(data->i2c_ctrl);
+	return -EINVAL;
 }
 
 static int sgp30_attr_set(const struct device *dev, enum sensor_channel chan,

@@ -446,6 +446,11 @@ static int i2c_cc13xx_cc26xx_init(const struct device *dev)
 	IOCPinTypeI2c(get_dev_config(dev)->base, get_dev_config(dev)->sda_pin,
 		      get_dev_config(dev)->scl_pin);
 
+//HACK!!!
+	IOCIODrvStrengthSet(get_dev_config(dev)->sda_pin, IOC_CURRENT_8MA, IOC_STRENGTH_MAX);
+	IOCIODrvStrengthSet(get_dev_config(dev)->scl_pin, IOC_CURRENT_8MA, IOC_STRENGTH_MAX);
+//HACK!!!
+
 	cfg = i2c_map_dt_bitrate(DT_INST_PROP(0, clock_frequency));
 	err = i2c_cc13xx_cc26xx_configure(dev, cfg | I2C_MODE_MASTER);
 	if (err) {

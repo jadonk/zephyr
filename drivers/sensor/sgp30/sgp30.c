@@ -20,6 +20,7 @@
 #include <drivers/sensor.h>
 #include <net/net_ip.h>
 #include <stdio.h>
+#include <math.h>
 
 #include <device.h>
 #include <zephyr/types.h>
@@ -122,7 +123,7 @@ static int sgp30_write(struct sgp30_data *data, uint16_t command,
 {
 	int ret;
 	size_t i;
-	uint32_t wb_size = 2+size*2+size;
+	uint32_t wb_size = 2+size*3;
 	uint8_t write_buf[9];
 	uint16_t be;
 	uint8_t *bep;
@@ -131,11 +132,14 @@ static int sgp30_write(struct sgp30_data *data, uint16_t command,
 	bep = (uint8_t *)&be;
 	memcpy(write_buf, bep, 2);
 
+	LOG_DBG("Writing command 0x%04x", command);
 	for (i = 0; i < size; i++) {
 		be = htons(val[i]);
 		bep = (uint8_t *)&be;
-		memcpy(&write_buf[2 + i * 3], bep, 2);
-		write_buf[4 + i * 3] = sgp30_generateCRC(bep);
+		memcpy(&write_buf[2+i*3], bep, 2);
+		write_buf[4+i*3] = sgp30_generateCRC(bep);
+		LOG_DBG("write_buf[%d] = 0x%04x", i, val[i]);
+		LOG_DBG("crc(write_buf[%d]) = 0x%02x", i, write_buf[4+i*3]);
 	}
 
 	LOG_DBG("Writing %d bytes to 0x%02x", wb_size, data->i2c_addr);
@@ -279,13 +283,6 @@ static int sgp30_init(const struct device *dev)
 		return -EINVAL;
 	}
 
-	//uint32_t i2c_cfg = I2C_SPEED_SET(I2C_SPEED_STANDARD) | I2C_MODE_MASTER;
-	//if (i2c_configure(data->i2c_ctrl, i2c_cfg))
-	//{
-	//	LOG_ERR("I2C config failed");
-	//	goto recover;
-	//}
-
 	data->i2c_addr = DT_INST_REG_ADDR(0);
 
 	if (sgp30_chip_init(dev) < 0) {
@@ -308,7 +305,25 @@ static int sgp30_attr_set(const struct device *dev, enum sensor_channel chan,
 			   enum sensor_attribute attr,
 			   const struct sensor_value *val)
 {
-	//struct sgp30_data *data = dev->data;
+	struct sgp30_data *data = dev->data;
+	uint16_t ah_fixedpt; /* Absolute humidity in 256ths of g*m^-3 */
+	double ah, rh; /* Absolute and relative humidities */
+	double t; /* Temperature in C */
+
+	switch(attr) {
+	case SENSOR_ATTR_CALIB_TARGET:
+		LOG_DBG("Calibrating with %d RH and %d C", val[0].val1, val[1].val1);
+		rh = sensor_value_to_double((struct sensor_value *)&val[0]);
+		LOG_DBG("rh = %f", rh);
+		t = sensor_value_to_double((struct sensor_value *)&val[1]);
+		LOG_DBG("t = %f", t);
+		ah = 216.7*(rh*0.06112*exp((17.62*t)/(243.12*t)))/(273.15+t);
+		ah_fixedpt = (uint16_t)(ah*256.0);
+		sgp30_write(data, 0x2061, &ah_fixedpt, 1);
+		break;
+	default:
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -316,8 +331,7 @@ static int sgp30_attr_set(const struct device *dev, enum sensor_channel chan,
 static const struct sensor_driver_api sgp30_api_funcs = {
 	.sample_fetch = sgp30_sample_fetch,
 	.channel_get = sgp30_channel_get,
-	//.attr_set = sgp30_attr_set,
-	//.attr_get = sgp30_attr_get,
+	.attr_set = sgp30_attr_set,
 };
 
 static struct sgp30_data sgp30_data;

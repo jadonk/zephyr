@@ -155,10 +155,14 @@ static int hm3301_init(const struct device *dev)
 	err = hm3301_sample_fetch(dev, SENSOR_CHAN_ALL);
 	if (err < 0) {
 		LOG_ERR("Initial read error: %d", err);
-		return err;
+		goto recover;
 	}
 
 	return 0;
+
+recover:
+	i2c_recover_bus(data->i2c_ctrl);
+	return -EINVAL;
 }
 
 static const struct sensor_driver_api hm3301_api_funcs = {

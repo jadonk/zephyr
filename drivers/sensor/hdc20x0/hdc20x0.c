@@ -147,8 +147,10 @@ static int hdc20x0_init(const struct device *dev)
 
 	/* Enable Automatic Measurement Mode at 5Hz */
 	if (i2c_reg_write_byte(data->i2c_master, config->i2c_addr,
-			       hdc20x0_REG_RESET_DRDY_INT_CONF, hdc20x0_AMM))
-		return -EIO;
+			       hdc20x0_REG_RESET_DRDY_INT_CONF, hdc20x0_AMM)) {
+		LOG_ERR("Unable to set up automatic measurement\n");
+		goto recover;
+	}
 	/*
 	 * We enable both temp and humidity measurement.
 	 * However the measurement won't start even in AMM until triggered.
@@ -158,11 +160,15 @@ static int hdc20x0_init(const struct device *dev)
 				 hdc20x0_MEAS_TRIG);
 	if (ret) {
 		LOG_ERR("Unable to set up measurement\n");
-		return ret;
+		goto recover;
 	}
 
 	LOG_DBG("Init OK");
 	return 0;
+
+recover:
+	i2c_recover_bus(data->i2c_master);
+	return -EINVAL;
 }
 
 /* Do a measurement and fetch the data from the sensor */

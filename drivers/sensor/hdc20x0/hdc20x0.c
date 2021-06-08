@@ -148,7 +148,7 @@ static int hdc20x0_init(const struct device *dev)
 	/* Enable Automatic Measurement Mode at 5Hz */
 	if (i2c_reg_write_byte(data->i2c_master, config->i2c_addr,
 			       hdc20x0_REG_RESET_DRDY_INT_CONF, hdc20x0_AMM)) {
-		LOG_ERR("Unable to set up automatic measurement\n");
+		LOG_ERR("Unable to detect HDC20X0\n");
 		goto recover;
 	}
 	/*

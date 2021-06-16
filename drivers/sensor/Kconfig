@@ -94,7 +94,7 @@ source "drivers/sensor/grove/Kconfig"
 
 source "drivers/sensor/ti_hdc/Kconfig"
 
-source "drivers/sensor/hdc20x0/Kconfig"
+source "drivers/sensor/ti_hdc20xx/Kconfig"
 
 source "drivers/sensor/hm3301/Kconfig"
 

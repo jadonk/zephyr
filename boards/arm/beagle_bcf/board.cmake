@@ -5,4 +5,4 @@
 board_set_flasher_ifnset(misc-flasher)
 
 # Install cc2538-bsl.py from https://github.com/jadonk/cc2538-bsl
-board_finalize_runner_args(misc-flasher ${BOARD_DIR}/support/cc2538-bsl.py)
+board_finalize_runner_args(misc-flasher cc2538-bsl.py -e -w -v --bootloader-send-break --append /zephyr/zephyr.bin)

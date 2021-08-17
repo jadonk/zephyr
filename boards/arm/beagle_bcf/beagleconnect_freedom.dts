@@ -104,9 +104,9 @@
         label = "OPT3001-LIGHT";
     };
 
-    humidity: hdc2010-humidity@40 {
+    humidity: hdc2010-humidity@41 {
         compatible = "ti,hdc20x0";
-        reg = <0x40>;
+        reg = <0x41>;
         /* drdy-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>; */
         label = "HDC2010-HUMIDITY";
     };

@@ -133,6 +133,15 @@
     };
 };
 
+&spi1 {
+    status = "okay";
+    sck-pin = <10>;
+    mosi-pin = <9>;
+    miso-pin = <11>;
+    cs-pin = <28>;
+    cs-gpios = <&gpio0 28 GPIO_ACTIVE_LOW>;
+};
+
 &rtc {
     status = "okay";
 };

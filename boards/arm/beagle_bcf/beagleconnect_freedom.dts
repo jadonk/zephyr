@@ -24,8 +24,6 @@
     compatible = "beagle,beagleconnect-freedom";
 
     aliases {
-        led0 = &led_subg;
-        led1 = &led_24g;
         sw0 = &user_button_0;
         sensor0 = &light;
         sensor1 = &accel;
@@ -39,23 +37,30 @@
         zephyr,flash = &flash0;
     };
 
-    leds {
-        compatible = "gpio-leds";
-        led_subg: led_0 {
-            gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
-            label = "SubG LED";
-        };
-        led_24g: led_1 {
-            gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
-            label = "2.4G LED";
-        };
-    };
-
     gpio_keys {
         compatible = "gpio-keys";
         user_button_0: button_0 {
             label = "User Button";
             gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
+        };
+    };
+
+    /* Not really LEDs, but outputs */
+    gpio_leds {
+        compatible = "gpio-leds";
+        /* On-board sensor I2C bus enable */
+        i2c_ctrl: i2c_ctrl {
+            label = "I2C_CTRL";
+            gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+        };
+
+        /* U.FL connector switch */
+        rf_sw: rf_sw {
+            label = "RF_SW";
+            gpios =
+                <&gpio0 29 GPIO_ACTIVE_HIGH>, // SubG TX +20dB
+                <&gpio0 30 GPIO_ACTIVE_HIGH>, // SubG TX/RX 0dB
+                <&gpio0 18 GPIO_ACTIVE_HIGH>; // 2.4GHz TX/RX
         };
     };
 };
@@ -96,19 +101,21 @@
         compatible = "st,lis2dh12", "st,lis2dh", "st,lis2de12";
         reg = <0x18>;
         label = "LIS2DE12-ACCEL";
+        //enable = <&i2c_ctrl>;
     };
 
     light: opt3001-light@44 {
         compatible = "ti,opt3001";
         reg = <0x44>;
         label = "OPT3001-LIGHT";
+        //enable = <&i2c_ctrl>;
     };
 
-    humidity: hdc2010-humidity@41 {
+    humidity: hdc2010-humidity@40 {
         compatible = "ti,hdc20x0";
-        reg = <0x41>;
-        /* drdy-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>; */
+        reg = <0x40>;
         label = "HDC2010-HUMIDITY";
+        //enable = <&i2c_ctrl>;
     };
 };
 
@@ -117,8 +124,9 @@
     sck-pin = <10>;
     mosi-pin = <9>;
     miso-pin = <11>;
-    /* cs-pin = <8>; */
-    cs-gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
+    cs-gpios = <&gpio0 8 GPIO_ACTIVE_LOW>,
+        <&gpio0 28 GPIO_ACTIVE_LOW>,  // mikroBUS port 1
+        <&gpio0 27 GPIO_ACTIVE_LOW>;  // mikroBUS port 2
     nor_flash: gd25q16c@0 {
         compatible = "jedec,spi-nor";
         label = "GD25Q16C";
@@ -131,15 +139,6 @@
         t-exit-dpd = <100000>;
         jedec-id = [c8 40 15];
     };
-};
-
-&spi1 {
-    status = "okay";
-    sck-pin = <10>;
-    mosi-pin = <9>;
-    miso-pin = <11>;
-    cs-pin = <28>;
-    cs-gpios = <&gpio0 28 GPIO_ACTIVE_LOW>;
 };
 
 &rtc {

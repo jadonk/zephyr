@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT sgm_ads1115
+#define DT_DRV_COMPAT ti_ads1115
 
 #include <drivers/i2c.h>
 #include <init.h>
@@ -28,21 +28,11 @@ LOG_MODULE_REGISTER(ads1115, LOG_LEVEL_INF);
 #define ADS1115_AIN_INDEX_MAX	3
 
 struct ads1115_data {
-	struct k_timer 			*timer;
+	struct k_timer *		timer;
 	struct k_work 			sample_worker;
-	const  struct device 	*i2c_master;
-	uint16_t 				i2c_slave_addr;
-
-	uint16_t 				ain_value[4];
-};
-
-static int ads1115_init(const struct device *dev);
-static int ads115_sample_fetch(const struct device *dev,enum sensor_channel chan);
-static int ads1115_channel_get(const struct device *dev,enum sensor_channel chan,struct sensor_value *val);
-
-static const struct sensor_driver_api ads1115_api_funcs = {
-	.sample_fetch = ads115_sample_fetch,
-	.channel_get = ads1115_channel_get,
+	const struct device *		i2c_master;
+	uint16_t 			i2c_slave_addr;
+	uint16_t 			ain_value[4];
 };
 
 #define ADS1115_DEV(idx) DT_NODELABEL(adccollector ## idx)
@@ -61,13 +51,26 @@ static const struct sensor_driver_api ads1115_api_funcs = {
 
 #if DT_NODE_HAS_STATUS(ADS1115_DEV(0), okay)
 CREATE_COLLECTOR_DEVICE(0)
+#define HAS_ADS1115
 #endif
 #if DT_NODE_HAS_STATUS(ADS1115_DEV(1), okay)
 CREATE_COLLECTOR_DEVICE(1)
+#define HAS_ADS1115
 #endif
 #if DT_NODE_HAS_STATUS(ADS1115_DEV(2), okay)
 CREATE_COLLECTOR_DEVICE(2)
+#define HAS_ADS1115
 #endif
+
+#ifdef HAS_ADS1115
+static int ads1115_init(const struct device *dev);
+static int ads115_sample_fetch(const struct device *dev,enum sensor_channel chan);
+static int ads1115_channel_get(const struct device *dev,enum sensor_channel chan,struct sensor_value *val);
+
+static const struct sensor_driver_api ads1115_api_funcs = {
+	.sample_fetch = ads115_sample_fetch,
+	.channel_get = ads1115_channel_get,
+};
 
 static int ads1115_reg_write(struct ads1115_data *p_data, uint8_t reg, uint16_t *p_val)
 {
@@ -331,8 +334,7 @@ static int ads1115_init(const struct device *dev)
 	return err;
 }
 
-
-
+#endif
 
 #if 0
 static struct ads1115_data m_ads1115_data;
@@ -340,6 +342,5 @@ static struct ads1115_data m_ads1115_data;
 DEVICE_AND_API_INIT(ads1115, DT_INST_LABEL(0), ads1115_init, &m_ads1115_data,
 		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
 		    &ads1115_api_funcs);
+
 #endif
-
-

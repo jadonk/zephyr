@@ -50,19 +50,17 @@ struct ads1115_data {
                      &ads1115_api_funcs);
 
 #if DT_NODE_HAS_STATUS(ADS1115_DEV(0), okay)
-CREATE_COLLECTOR_DEVICE(0)
 #define HAS_ADS1115
 #endif
 #if DT_NODE_HAS_STATUS(ADS1115_DEV(1), okay)
-CREATE_COLLECTOR_DEVICE(1)
 #define HAS_ADS1115
 #endif
 #if DT_NODE_HAS_STATUS(ADS1115_DEV(2), okay)
-CREATE_COLLECTOR_DEVICE(2)
 #define HAS_ADS1115
 #endif
 
 #ifdef HAS_ADS1115
+#warning "ADS1115 found in DT"
 static int ads1115_init(const struct device *dev);
 static int ads115_sample_fetch(const struct device *dev,enum sensor_channel chan);
 static int ads1115_channel_get(const struct device *dev,enum sensor_channel chan,struct sensor_value *val);
@@ -227,23 +225,8 @@ static int ads1115_channel_get(const struct device *dev,
 
 	switch (chan)
 	{
-		case SENSOR_CHAN_CH0:
+		case SENSOR_CHAN_VOLTAGE:
 			val->val1 = p_ads1115_data->ain_value[0];
-			val->val2 = 0;
-			break;
-
-		case SENSOR_CHAN_CH1:
-			val->val1 = p_ads1115_data->ain_value[1];
-			val->val2 = 0;
-			break;
-
-		case SENSOR_CHAN_CH2:
-			val->val1 = p_ads1115_data->ain_value[2];
-			val->val2 = 0;
-			break;
-
-		case SENSOR_CHAN_CH3:
-			val->val1 = p_ads1115_data->ain_value[3];
 			val->val2 = 0;
 			break;
 
@@ -343,4 +326,14 @@ DEVICE_AND_API_INIT(ads1115, DT_INST_LABEL(0), ads1115_init, &m_ads1115_data,
 		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
 		    &ads1115_api_funcs);
 
+#endif
+
+#if DT_NODE_HAS_STATUS(ADS1115_DEV(0), okay)
+CREATE_COLLECTOR_DEVICE(0)
+#endif
+#if DT_NODE_HAS_STATUS(ADS1115_DEV(1), okay)
+CREATE_COLLECTOR_DEVICE(1)
+#endif
+#if DT_NODE_HAS_STATUS(ADS1115_DEV(2), okay)
+CREATE_COLLECTOR_DEVICE(2)
 #endif

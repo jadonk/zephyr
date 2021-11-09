@@ -27,7 +27,7 @@
         sw0 = &user_button_0;
         sensor0 = &light;
         sensor1 = &accel;
-        sensor2 = &humidity;
+        sensor2 = &humidity;  /* Not populated on rev C4 */
     };
 
     chosen {
@@ -48,11 +48,6 @@
     /* Not really LEDs, but outputs */
     gpio_leds {
         compatible = "gpio-leds";
-        /* On-board sensor I2C bus enable */
-        i2c_ctrl: i2c_ctrl {
-            label = "I2C_CTRL";
-            gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
-        };
 
         /* U.FL connector switch */
         rf_sw: rf_sw {
@@ -123,6 +118,12 @@
     clock-frequency = <I2C_BITRATE_FAST>;
     scl-pin = <25>;
     sda-pin = <26>;
+
+    mcu: msp430-usbbridge@4 {
+        compatible = "beagle,usbbridge";
+        reg = <0x4>;
+        label = "MSP430-USBBRIDGE";
+    };
 };
 
 &spi0 {

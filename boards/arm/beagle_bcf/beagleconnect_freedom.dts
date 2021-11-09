@@ -27,7 +27,7 @@
         sw0 = &user_button_0;
         sensor0 = &light;
         sensor1 = &accel;
-        sensor2 = &humidity;
+        sensor2 = &humidity;  /* Not populated on rev C4 */
     };
 
     chosen {
@@ -48,11 +48,6 @@
     /* Not really LEDs, but outputs */
     gpio_leds {
         compatible = "gpio-leds";
-        /* On-board sensor I2C bus enable */
-        i2c_ctrl: i2c_ctrl {
-            label = "I2C_CTRL";
-            gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
-        };
 
         /* U.FL connector switch */
         rf_sw: rf_sw {
@@ -97,25 +92,35 @@
     scl-pin = <25>;
     sda-pin = <26>;
 
-    accel: lis2dh12-accel@18 {
-        compatible = "st,lis2dh12", "st,lis2dh", "st,lis2de12";
-        reg = <0x18>;
-        label = "LIS2DE12-ACCEL";
-        //enable = <&i2c_ctrl>;
+    mcu: msp430-usbbridge@3 {
+        compatible = "beagle,usbbridge";
+        reg = <0x3>;
+        label = "MSP430-USBBRIDGE";
     };
 
-    light: opt3001-light@44 {
-        compatible = "ti,opt3001";
-        reg = <0x44>;
-        label = "OPT3001-LIGHT";
-        //enable = <&i2c_ctrl>;
-    };
+    sens_i2c: sensor-switch {
+        compatible = "ti,ts5a2066";
+        gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
-    humidity: hdc2010-humidity@40 {
-        compatible = "ti,hdc20x0";
-        reg = <0x40>;
-        label = "HDC2010-HUMIDITY";
-        //enable = <&i2c_ctrl>;
+        accel: lis2dh12-accel@18 {
+            compatible = "st,lis2dh12", "st,lis2dh", "st,lis2de12";
+            reg = <0x18>;
+            label = "LIS2DE12-ACCEL";
+        };
+
+        light: opt3001-light@44 {
+            compatible = "ti,opt3001";
+            reg = <0x44>;
+            label = "OPT3001-LIGHT";
+        };
+
+        humidity: hdc2010-humidity@40 {
+            compatible = "ti,hdc20x0";
+            reg = <0x40>;
+            label = "HDC2010-HUMIDITY";
+        };
     };
 };
 

@@ -20,9 +20,10 @@
 LOG_MODULE_REGISTER(ts5a2066, CONFIG_I2C_LOG_LEVEL);
 
 struct ts5a2066_config {
-	const struct device *bus;
-	const struct device *gpiodev;
-	gpio_pin_t gpio;
+	const struct device * bus;
+	const struct device * gpiodev;
+	const gpio_pin_t gpiopin;
+	const gpio_flags_t gpioflags;
 };
 
 struct ts5a2066_data {
@@ -42,7 +43,9 @@ static int ts5a2066_enable(const struct device *dev)
 	int res = 0;
 	const struct ts5a2066_config *config = dev->config;
 
-	res = gpio_pin_set(config->gpiodev, config->gpio, 1);
+	//LOG_DBG("Enabling TS5A2066 using GPIO %d", config->gpiopin);
+	//res = gpio_pin_set_raw(config->gpiodev, config->gpiopin, 1);
+	res = gpio_pin_configure(config->gpiodev, config->gpiopin, GPIO_OUTPUT_HIGH);
 
 	return res;
 }
@@ -52,7 +55,9 @@ static int ts5a2066_disable(const struct device *dev)
 	int res = 0;
 	const struct ts5a2066_config *config = dev->config;
 
-	res = gpio_pin_set(config->gpiodev, config->gpio, 0);
+	//LOG_DBG("Disabling TS5A2066 using GPIO %d", config->gpiopin);
+	//res = gpio_pin_set_raw(config->gpiodev, config->gpiopin, 0);
+	res = gpio_pin_configure(config->gpiodev, config->gpiopin, GPIO_OUTPUT_LOW);
 
 	return res;
 }
@@ -71,7 +76,9 @@ static int ts5a2066_transfer(const struct device *dev,
 	}
 
 	ts5a2066_enable(dev);
+	k_busy_wait(100);
 	res = i2c_transfer(config->bus, msgs, num_msgs, addr);
+	k_busy_wait(100);
 	ts5a2066_disable(dev);
 
 	k_mutex_unlock(&data->lock);
@@ -85,8 +92,9 @@ const struct i2c_driver_api ts5a2066_api_funcs = {
 
 static int ts5a2066_init(const struct device *dev)
 {
-	//struct ts5a2066_data * data = dev->data;
-	//const struct ts5a2066_config * config = dev->config;
+	const struct ts5a2066_config * config = dev->config;
+
+	gpio_pin_configure(config->gpiodev, config->gpiopin, GPIO_OUTPUT_LOW);
 
 	return 0;
 }
@@ -95,13 +103,14 @@ static int ts5a2066_init(const struct device *dev)
 									\
 static struct ts5a2066_data ts5a2066_dev_data_##inst;			\
 									\
-extern struct device * __device_DT_N_S_soc_S_i2c_40002000;		\
-extern struct device * __device_DT_N_S_soc_S_gpio_40022000;		\
+extern struct device __device_DT_N_S_soc_S_i2c_40002000;		\
+extern struct device __device_DT_N_S_soc_S_gpio_40022000;		\
 									\
 static const struct ts5a2066_config ts5a2066_dev_cfg_##inst = {		\
 	.bus		= &__device_DT_N_S_soc_S_i2c_40002000,		\
 	.gpiodev	= &__device_DT_N_S_soc_S_gpio_40022000,		\
-	.gpio		= DT_INST_GPIO_PIN(inst, gpios),		\
+	.gpiopin	= DT_INST_GPIO_PIN(inst, gpios),		\
+	.gpioflags	= DT_INST_GPIO_FLAGS(inst, gpios),		\
 };									\
 									\
 DEVICE_DT_INST_DEFINE(inst,						\

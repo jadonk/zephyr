@@ -119,9 +119,9 @@
     scl-pin = <25>;
     sda-pin = <26>;
 
-    mcu: msp430-usbbridge@3 {
+    mcu: msp430-usbbridge@4 {
         compatible = "beagle,usbbridge";
-        reg = <0x3>;
+        reg = <0x4>;
         label = "MSP430-USBBRIDGE";
     };
 };

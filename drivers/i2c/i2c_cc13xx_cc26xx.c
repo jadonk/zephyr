@@ -62,13 +62,18 @@ static int i2c_cc13xx_cc26xx_transmit(const struct device *dev,
 	const uint32_t base = get_dev_config(dev)->base;
 	struct i2c_cc13xx_cc26xx_data *data = get_dev_data(dev);
 
-	/* Sending address without data is not supported */
-	if (len == 0) {
-		return -EIO;
-	}
-
 	I2CMasterSlaveAddrSet(base, addr, false);
+	
+        /* Sending address without data*/
+        if (len == 0) {
 
+                I2CMasterControl(base, I2C_MASTER_CMD_SINGLE_SEND); 
+
+                k_sem_take(&data->complete, K_FOREVER);
+
+                return data->error == I2C_MASTER_ERR_NONE ? 0 : -EIO;
+        }
+	
 	/* The following assumes a single master. Use I2CMasterBusBusy() if
 	 * wanting to implement multiple master support.
 	 */

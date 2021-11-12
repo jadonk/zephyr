@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT sensiron_sgp30
+#define DT_DRV_COMPAT sensirion_sgp30
 
 #include <drivers/i2c.h>
 #include <init.h>

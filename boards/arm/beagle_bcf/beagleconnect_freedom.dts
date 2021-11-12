@@ -80,7 +80,7 @@
         };
 
         humidity: hdc2010-humidity@41 {
-            compatible = "ti,hdc20x0";
+            compatible = "ti,hdc2010";
             reg = <0x41>;
             label = "HDC2010-HUMIDITY";
         };

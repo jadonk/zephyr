@@ -149,8 +149,8 @@ static int hm3301_init(const struct device *dev)
 
 	data->i2c_addr = DT_INST_REG_ADDR(0);
 
-	// Try 100ms delay at the start
-	k_msleep(100);
+	// Try 500ms delay at the start
+	k_msleep(500);
 
 	err = hm3301_sample_fetch(dev, SENSOR_CHAN_ALL);
 	if (err < 0) {

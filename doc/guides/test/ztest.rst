@@ -13,7 +13,7 @@ integration testing, or for unit testing specific modules.
 Quick start - Integration testing
 *********************************
 
-A simple working base is located at :zephyr_file:`samples/testing/integration`.  Just
+A simple working base is located at :zephyr_file:`samples/subsys/testsuite/integration`.  Just
 copy the files to ``tests/`` and edit them for your needs. The test will then
 be automatically built and run by the twister script. If you are testing
 the **bar** component of **foo**, you should copy the sample folder to
@@ -33,25 +33,25 @@ The sample contains the following files:
 
 CMakeLists.txt
 
-.. literalinclude:: ../../../samples/testing/integration/CMakeLists.txt
+.. literalinclude:: ../../../samples/subsys/testsuite/integration/CMakeLists.txt
    :language: CMake
    :linenos:
 
 testcase.yaml
 
-.. literalinclude:: ../../../samples/testing/integration/testcase.yaml
+.. literalinclude:: ../../../samples/subsys/testsuite/integration/testcase.yaml
    :language: yaml
    :linenos:
 
 prj.conf
 
-.. literalinclude:: ../../../samples/testing/integration/prj.conf
+.. literalinclude:: ../../../samples/subsys/testsuite/integration/prj.conf
    :language: text
    :linenos:
 
 src/main.c (see :ref:`best practices <main_c_bp>`)
 
-.. literalinclude:: ../../../samples/testing/integration/src/main.c
+.. literalinclude:: ../../../samples/subsys/testsuite/integration/src/main.c
    :language: c
    :linenos:
 
@@ -99,7 +99,7 @@ feature. The ``twister`` script can parse the testcases in all
 test projects or a subset of them, and can generate reports on a granular
 level, i.e. if cases have passed or failed or if they were blocked or skipped.
 
-Sanitycheck parses the source files looking for test case names, so you
+Twister parses the source files looking for test case names, so you
 can list all kernel test cases, for example, by entering::
 
         twister --list-tests -T tests/kernel
@@ -300,7 +300,6 @@ Running tests
 =============
 
 .. doxygengroup:: ztest_test
-   :project: Zephyr
 
 Assertions
 ==========
@@ -320,16 +319,15 @@ Example output for a failed macro from
     Aborted at unit test function
 
 .. doxygengroup:: ztest_assert
-   :project: Zephyr
 
 Mocking
 =======
 
 These functions allow abstracting callbacks and related functions and
 controlling them from specific tests. You can enable the mocking framework by
-setting :option:`CONFIG_ZTEST_MOCKING` to "y" in the configuration file of the
+setting :kconfig:`CONFIG_ZTEST_MOCKING` to "y" in the configuration file of the
 test.  The amount of concurrent return values and expected parameters is
-limited by :option:`CONFIG_ZTEST_PARAMETER_COUNT`.
+limited by :kconfig:`CONFIG_ZTEST_PARAMETER_COUNT`.
 
 Here is an example for configuring the function ``expect_two_parameters`` to
 expect the values ``a=2`` and ``b=3``, and telling ``returns_int`` to return
@@ -340,14 +338,13 @@ expect the values ``a=2`` and ``b=3``, and telling ``returns_int`` to return
    :linenos:
 
 .. doxygengroup:: ztest_mock
-   :project: Zephyr
 
 Customizing Test Output
 ***********************
 The way output is presented when running tests can be customized.
 An example can be found in :zephyr_file:`tests/ztest/custom_output`.
 
-Customization is enabled by setting :option:`CONFIG_ZTEST_TC_UTIL_USER_OVERRIDE` to "y"
+Customization is enabled by setting :kconfig:`CONFIG_ZTEST_TC_UTIL_USER_OVERRIDE` to "y"
 and adding a file :file:`tc_util_user_override.h` with your overrides.
 
 Add the line ``zephyr_include_directories(my_folder)`` to

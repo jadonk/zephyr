@@ -5,9 +5,11 @@
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/kconfig/include/generated)
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/kconfig/include/config)
 
-# Support multiple SOC_ROOT
+# Support multiple SOC_ROOT, remove ZEPHYR_BASE as that is always sourced.
+set(kconfig_soc_root ${SOC_ROOT})
+list(REMOVE_ITEM kconfig_soc_root ${ZEPHYR_BASE})
 set(OPERATION WRITE)
-foreach(root ${SOC_ROOT})
+foreach(root ${kconfig_soc_root})
   file(${OPERATION} ${KCONFIG_BINARY_DIR}/Kconfig.soc.defconfig
        "osource \"${root}/soc/$(ARCH)/*/Kconfig.defconfig\"\n"
   )
@@ -21,9 +23,11 @@ foreach(root ${SOC_ROOT})
   set(OPERATION APPEND)
 endforeach()
 
-# Support multiple shields in BOARD_ROOT
+# Support multiple shields in BOARD_ROOT, remove ZEPHYR_BASE as that is always sourced.
+set(kconfig_board_root ${BOARD_ROOT})
+list(REMOVE_ITEM kconfig_board_root ${ZEPHYR_BASE})
 set(OPERATION WRITE)
-foreach(root ${BOARD_ROOT})
+foreach(root ${kconfig_board_root})
   file(${OPERATION} ${KCONFIG_BINARY_DIR}/Kconfig.shield.defconfig
        "osource \"${root}/boards/shields/*/Kconfig.defconfig\"\n"
   )
@@ -55,6 +59,10 @@ if(OVERLAY_CONFIG)
   string(REPLACE " " ";" OVERLAY_CONFIG_AS_LIST "${OVERLAY_CONFIG}")
 endif()
 
+if((DEFINED BOARD_REVISION) AND EXISTS ${BOARD_DIR}/${BOARD}_${BOARD_REVISION_STRING}.conf)
+  list(INSERT CONF_FILE_AS_LIST 0 ${BOARD_DIR}/${BOARD}_${BOARD_REVISION_STRING}.conf)
+endif()
+
 # DTS_ROOT_BINDINGS is a semicolon separated list, this causes
 # problems when invoking kconfig_target since semicolon is a special
 # character in the C shell, so we make it into a question-mark
@@ -65,15 +73,24 @@ string(REPLACE ";" "?" DTS_ROOT_BINDINGS "${DTS_ROOT_BINDINGS}")
 # This allows Kconfig files to refer relative from a modules root as:
 # source "$(ZEPHYR_FOO_MODULE_DIR)/Kconfig"
 foreach(module_name ${ZEPHYR_MODULE_NAMES})
-  string(TOUPPER ${module_name} MODULE_NAME_UPPER)
+  zephyr_string(SANITIZE TOUPPER MODULE_NAME_UPPER ${module_name})
   list(APPEND
        ZEPHYR_KCONFIG_MODULES_DIR
        "ZEPHYR_${MODULE_NAME_UPPER}_MODULE_DIR=${ZEPHYR_${MODULE_NAME_UPPER}_MODULE_DIR}"
   )
+
+  if(ZEPHYR_${MODULE_NAME_UPPER}_KCONFIG)
+    list(APPEND
+         ZEPHYR_KCONFIG_MODULES_DIR
+         "ZEPHYR_${MODULE_NAME_UPPER}_KCONFIG=${ZEPHYR_${MODULE_NAME_UPPER}_KCONFIG}"
+  )
+  endif()
 endforeach()
 
 # A list of common environment settings used when invoking Kconfig during CMake
 # configure time or menuconfig and related build target.
+string(REPLACE ";" "\\\;" SHIELD_AS_LIST_ESCAPED "${SHIELD_AS_LIST}")
+
 set(COMMON_KCONFIG_ENV_SETTINGS
   PYTHON_EXECUTABLE=${PYTHON_EXECUTABLE}
   srctree=${ZEPHYR_BASE}
@@ -84,9 +101,9 @@ set(COMMON_KCONFIG_ENV_SETTINGS
   ARCH=${ARCH}
   ARCH_DIR=${ARCH_DIR}
   BOARD_DIR=${BOARD_DIR}
-  SHIELD_AS_LIST=${SHIELD_AS_LIST}
   KCONFIG_BINARY_DIR=${KCONFIG_BINARY_DIR}
   TOOLCHAIN_KCONFIG_DIR=${TOOLCHAIN_KCONFIG_DIR}
+  TOOLCHAIN_HAS_NEWLIB=$<IF:$<BOOL:${TOOLCHAIN_HAS_NEWLIB}>,y,n>
   EDT_PICKLE=${EDT_PICKLE}
   # Export all Zephyr modules to Kconfig
   ${ZEPHYR_KCONFIG_MODULES_DIR}
@@ -125,7 +142,7 @@ foreach(kconfig_target
     ZEPHYR_BASE=${ZEPHYR_BASE}
     ZEPHYR_TOOLCHAIN_VARIANT=${ZEPHYR_TOOLCHAIN_VARIANT}
     ${COMMON_KCONFIG_ENV_SETTINGS}
-    EXTRA_DTC_FLAGS=${EXTRA_DTC_FLAGS}
+    "SHIELD_AS_LIST=${SHIELD_AS_LIST_ESCAPED}"
     DTS_POST_CPP=${DTS_POST_CPP}
     DTS_ROOT_BINDINGS=${DTS_ROOT_BINDINGS}
     ${PYTHON_EXECUTABLE}
@@ -233,6 +250,7 @@ endif()
 execute_process(
   COMMAND ${CMAKE_COMMAND} -E env
   ${COMMON_KCONFIG_ENV_SETTINGS}
+  SHIELD_AS_LIST=${SHIELD_AS_LIST_ESCAPED}
   ${PYTHON_EXECUTABLE}
   ${ZEPHYR_BASE}/scripts/kconfig/kconfig.py
   --zephyr-base=${ZEPHYR_BASE}

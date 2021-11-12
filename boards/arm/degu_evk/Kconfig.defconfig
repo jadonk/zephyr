@@ -8,13 +8,7 @@ if BOARD_DEGU_EVK
 config BOARD
 	default "degu_evk"
 
-if USB
-
-config USB_NRFX
-	default y
-
-config USB_DEVICE_STACK
-	default y
+if USB_DEVICE_STACK
 
 config USB_DEVICE_PRODUCT
 	default "Degu Evaluation Kit"
@@ -28,15 +22,9 @@ config UART_INTERRUPT_DRIVEN
 config UART_LINE_CTRL
 	default y
 
-config UART_CONSOLE_ON_DEV_NAME
-	default "CDC_ACM_0"
+endif # USB_DEVICE_STACK
 
-config UART_SHELL_ON_DEV_NAME
-	default "CDC_ACM_0"
-
-endif # USB
-
-if DISK_ACCESS_FLASH
+if DISK_DRIVER_FLASH
 
 config DISK_FLASH_DEV_NAME
 	default "NRF_FLASH_DRV_NAME"
@@ -56,6 +44,6 @@ config DISK_FLASH_ERASE_ALIGNMENT
 config DISK_VOLUME_SIZE
 	default 0x8000
 
-endif # DISK_ACCESS_FLASH
+endif # DISK_DRIVER_FLASH
 
 endif # BOARD_DEGU_EVK

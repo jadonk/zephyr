@@ -12,16 +12,11 @@ choice CODE_LOCATION
 	default CODE_FLEXSPI
 endchoice
 
-config DISK_ACCESS_USDHC1
-	default y
-	depends on DISK_ACCESS_USDHC
+config DISK_DRIVER_SDMMC
+	default y if DISK_DRIVERS
 
 config I2C
 	default y if KSCAN
-
-config SPI_3
-	default y
-	depends on SPI_MCUX_LPSPI
 
 config KSCAN
 	default y if LVGL
@@ -33,9 +28,6 @@ config KSCAN_FT5336
 
 config KSCAN_FT5336_INTERRUPT
 	default y
-
-config KSCAN_INIT_PRIORITY
-	default 60
 
 endif # KSCAN
 

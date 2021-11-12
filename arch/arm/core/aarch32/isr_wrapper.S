@@ -12,6 +12,10 @@
  * Wrapper installed in vector table for handling dynamic interrupts that accept
  * a parameter.
  */
+/*
+ * Tell armclang that stack alignment are ensured.
+ */
+.eabi_attribute Tag_ABI_align_preserved, 1
 
 #include <toolchain.h>
 #include <linker/sections.h>
@@ -45,6 +49,35 @@ SECTION_FUNC(TEXT, _isr_wrapper)
 #if defined(CONFIG_CPU_CORTEX_M)
 	push {r0,lr}		/* r0, lr are now the first items on the stack */
 #elif defined(CONFIG_CPU_CORTEX_R)
+
+#if defined(CONFIG_USERSPACE)
+	/* See comment below about svc stack usage */
+	cps #MODE_SVC
+	push {r0}
+
+	/* Determine if interrupted thread was in user context */
+	cps #MODE_IRQ
+	mrs r0, spsr
+	and r0, #MODE_MASK
+	cmp r0, #MODE_USR
+	bne isr_system_thread
+
+	ldr r0, =_kernel
+	ldr r0, [r0, #_kernel_offset_to_current]
+
+	/* Save away user stack pointer */
+	cps #MODE_SYS
+	str sp, [r0, #_thread_offset_to_sp_usr] /* sp_usr */
+
+	/* Switch to privileged stack */
+	ldr sp, [r0, #_thread_offset_to_priv_stack_end] /* priv stack end */
+
+isr_system_thread:
+	cps #MODE_SVC
+	pop {r0}
+	cps #MODE_IRQ
+#endif
+
 	/*
 	 * Save away r0-r3, r12 and lr_irq for the previous context to the
 	 * process stack since they are clobbered here.  Also, save away lr
@@ -67,6 +100,13 @@ SECTION_FUNC(TEXT, _isr_wrapper)
 	 * information to the user mode.
 	 */
 	cps #MODE_SVC
+
+	/*
+	 * Preserve lr_svc which may contain the branch return address of the
+	 * interrupted context in case of a nested interrupt. This value will
+	 * be restored prior to exiting the interrupt in z_arm_int_exit.
+	 */
+	push {lr}
 
 	/* Align stack at double-word boundary */
 	and r3, sp, #4
@@ -176,6 +216,14 @@ _idle_state_cleared:
 	 * interface function.
 	 */
 	cpsie i
+
+	/*
+	 * Skip calling the isr if it is a spurious interrupt.
+	 */
+	mov r1, #CONFIG_NUM_IRQS
+	lsl r1, r1, #3
+	cmp r0, r1
+	bge spurious_continue
 #endif /* !CONFIG_CPU_CORTEX_M */
 
 	ldr r1, =_sw_isr_table
@@ -186,6 +234,7 @@ _idle_state_cleared:
 	blx r3		/* call ISR */
 
 #if defined(CONFIG_CPU_CORTEX_R)
+spurious_continue:
 	/* Signal end-of-interrupt */
 	pop {r0, r1}
 #if !defined(CONFIG_ARM_CUSTOM_INTERRUPT_CONTROLLER)

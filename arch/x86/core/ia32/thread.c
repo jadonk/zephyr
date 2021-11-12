@@ -56,7 +56,18 @@ int arch_float_disable(struct k_thread *thread)
 #if defined(CONFIG_LAZY_FPU_SHARING)
 	return z_float_disable(thread);
 #else
-	return -ENOSYS;
+	return -ENOTSUP;
+#endif /* CONFIG_LAZY_FPU_SHARING */
+}
+
+extern int z_float_enable(struct k_thread *thread, unsigned int options);
+
+int arch_float_enable(struct k_thread *thread, unsigned int options)
+{
+#if defined(CONFIG_LAZY_FPU_SHARING)
+	return z_float_enable(thread, options);
+#else
+	return -ENOTSUP;
 #endif /* CONFIG_LAZY_FPU_SHARING */
 }
 #endif /* CONFIG_FPU && CONFIG_FPU_SHARING */
@@ -103,28 +114,4 @@ void arch_new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 	thread->arch.excNestCount = 0;
 #endif /* CONFIG_LAZY_FPU_SHARING */
 	thread->arch.flags = 0;
-}
-
-/* The core kernel code puts the dummy thread on the stack, which unfortunately
- * doesn't work for 32-bit x86 as k_thread objects must be aligned due to the
- * buffer within them fed to fxsave/fxrstor.
- *
- * Use some sufficiently aligned bytes in the lower memory of the interrupt
- * stack instead, otherwise the logic is more or less the same.
- */
-void arch_switch_to_main_thread(struct k_thread *main_thread, char *stack_ptr,
-				k_thread_entry_t _main)
-{
-	struct k_thread *dummy_thread = (struct k_thread *)
-		ROUND_UP(Z_KERNEL_STACK_BUFFER(z_interrupt_stacks[0]),
-			 FP_REG_SET_ALIGN);
-
-	__ASSERT(((uintptr_t)(&dummy_thread->arch.preempFloatReg) %
-		  FP_REG_SET_ALIGN) == 0,
-		 "unaligned dummy thread %p float member %p",
-		 dummy_thread, &dummy_thread->arch.preempFloatReg);
-
-	z_dummy_thread_init(dummy_thread);
-	z_swap_unlocked();
-	CODE_UNREACHABLE;
 }

@@ -29,7 +29,6 @@ struct cavs_idc_data {
 	void		*user_data;
 };
 
-DEVICE_DECLARE(cavs_idc);
 static struct cavs_idc_data cavs_idc_device_data;
 
 static void cavs_idc_isr(const struct device *dev)
@@ -71,7 +70,7 @@ static void cavs_idc_isr(const struct device *dev)
 				ext = UINT_TO_POINTER(
 					idc_read(IPC_IDCTEFC(i), curr_cpu_id) &
 					IPC_IDCTEFC_MSG_MASK);
-			drv_data->cb(dev, drv_data->user_data, id, ext);
+				drv_data->cb(dev, drv_data->user_data, id, ext);
 			}
 			break;
 		}
@@ -209,7 +208,7 @@ static int cavs_idc_init(const struct device *dev)
 {
 	IRQ_CONNECT(DT_INST_IRQN(0),
 		    DT_INST_IRQ(0, priority),
-		    cavs_idc_isr, DEVICE_GET(cavs_idc), 0);
+		    cavs_idc_isr, DEVICE_DT_INST_GET(0), 0);
 
 	irq_enable(DT_INST_IRQN(0));
 
@@ -224,14 +223,13 @@ static const struct ipm_driver_api cavs_idc_driver_api = {
 	.set_enabled = cavs_idc_set_enabled,
 };
 
-DEVICE_AND_API_INIT(IPM_CAVS_IDC_DEV_NAME,
-		    DT_INST_LABEL(0),
-		    &cavs_idc_init, &cavs_idc_device_data, NULL,
+DEVICE_DT_INST_DEFINE(0, &cavs_idc_init, NULL,
+		    &cavs_idc_device_data, NULL,
 		    PRE_KERNEL_2, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		    &cavs_idc_driver_api);
 
 #ifdef CONFIG_SCHED_IPI_SUPPORTED
-static int cavs_idc_smp_init(const struct device *dev)
+int cavs_idc_smp_init(const struct device *dev)
 {
 	/* Enable IDC for scheduler IPI */
 	cavs_idc_set_enabled(dev, 1);
@@ -239,5 +237,7 @@ static int cavs_idc_smp_init(const struct device *dev)
 	return 0;
 }
 
+#ifndef CONFIG_SMP_BOOT_DELAY
 SYS_INIT(cavs_idc_smp_init, SMP, 0);
+#endif
 #endif

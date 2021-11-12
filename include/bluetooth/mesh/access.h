@@ -1,5 +1,5 @@
 /** @file
- *  @brief Bluetooth Mesh Access Layer APIs.
+ *  @brief Access layer APIs.
  */
 
 /*
@@ -12,6 +12,7 @@
 
 #include <settings/settings.h>
 #include <sys/util.h>
+#include <bluetooth/mesh/msg.h>
 
 /* Internal macros used to initialize array members */
 #define BT_MESH_KEY_UNUSED_ELT_(IDX, _) BT_MESH_KEY_UNUSED,
@@ -24,8 +25,8 @@
 		       BT_MESH_ADDR_UNASSIGNED_ELT_) }
 
 /**
- * @brief Bluetooth Mesh Access Layer
- * @defgroup bt_mesh_access Bluetooth Mesh Access Layer
+ * @brief Access layer
+ * @defgroup bt_mesh_access Access layer
  * @ingroup bt_mesh
  * @{
  */
@@ -160,40 +161,18 @@ struct bt_mesh_elem {
 #define BT_MESH_MODEL_ID_LIGHT_LC_SETUPSRV         0x1310
 #define BT_MESH_MODEL_ID_LIGHT_LC_CLI              0x1311
 
-/** Message sending context. */
-struct bt_mesh_msg_ctx {
-	/** NetKey Index of the subnet to send the message on. */
-	uint16_t net_idx;
-
-	/** AppKey Index to encrypt the message with. */
-	uint16_t app_idx;
-
-	/** Remote address. */
-	uint16_t addr;
-
-	/** Destination address of a received message. Not used for sending. */
-	uint16_t recv_dst;
-
-	/** RSSI of received packet. Not used for sending. */
-	int8_t  recv_rssi;
-
-	/** Received TTL value. Not used for sending. */
-	uint8_t  recv_ttl;
-
-	/** Force sending reliably by using segment acknowledgement */
-	bool  send_rel;
-
-	/** TTL, or BT_MESH_TTL_DEFAULT for default TTL. */
-	uint8_t  send_ttl;
-};
-
 /** Model opcode handler. */
 struct bt_mesh_model_op {
 	/** OpCode encoded using the BT_MESH_MODEL_OP_* macros */
 	const uint32_t  opcode;
 
-	/** Minimum required message length */
-	const size_t min_len;
+	/** Message length. If the message has variable length then this value
+	 *  indicates minimum message length and should be positive. Handler
+	 *  function should verify precise length based on the contents of the
+	 *  message. If the message has fixed length then this value should
+	 *  be negative. Use BT_MESH_LEN_* macros when defining this value.
+	 */
+	const ssize_t len;
 
 	/** @brief Handler function for this opcode.
 	 *
@@ -201,15 +180,22 @@ struct bt_mesh_model_op {
 	 *  @param ctx   Message context for the message.
 	 *  @param buf   Message buffer containing the message payload, not
 	 *               including the opcode.
+	 *
+	 *  @return Zero on success or (negative) error code otherwise.
 	 */
-	void (*const func)(struct bt_mesh_model *model,
-			   struct bt_mesh_msg_ctx *ctx,
-			   struct net_buf_simple *buf);
+	int (*const func)(struct bt_mesh_model *model,
+			  struct bt_mesh_msg_ctx *ctx,
+			  struct net_buf_simple *buf);
 };
 
 #define BT_MESH_MODEL_OP_1(b0) (b0)
 #define BT_MESH_MODEL_OP_2(b0, b1) (((b0) << 8) | (b1))
 #define BT_MESH_MODEL_OP_3(b0, cid) ((((b0) << 16) | 0xc00000) | (cid))
+
+/** Macro for encoding exact message length for fixed-length messages.  */
+#define BT_MESH_LEN_EXACT(len) (-len)
+/** Macro for encoding minimum message length for variable-length messages.  */
+#define BT_MESH_LEN_MIN(len) (len)
 
 /** End of the opcode list. Must always be present. */
 #define BT_MESH_MODEL_OP_END { 0, 0, NULL }
@@ -219,56 +205,6 @@ struct bt_mesh_model_op {
 
 /** Helper to define an empty model array */
 #define BT_MESH_MODEL_NONE ((struct bt_mesh_model []){})
-
-/** Length of a short Mesh MIC. */
-#define BT_MESH_MIC_SHORT 4
-/** Length of a long Mesh MIC. */
-#define BT_MESH_MIC_LONG 8
-
-/** @def BT_MESH_MODEL_OP_LEN
- *
- *  @brief Helper to determine the length of an opcode.
- *
- *  @param _op Opcode.
- */
-#define BT_MESH_MODEL_OP_LEN(_op) ((_op) <= 0xff ? 1 : (_op) <= 0xffff ? 2 : 3)
-
-/** @def BT_MESH_MODEL_BUF_LEN
- *
- *  @brief Helper for model message buffer length.
- *
- *  Returns the length of a Mesh model message buffer, including the opcode
- *  length and a short MIC.
- *
- *  @param _op          Opcode of the message.
- *  @param _payload_len Length of the model payload.
- */
-#define BT_MESH_MODEL_BUF_LEN(_op, _payload_len)                               \
-	(BT_MESH_MODEL_OP_LEN(_op) + (_payload_len) + BT_MESH_MIC_SHORT)
-
-/** @def BT_MESH_MODEL_BUF_LEN_LONG_MIC
- *
- *  @brief Helper for model message buffer length.
- *
- *  Returns the length of a Mesh model message buffer, including the opcode
- *  length and a long MIC.
- *
- *  @param _op          Opcode of the message.
- *  @param _payload_len Length of the model payload.
- */
-#define BT_MESH_MODEL_BUF_LEN_LONG_MIC(_op, _payload_len)                      \
-	(BT_MESH_MODEL_OP_LEN(_op) + (_payload_len) + BT_MESH_MIC_LONG)
-
-/** @def BT_MESH_MODEL_BUF_DEFINE
- *
- *  @brief Define a Mesh model message buffer using @ref NET_BUF_SIMPLE_DEFINE.
- *
- *  @param _buf         Buffer name.
- *  @param _op          Opcode of the message.
- *  @param _payload_len Length of the model message payload.
- */
-#define BT_MESH_MODEL_BUF_DEFINE(_buf, _op, _payload_len)                      \
-	NET_BUF_SIMPLE_DEFINE(_buf, BT_MESH_MODEL_BUF_LEN(_op, (_payload_len)))
 
 /** @def BT_MESH_MODEL_CB
  *
@@ -416,17 +352,17 @@ struct bt_mesh_model_pub {
 	/** The model the context belongs to. Initialized by the stack. */
 	struct bt_mesh_model *mod;
 
-	uint16_t addr;         /**< Publish Address. */
-	uint16_t key:12,       /**< Publish AppKey Index. */
-	      cred:1,       /**< Friendship Credentials Flag. */
-	      send_rel:1;   /**< Force reliable sending (segment acks) */
+	uint16_t addr;          /**< Publish Address. */
+	uint16_t key:12,        /**< Publish AppKey Index. */
+		 cred:1,        /**< Friendship Credentials Flag. */
+		 send_rel:1,    /**< Force reliable sending (segment acks) */
+		 fast_period:1; /**< Use FastPeriodDivisor */
 
 	uint8_t  ttl;          /**< Publish Time to Live. */
 	uint8_t  retransmit;   /**< Retransmit Count & Interval Steps. */
 	uint8_t  period;       /**< Publish Period. */
 	uint8_t  period_div:4, /**< Divisor for the Period. */
-	      fast_period:1,/**< Use FastPeriodDivisor */
-	      count:3;      /**< Retransmissions left. */
+		 count:4;      /**< Transmissions left. */
 
 	uint32_t period_start; /**< Start of the current period. */
 
@@ -457,7 +393,7 @@ struct bt_mesh_model_pub {
 	int (*update)(struct bt_mesh_model *mod);
 
 	/** Publish Period Timer. Only for stack-internal use. */
-	struct k_delayed_work timer;
+	struct k_work_delayable timer;
 };
 
 /** @def BT_MESH_MODEL_PUB_DEFINE
@@ -535,16 +471,21 @@ struct bt_mesh_model_cb {
 	void (*const reset)(struct bt_mesh_model *model);
 };
 
+/** Vendor model ID */
+struct bt_mesh_mod_id_vnd {
+	/** Vendor's company ID */
+	uint16_t company;
+	/** Model ID */
+	uint16_t id;
+};
+
 /** Abstraction that describes a Mesh Model instance */
 struct bt_mesh_model {
 	union {
 		/** SIG model ID */
 		const uint16_t id;
 		/** Vendor model ID */
-		struct {
-			uint16_t company; /**< Vendor's company ID */
-			uint16_t id;      /**< Model ID */
-		} vnd;
+		const struct bt_mesh_mod_id_vnd vnd;
 	};
 
 	/* Internal information, mainly for persistent storage */
@@ -568,11 +509,10 @@ struct bt_mesh_model {
 	const struct bt_mesh_model_cb * const cb;
 
 #ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
-	/* Pointer to the next model in a model extension tree. */
+	/* Pointer to the next model in a model extension list. */
 	struct bt_mesh_model *next;
-	/* Pointer to the first model this model extends. */
-	struct bt_mesh_model *extends;
 #endif
+
 	/** Model-specific user data */
 	void *user_data;
 };
@@ -594,16 +534,6 @@ struct bt_mesh_send_cb {
 	void (*end)(int err, void *cb_data);
 };
 
-
-/** @brief Initialize a model message.
- *
- *  Clears the message buffer contents, and encodes the given opcode.
- *  The message buffer will be ready for filling in payload data.
- *
- *  @param msg    Message buffer.
- *  @param opcode Opcode to encode.
- */
-void bt_mesh_model_msg_init(struct net_buf_simple *msg, uint32_t opcode);
 
 /** Special TTL value to request using configured default TTL */
 #define BT_MESH_TTL_DEFAULT 0xff
@@ -688,39 +618,46 @@ static inline bool bt_mesh_model_in_primary(const struct bt_mesh_model *mod)
  *
  *  @param mod      Mesh model.
  *  @param vnd      This is a vendor model.
- *  @param name     Name/key of the settings item.
+ *  @param name     Name/key of the settings item. Only
+ *                  @ref SETTINGS_MAX_DIR_DEPTH bytes will be used at most.
  *  @param data     Model data to store, or NULL to delete any model data.
  *  @param data_len Length of the model data.
  *
  *  @return 0 on success, or (negative) error code on failure.
  */
 int bt_mesh_model_data_store(struct bt_mesh_model *mod, bool vnd,
-			 const char *name, const void *data,
-			 size_t data_len);
+			     const char *name, const void *data,
+			     size_t data_len);
 
 /** @brief Let a model extend another.
  *
  *  Mesh models may be extended to reuse their functionality, forming a more
  *  complex model. A Mesh model may extend any number of models, in any element.
  *  The extensions may also be nested, ie a model that extends another may
- *  itself be extended. Extensions may not be cyclical, and a model can only be
- *  extended by one other model.
+ *  itself be extended.
  *
- *  A set of models that extend each other form a model extension tree.
+ *  A set of models that extend each other form a model extension list.
  *
- *  All models in an extension tree share one subscription list per element. The
+ *  All models in an extension list share one subscription list per element. The
  *  access layer will utilize the combined subscription list of all models in an
- *  extension tree and element, giving the models extended subscription list
+ *  extension list and element, giving the models extended subscription list
  *  capacity.
  *
- *  @param mod      Mesh model.
- *  @param base_mod The model being extended.
+ *  @param extending_mod      Mesh model that is extending the base model.
+ *  @param base_mod           The model being extended.
  *
  *  @retval 0 Successfully extended the base_mod model.
- *  @retval -EALREADY The base_mod model is already extended.
  */
-int bt_mesh_model_extend(struct bt_mesh_model *mod,
+int bt_mesh_model_extend(struct bt_mesh_model *extending_mod,
 			 struct bt_mesh_model *base_mod);
+
+/** @brief Check if model is extended by another model.
+ *
+ *  @param model The model to check.
+ *
+ *  @retval true If model is extended by another model, otherwise false
+ */
+bool bt_mesh_model_is_extended(struct bt_mesh_model *model);
 
 /** Node Composition */
 struct bt_mesh_comp {

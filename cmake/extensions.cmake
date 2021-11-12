@@ -19,6 +19,10 @@
 # 3.3.1 Toolchain integration
 # 3.4. Debugging CMake
 # 3.5. File system management
+# 4. Devicetree extensions
+# 4.1 dt_*
+# 5. Zephyr linker functions
+# 5.1. zephyr_linker*
 
 ########################################################
 # 1. Zephyr-aware extensions
@@ -436,6 +440,17 @@ endmacro()
 # zephyr_library_amend()
 # zephyr_libray_add_sources(...)
 #
+# It is also possible to use generator expression when amending to Zephyr
+# libraries.
+#
+# For example, in case it is required to expose the Zephyr library's folder as
+# include path then the following is possible:
+# zephyr_library_amend()
+# zephyr_library_include_directories($<TARGET_PROPERTY:SOURCE_DIR>)
+#
+# See the CMake documentation for more target properties or generator
+# expressions.
+#
 macro(zephyr_library_amend)
   # This is a macro because we need to ensure the ZEPHYR_CURRENT_LIBRARY and
   # following zephyr_library_* calls are executed within the scope of the
@@ -514,6 +529,15 @@ endfunction()
 # constructor but must called explicitly on CMake libraries that do
 # not use a zephyr library constructor.
 function(zephyr_append_cmake_library library)
+  if(TARGET zephyr_prebuilt)
+    message(WARNING
+      "zephyr_library() or zephyr_library_named() called in Zephyr CMake "
+      "application mode. `${library}` will not be treated as a Zephyr library."
+      "To create a Zephyr library in Zephyr CMake kernel mode consider "
+      "creating a Zephyr module. See more here: "
+      "https://docs.zephyrproject.org/latest/guides/modules.html"
+    )
+  endif()
   set_property(GLOBAL APPEND PROPERTY ZEPHYR_LIBS ${library})
 endfunction()
 
@@ -539,6 +563,31 @@ function(zephyr_library_app_memory partition)
   set_property(TARGET zephyr_property_target
                APPEND PROPERTY COMPILE_OPTIONS
                "-l" $<TARGET_FILE_NAME:${ZEPHYR_CURRENT_LIBRARY}> "${partition}")
+endfunction()
+
+# Configure a Zephyr library specific property.
+#
+# Usage:
+#   zephyr_library_property(<property> <value>)
+#
+# Current Zephyr library specific properties that are supported:
+# ALLOW_EMPTY <TRUE:FALSE>: Allow a Zephyr library to be empty.
+#                           An empty Zephyr library will generate a CMake
+#                           configure time warning unless `ALLOW_EMPTY` is TRUE.
+function(zephyr_library_property)
+  set(single_args "ALLOW_EMPTY")
+  cmake_parse_arguments(LIB_PROP "" "${single_args}" "" ${ARGN})
+  target_compile_definitions(${ZEPHYR_CURRENT_LIBRARY} PRIVATE ${item} ${ARGN})
+
+  if(LIB_PROP_UNPARSED_ARGUMENTS)
+      message(FATAL_ERROR "zephyr_library_property(${ARGV0} ...) given unknown arguments: ${FILE_UNPARSED_ARGUMENTS}")
+  endif()
+
+  foreach(arg ${single_args})
+    if(DEFINED LIB_PROP_${arg})
+      set_property(TARGET ${ZEPHYR_CURRENT_LIBRARY} PROPERTY ${arg} ${LIB_PROP_${arg}})
+    endif()
+  endforeach()
 endfunction()
 
 # 1.2.1 zephyr_interface_library_*
@@ -630,10 +679,17 @@ endfunction()
 
 # 1.4. board_*
 #
-# This section is for extensions which control Zephyr's board runners
-# from the build system. The Zephyr build system has targets for
-# flashing and debugging supported boards. These are wrappers around a
-# "runner" Python subpackage that is part of Zephyr's "west" tool.
+# This section is for extensions related to Zephyr board handling.
+#
+# Zephyr board extensions current contains:
+# - Board runners
+# - Board revision
+
+# Zephyr board runners:
+#   Zephyr board runner extension functions control Zephyr's board runners
+#   from the build system. The Zephyr build system has targets for
+#   flashing and debugging supported boards. These are wrappers around a
+#   "runner" Python subpackage that is part of Zephyr's "west" tool.
 #
 # This section provides glue between CMake and the Python code that
 # manages the runners.
@@ -759,12 +815,168 @@ function(board_finalize_runner_args runner)
     # Default arguments from the common runner file come first.
     ${ARGN}
     # Arguments explicitly given with board_runner_args() come
-    # last, so they take precedence.
+    # next, so they take precedence over the common runner file.
     ${explicit}
+    # Arguments given via the CMake cache come last of all. Users
+    # can provide variables in this way from the CMake command line.
+    ${BOARD_RUNNER_ARGS_${runner_id}}
     )
 
   # Add the finalized runner to the global property list.
   set_property(GLOBAL APPEND PROPERTY ZEPHYR_RUNNERS ${runner})
+endfunction()
+
+# Zephyr board revision:
+#
+# This section provides a function for revision checking.
+
+# Usage:
+#   board_check_revision(FORMAT <LETTER | MAJOR.MINOR.PATCH>
+#                        [EXACT]
+#                        [DEFAULT_REVISION <revision>]
+#                        [HIGHEST_REVISION <revision>]
+#   )
+#
+# Zephyr board extension function.
+#
+# This function can be used in `boards/<board>/revision.cmake` to check a user
+# requested revision against available board revisions.
+#
+# The function will check the revision from `-DBOARD=<board>@<revision>` that
+# is provided by the user according to the arguments.
+# When `EXACT` is not specified, this function will set the Zephyr build system
+# variable `ACTIVE_BOARD_REVISION` with the selected revision.
+#
+# FORMAT <LETTER | MAJOR.MINOR.PATCH>: Specify the revision format.
+#         LETTER:             Revision format is a single letter from A - Z.
+#         MAJOR.MINOR.PATCH:  Revision format is three numbers, separated by `.`,
+#                             `x.y.z`. Trailing zeroes may be omitted on the
+#                             command line, which means:
+#                             1.0.0 == 1.0 == 1
+#
+# EXACT: Revision is required to be an exact match. As example, available revisions are:
+#        0.1.0 and 0.3.0, and user provides 0.2.0, then an error is reported
+#        when `EXACT` is given.
+#        If `EXACT` is not provided, then closest lower revision will be selected
+#        as the active revision, which in the example will be `0.1.0`.
+#
+# DEFAULT_REVISION: Provides a default revision to use when user has not selected
+#                   a revision number. If no default revision is provided then
+#                   user will be printed with an error if no revision is given
+#                   on the command line.
+#
+# HIGHEST_REVISION: Allows to specify highest valid revision for a board.
+#                   This can be used to ensure that a newer board cannot be used
+#                   with an older Zephyr. As example, if current board supports
+#                   revisions 0.x.0-0.99.99 and 1.0.0-1.99.99, and it is expected
+#                   that current board implementation will not work with board
+#                   revision 2.0.0, then HIGHEST_REVISION can be set to 1.99.99,
+#                   and user will be printed with an error if using
+#                   `<board>@2.0.0` or higher.
+#                   This field is not needed when `EXACT` is used.
+#
+# VALID_REVISIONS:  A list of valid revisions for this board.
+#                   If this argument is not provided, then each Kconfig fragment
+#                   of the form ``<board>_<revision>.conf`` in the board folder
+#                   will be used as a valid revision for the board.
+#
+function(board_check_revision)
+  set(options EXACT)
+  set(single_args FORMAT DEFAULT_REVISION HIGHEST_REVISION)
+  set(multi_args  VALID_REVISIONS)
+  cmake_parse_arguments(BOARD_REV "${options}" "${single_args}" "${multi_args}" ${ARGN})
+
+  string(TOUPPER ${BOARD_REV_FORMAT} BOARD_REV_FORMAT)
+
+  if(NOT DEFINED BOARD_REVISION)
+    if(DEFINED BOARD_REV_DEFAULT_REVISION)
+      set(BOARD_REVISION ${BOARD_REV_DEFAULT_REVISION})
+      set(BOARD_REVISION ${BOARD_REVISION} PARENT_SCOPE)
+    else()
+      message(FATAL_ERROR "No board revision specified, Board: `${BOARD}` \
+              requires a revision. Please use: `-DBOARD=${BOARD}@<revision>`")
+    endif()
+  endif()
+
+  if(DEFINED BOARD_REV_HIGHEST_REVISION)
+    if(((BOARD_REV_FORMAT STREQUAL LETTER) AND
+        (BOARD_REVISION STRGREATER BOARD_REV_HIGHEST_REVISION)) OR
+       ((BOARD_REV_FORMAT MATCHES "^MAJOR\.MINOR\.PATCH$") AND
+        (BOARD_REVISION VERSION_GREATER BOARD_REV_HIGHEST_REVISION))
+    )
+      message(FATAL_ERROR "Board revision `${BOARD_REVISION}` greater than \
+              highest supported revision `${BOARD_REV_HIGHEST_REVISION}`. \
+              Please specify a valid board revision.")
+    endif()
+  endif()
+
+  if(BOARD_REV_FORMAT STREQUAL LETTER)
+    set(revision_regex "([A-Z])")
+  elseif(BOARD_REV_FORMAT MATCHES "^MAJOR\.MINOR\.PATCH$")
+    set(revision_regex "((0|[1-9][0-9]*)(\.[0-9]+)(\.[0-9]+))")
+    # We allow loose <board>@<revision> typing on command line.
+    # so append missing zeroes.
+    if(BOARD_REVISION MATCHES "((0|[1-9][0-9]*)(\.[0-9]+)?(\.[0-9]+)?)")
+      if(NOT CMAKE_MATCH_3)
+        set(BOARD_REVISION ${BOARD_REVISION}.0)
+        set(BOARD_REVISION ${BOARD_REVISION} PARENT_SCOPE)
+      endif()
+      if(NOT CMAKE_MATCH_4)
+        set(BOARD_REVISION ${BOARD_REVISION}.0)
+        set(BOARD_REVISION ${BOARD_REVISION} PARENT_SCOPE)
+      endif()
+    endif()
+  else()
+    message(FATAL_ERROR "Invalid format specified for \
+    `board_check_revision(FORMAT <LETTER | MAJOR.MINOR.PATCH>)`")
+  endif()
+
+  if(NOT (BOARD_REVISION MATCHES "^${revision_regex}$"))
+    message(FATAL_ERROR "Invalid revision format used for `${BOARD_REVISION}`. \
+            Board `${BOARD}` uses revision format: ${BOARD_REV_FORMAT}.")
+  endif()
+
+  if(NOT DEFINED BOARD_REV_VALID_REVISIONS)
+    file(GLOB revision_candidates LIST_DIRECTORIES false RELATIVE ${BOARD_DIR}
+         ${BOARD_DIR}/${BOARD}_*.conf
+    )
+    string(REPLACE "." "_" underscore_revision_regex ${revision_regex})
+    set(file_revision_regex "${BOARD}_${underscore_revision_regex}.conf")
+    foreach(candidate ${revision_candidates})
+      if(${candidate} MATCHES "${file_revision_regex}")
+        string(REPLACE "_" "." FOUND_BOARD_REVISION ${CMAKE_MATCH_1})
+        list(APPEND BOARD_REV_VALID_REVISIONS ${FOUND_BOARD_REVISION})
+      endif()
+    endforeach()
+  endif()
+
+  if(${BOARD_REVISION} IN_LIST BOARD_REV_VALID_REVISIONS)
+    # Found exact match.
+    return()
+  endif()
+
+  if(NOT BOARD_REV_EXACT)
+    foreach(TEST_REVISION ${BOARD_REV_VALID_REVISIONS})
+      if((BOARD_REV_FORMAT MATCHES "^MAJOR\.MINOR\.PATCH$") AND
+         (${BOARD_REVISION} VERSION_GREATER_EQUAL ${TEST_REVISION}) AND
+         (${TEST_REVISION} VERSION_GREATER_EQUAL "${ACTIVE_BOARD_REVISION}")
+      )
+        set(ACTIVE_BOARD_REVISION ${TEST_REVISION})
+      elseif((BOARD_REV_FORMAT STREQUAL LETTER) AND
+             (${BOARD_REVISION} STRGREATER ${TEST_REVISION}) AND
+             (${TEST_REVISION} STRGREATER "${ACTIVE_BOARD_REVISION}")
+      )
+        set(ACTIVE_BOARD_REVISION ${TEST_REVISION})
+      endif()
+    endforeach()
+  endif()
+
+  if(BOARD_REV_EXACT OR NOT DEFINED ACTIVE_BOARD_REVISION)
+    message(FATAL_ERROR "Board revision `${BOARD_REVISION}` for board \
+            `${BOARD}` not found. Please specify a valid board revision.")
+  endif()
+
+  set(ACTIVE_BOARD_REVISION ${ACTIVE_BOARD_REVISION} PARENT_SCOPE)
 endfunction()
 
 # 1.5. Misc.
@@ -897,7 +1109,7 @@ endfunction()
 function(zephyr_check_compiler_flag_hardcoded lang option check exists)
   # Various flags that are not supported for CXX may not be testable
   # because they would produce a warning instead of an error during
-  # the test.  Exclude them by toolchain-specific blacklist.
+  # the test.  Exclude them by toolchain-specific blocklist.
   if((${lang} STREQUAL CXX) AND ("${option}" IN_LIST CXX_EXCLUDED_OPTIONS))
     set(check 0 PARENT_SCOPE)
     set(exists 1 PARENT_SCOPE)
@@ -914,15 +1126,17 @@ endfunction(zephyr_check_compiler_flag_hardcoded)
 #    Preprocessor directives work inside <files>. Relative paths are resolved
 #    relative to the calling file, like zephyr_sources().
 # <location> is one of
-#    NOINIT       Inside the noinit output section.
-#    RWDATA       Inside the data output section.
-#    RODATA       Inside the rodata output section.
-#    ROM_START    Inside the first output section of the image. This option is
-#                 currently only available on ARM Cortex-M, ARM Cortex-R,
-#                 x86, ARC, and openisa_rv32m1.
-#    RAM_SECTIONS Inside the RAMABLE_REGION GROUP.
-#    SECTIONS     Near the end of the file. Don't use this when linking into
-#                 RAMABLE_REGION, use RAM_SECTIONS instead.
+#    NOINIT        Inside the noinit output section.
+#    RWDATA        Inside the data output section.
+#    RODATA        Inside the rodata output section.
+#    ROM_START     Inside the first output section of the image. This option is
+#                  currently only available on ARM Cortex-M, ARM Cortex-R,
+#                  x86, ARC, openisa_rv32m1, and RISC-V.
+#                  Note: On RISC-V the rom_start section will be after vector section.
+#    RAM_SECTIONS  Inside the RAMABLE_REGION GROUP, not initialized.
+#    DATA_SECTIONS Inside the RAMABLE_REGION GROUP, initialized.
+#    SECTIONS      Near the end of the file. Don't use this when linking into
+#                  RAMABLE_REGION, use RAM_SECTIONS instead.
 # <sort_key> is an optional key to sort by inside of each location. The key must
 #    be alphanumeric, and the keys are sorted alphabetically. If no key is
 #    given, the key 'default' is used. Keys are case-sensitive.
@@ -937,8 +1151,8 @@ endfunction(zephyr_check_compiler_flag_hardcoded)
 #    _mysection_end = .;
 #    _mysection_size = ABSOLUTE(_mysection_end - _mysection_start);
 #
-# When placing into SECTIONS or RAM_SECTIONS, the files must instead define
-# their own output sections to achieve the same thing:
+# When placing into SECTIONS, RAM_SECTIONS or DATA_SECTIONS, the files must
+# instead define their own output sections to achieve the same thing:
 #    SECTION_PROLOGUE(.mysection,,)
 #    {
 #        _mysection_start = .;
@@ -956,19 +1170,21 @@ endfunction(zephyr_check_compiler_flag_hardcoded)
 function(zephyr_linker_sources location)
   # Set up the paths to the destination files. These files are #included inside
   # the global linker.ld.
-  set(snippet_base      "${__build_dir}/include/generated")
-  set(sections_path     "${snippet_base}/snippets-sections.ld")
-  set(ram_sections_path "${snippet_base}/snippets-ram-sections.ld")
-  set(rom_start_path    "${snippet_base}/snippets-rom-start.ld")
-  set(noinit_path       "${snippet_base}/snippets-noinit.ld")
-  set(rwdata_path       "${snippet_base}/snippets-rwdata.ld")
-  set(rodata_path       "${snippet_base}/snippets-rodata.ld")
+  set(snippet_base       "${__build_dir}/include/generated")
+  set(sections_path      "${snippet_base}/snippets-sections.ld")
+  set(ram_sections_path  "${snippet_base}/snippets-ram-sections.ld")
+  set(data_sections_path "${snippet_base}/snippets-data-sections.ld")
+  set(rom_start_path     "${snippet_base}/snippets-rom-start.ld")
+  set(noinit_path        "${snippet_base}/snippets-noinit.ld")
+  set(rwdata_path        "${snippet_base}/snippets-rwdata.ld")
+  set(rodata_path        "${snippet_base}/snippets-rodata.ld")
 
   # Clear destination files if this is the first time the function is called.
   get_property(cleared GLOBAL PROPERTY snippet_files_cleared)
   if (NOT DEFINED cleared)
     file(WRITE ${sections_path} "")
     file(WRITE ${ram_sections_path} "")
+    file(WRITE ${data_sections_path} "")
     file(WRITE ${rom_start_path} "")
     file(WRITE ${noinit_path} "")
     file(WRITE ${rwdata_path} "")
@@ -981,6 +1197,8 @@ function(zephyr_linker_sources location)
     set(snippet_path "${sections_path}")
   elseif("${location}" STREQUAL "RAM_SECTIONS")
     set(snippet_path "${ram_sections_path}")
+  elseif("${location}" STREQUAL "DATA_SECTIONS")
+    set(snippet_path "${data_sections_path}")
   elseif("${location}" STREQUAL "ROM_START")
     set(snippet_path "${rom_start_path}")
   elseif("${location}" STREQUAL "NOINIT")
@@ -1058,6 +1276,38 @@ function(check_dtc_flag flag ok)
   else()
     set(${ok} 0 PARENT_SCOPE)
   endif()
+endfunction()
+
+# Function to round number to next power of two.
+#
+# Usage:
+#   pow2round(<variable>)
+#
+# Example:
+# set(test 2)
+# pow2round(test)
+# # test is still 2
+#
+# set(test 5)
+# pow2round(test)
+# # test is now 8
+#
+# Arguments:
+# n   = Variable containing the number to round
+function(pow2round n)
+  math(EXPR x "${${n}} & (${${n}} - 1)")
+  if(${x} EQUAL 0)
+    return()
+  endif()
+
+  math(EXPR ${n} "${${n}} | (${${n}} >> 1)")
+  math(EXPR ${n} "${${n}} | (${${n}} >> 2)")
+  math(EXPR ${n} "${${n}} | (${${n}} >> 4)")
+  math(EXPR ${n} "${${n}} | (${${n}} >> 8)")
+  math(EXPR ${n} "${${n}} | (${${n}} >> 16)")
+  math(EXPR ${n} "${${n}} | (${${n}} >> 32)")
+  math(EXPR ${n} "${${n}} + 1")
+  set(${n} ${${n}} PARENT_SCOPE)
 endfunction()
 
 ########################################################
@@ -1151,9 +1401,9 @@ endfunction()
 # ifdef functions are added on an as-need basis. See
 # https://cmake.org/cmake/help/latest/manual/cmake-commands.7.html for
 # a list of available functions.
-function(add_subdirectory_ifdef feature_toggle dir)
+function(add_subdirectory_ifdef feature_toggle source_dir)
   if(${${feature_toggle}})
-    add_subdirectory(${dir})
+    add_subdirectory(${source_dir} ${ARGN})
   endif()
 endfunction()
 
@@ -1205,20 +1455,8 @@ function(zephyr_library_sources_ifdef feature_toggle source)
   endif()
 endfunction()
 
-function(zephyr_library_sources_ifndef feature_toggle source)
-  if(NOT ${feature_toggle})
-    zephyr_library_sources(${source} ${ARGN})
-  endif()
-endfunction()
-
 function(zephyr_sources_ifdef feature_toggle)
   if(${${feature_toggle}})
-    zephyr_sources(${ARGN})
-  endif()
-endfunction()
-
-function(zephyr_sources_ifndef feature_toggle)
-   if(NOT ${feature_toggle})
     zephyr_sources(${ARGN})
   endif()
 endfunction()
@@ -1265,6 +1503,12 @@ function(zephyr_library_compile_definitions_ifdef feature_toggle item)
   endif()
 endfunction()
 
+function(zephyr_library_include_directories_ifdef feature_toggle)
+  if(${${feature_toggle}})
+    zephyr_library_include_directories(${ARGN})
+  endif()
+endfunction()
+
 function(zephyr_library_compile_options_ifdef feature_toggle item)
   if(${${feature_toggle}})
     zephyr_library_compile_options(${item} ${ARGN})
@@ -1303,9 +1547,63 @@ function(set_ifndef variable value)
   endif()
 endfunction()
 
+function(add_subdirectory_ifndef feature_toggle source_dir)
+  if(NOT ${feature_toggle})
+    add_subdirectory(${source_dir} ${ARGN})
+  endif()
+endfunction()
+
+function(target_sources_ifndef feature_toggle target scope item)
+  if(NOT ${feature_toggle})
+    target_sources(${target} ${scope} ${item} ${ARGN})
+  endif()
+endfunction()
+
+function(target_compile_definitions_ifndef feature_toggle target scope item)
+  if(NOT ${feature_toggle})
+    target_compile_definitions(${target} ${scope} ${item} ${ARGN})
+  endif()
+endfunction()
+
+function(target_include_directories_ifndef feature_toggle target scope item)
+  if(NOT ${feature_toggle})
+    target_include_directories(${target} ${scope} ${item} ${ARGN})
+  endif()
+endfunction()
+
+function(target_link_libraries_ifndef feature_toggle target item)
+  if(NOT ${feature_toggle})
+    target_link_libraries(${target} ${item} ${ARGN})
+  endif()
+endfunction()
+
+function(add_compile_option_ifndef feature_toggle option)
+  if(NOT ${feature_toggle})
+    add_compile_options(${option})
+  endif()
+endfunction()
+
+function(target_compile_option_ifndef feature_toggle target scope option)
+  if(NOT ${feature_toggle})
+    target_compile_options(${target} ${scope} ${option})
+  endif()
+endfunction()
+
 function(target_cc_option_ifndef feature_toggle target scope option)
   if(NOT ${feature_toggle})
     target_cc_option(${target} ${scope} ${option})
+  endif()
+endfunction()
+
+function(zephyr_library_sources_ifndef feature_toggle source)
+  if(NOT ${feature_toggle})
+    zephyr_library_sources(${source} ${ARGN})
+  endif()
+endfunction()
+
+function(zephyr_sources_ifndef feature_toggle)
+   if(NOT ${feature_toggle})
+    zephyr_sources(${ARGN})
   endif()
 endfunction()
 
@@ -1315,11 +1613,77 @@ function(zephyr_cc_option_ifndef feature_toggle)
   endif()
 endfunction()
 
+function(zephyr_ld_option_ifndef feature_toggle)
+  if(NOT ${feature_toggle})
+    zephyr_ld_options(${ARGN})
+  endif()
+endfunction()
+
+function(zephyr_link_libraries_ifndef feature_toggle)
+  if(NOT ${feature_toggle})
+    zephyr_link_libraries(${ARGN})
+  endif()
+endfunction()
+
 function(zephyr_compile_options_ifndef feature_toggle)
   if(NOT ${feature_toggle})
     zephyr_compile_options(${ARGN})
   endif()
 endfunction()
+
+function(zephyr_compile_definitions_ifndef feature_toggle)
+  if(NOT ${feature_toggle})
+    zephyr_compile_definitions(${ARGN})
+  endif()
+endfunction()
+
+function(zephyr_include_directories_ifndef feature_toggle)
+  if(NOT ${feature_toggle})
+    zephyr_include_directories(${ARGN})
+  endif()
+endfunction()
+
+function(zephyr_library_compile_definitions_ifndef feature_toggle item)
+  if(NOT ${feature_toggle})
+    zephyr_library_compile_definitions(${item} ${ARGN})
+  endif()
+endfunction()
+
+function(zephyr_library_include_directories_ifndef feature_toggle)
+  if(NOT ${feature_toggle})
+    zephyr_library_include_directories(${ARGN})
+  endif()
+endfunction()
+
+function(zephyr_library_compile_options_ifndef feature_toggle item)
+  if(NOT ${feature_toggle})
+    zephyr_library_compile_options(${item} ${ARGN})
+  endif()
+endfunction()
+
+function(zephyr_link_interface_ifndef feature_toggle interface)
+  if(NOT ${feature_toggle})
+    target_link_libraries(${interface} INTERFACE zephyr_interface)
+  endif()
+endfunction()
+
+function(zephyr_library_link_libraries_ifndef feature_toggle item)
+  if(NOT ${feature_toggle})
+     zephyr_library_link_libraries(${item})
+  endif()
+endfunction()
+
+function(zephyr_linker_sources_ifndef feature_toggle)
+  if(NOT ${feature_toggle})
+    zephyr_linker_sources(${ARGN})
+  endif()
+endfunction()
+
+macro(list_append_ifndef feature_toggle list)
+  if(NOT ${feature_toggle})
+    list(APPEND ${list} ${ARGN})
+  endif()
+endmacro()
 
 # 3.3. *_option Compiler-compatibility checks
 #
@@ -1433,30 +1797,35 @@ endfunction()
 # The argument 'include_files' is an output parameter with the result
 # of parsing the include files.
 function(toolchain_parse_make_rule input_file include_files)
-  file(READ ${input_file} input)
+  file(STRINGS ${input_file} input)
 
   # The file is formatted like this:
   # empty_file.o: misc/empty_file.c \
   # nrf52840dk_nrf52840/nrf52840dk_nrf52840.dts \
   # nrf52840_qiaa.dtsi
 
-  # Get rid of the backslashes
-  string(REPLACE "\\" ";" input_as_list ${input})
+  # The dep file will contain `\` for line continuation.
+  # This results in `\;` which is then treated a the char `;` instead of
+  # the element separator, so let's get the pure `;` back.
+  string(REPLACE "\;" ";" input_as_list ${input})
 
   # Pop the first line and treat it specially
-  list(GET input_as_list 0 first_input_line)
+  list(POP_FRONT input_as_list first_input_line)
   string(FIND ${first_input_line} ": " index)
   math(EXPR j "${index} + 2")
   string(SUBSTRING ${first_input_line} ${j} -1 first_include_file)
-  list(REMOVE_AT input_as_list 0)
 
-  list(APPEND result ${first_include_file})
+  # Remove whitespace before and after filename and convert to CMake path.
+  string(STRIP "${first_include_file}" first_include_file)
+  file(TO_CMAKE_PATH "${first_include_file}" first_include_file)
+  set(result "${first_include_file}")
 
-  # Add the other lines
-  list(APPEND result ${input_as_list})
-
-  # Strip away the newlines and whitespaces
-  list(TRANSFORM result STRIP)
+  # Remove whitespace before and after filename and convert to CMake path.
+  foreach(file ${input_as_list})
+    string(STRIP "${file}" file)
+    file(TO_CMAKE_PATH "${file}" file)
+    list(APPEND result "${file}")
+  endforeach()
 
   set(${include_files} ${result} PARENT_SCOPE)
 endfunction()
@@ -1609,25 +1978,6 @@ macro(assert_exists var)
   endif()
 endmacro()
 
-function(print_usage)
-  if(NOT CMAKE_MAKE_PROGRAM)
-    # Create dummy project, in order to obtain make program for correct usage printing.
-    project(dummy_print_usage)
-  endif()
-  message("see usage:")
-  string(REPLACE ";" " " BOARD_ROOT_SPACE_SEPARATED "${BOARD_ROOT}")
-  string(REPLACE ";" " " SHIELD_LIST_SPACE_SEPARATED "${SHIELD_LIST}")
-  execute_process(
-    COMMAND
-    ${CMAKE_COMMAND}
-    -DZEPHYR_BASE=${ZEPHYR_BASE}
-    -DBOARD_ROOT_SPACE_SEPARATED=${BOARD_ROOT_SPACE_SEPARATED}
-    -DSHIELD_LIST_SPACE_SEPARATED=${SHIELD_LIST_SPACE_SEPARATED}
-    -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
-    -P ${ZEPHYR_BASE}/cmake/usage/usage.cmake
-    )
-endfunction()
-
 # 3.5. File system management
 function(check_if_directory_is_writeable dir ok)
   execute_process(
@@ -1726,53 +2076,321 @@ endfunction()
 #                          Issue an error for any relative path not specified
 #                          by user with `-D<path>`
 #
+# CONF_FILES <path>: Find all configuration files in path and return them in a
+#                    list. Configuration files will be:
+#                    - DTS:       Overlay files (.overlay)
+#                    - Kconfig:   Config fragments (.conf)
+#                    The conf file search will return existing configuration
+#                    files for the current board.
+#                    CONF_FILES takes the following additional arguments:
+#                    BOARD <board>:             Find configuration files for specified board.
+#                    BOARD_REVISION <revision>: Find configuration files for specified board
+#                                               revision. Requires BOARD to be specified.
+#
+#                                               If no board is given the current BOARD and
+#                                               BOARD_REVISION will be used.
+#
+#                    DTS <list>:   List to populate with DTS overlay files
+#                    KCONF <list>: List to populate with Kconfig fragment files
+#                    BUILD <type>: Build type to include for search.
+#                                  For example:
+#                                  BUILD debug, will look for <board>_debug.conf
+#                                  and <board>_debug.overlay, instead of <board>.conf
+#
 # returns an updated list of absolute paths
 function(zephyr_file)
-  set(options APPLICATION_ROOT)
-  cmake_parse_arguments(FILE "${options}" "" "" ${ARGN})
-  if(NOT FILE_APPLICATION_ROOT)
+  set(file_options APPLICATION_ROOT CONF_FILES)
+  if((ARGC EQUAL 0) OR (NOT (ARGV0 IN_LIST file_options)))
     message(FATAL_ERROR "No <mode> given to `zephyr_file(<mode> <args>...)` function,\n \
-Please provide one of following: APPLICATION_ROOT")
+Please provide one of following: APPLICATION_ROOT, CONF_FILES")
   endif()
 
-  if(FILE_APPLICATION_ROOT)
-    if(NOT (${ARGC} EQUAL 2))
-      math(EXPR ARGC "${ARGC} - 1")
-      message(FATAL_ERROR "zephyr_file(APPLICATION_ROOT <path-variable>) takes exactly 1 argument, ${ARGC} were given")
-    endif()
+  if(${ARGV0} STREQUAL APPLICATION_ROOT)
+    set(single_args APPLICATION_ROOT)
+  elseif(${ARGV0} STREQUAL CONF_FILES)
+    set(single_args CONF_FILES BOARD BOARD_REVISION DTS KCONF BUILD)
+  endif()
 
+  cmake_parse_arguments(FILE "" "${single_args}" "" ${ARGN})
+  if(FILE_UNPARSED_ARGUMENTS)
+      message(FATAL_ERROR "zephyr_file(${ARGV0} <path> ...) given unknown arguments: ${FILE_UNPARSED_ARGUMENTS}")
+  endif()
+
+
+  if(FILE_APPLICATION_ROOT)
     # Note: user can do: `-D<var>=<relative-path>` and app can at same
     # time specify `list(APPEND <var> <abs-path>)`
     # Thus need to check and update only CACHED variables (-D<var>).
-    set(CACHED_PATH $CACHE{${ARGV1}})
+    set(CACHED_PATH $CACHE{${FILE_APPLICATION_ROOT}})
     foreach(path ${CACHED_PATH})
       # The cached variable is relative path, i.e. provided by `-D<var>` or
       # `set(<var> CACHE)`, so let's update current scope variable to absolute
       # path from  `APPLICATION_SOURCE_DIR`.
       if(NOT IS_ABSOLUTE ${path})
         set(abs_path ${APPLICATION_SOURCE_DIR}/${path})
-        list(FIND ${ARGV1} ${path} index)
+        list(FIND ${FILE_APPLICATION_ROOT} ${path} index)
         if(NOT ${index} LESS 0)
-          list(REMOVE_AT ${ARGV1} ${index})
-          list(INSERT ${ARGV1} ${index} ${abs_path})
+          list(REMOVE_AT ${FILE_APPLICATION_ROOT} ${index})
+          list(INSERT ${FILE_APPLICATION_ROOT} ${index} ${abs_path})
         endif()
       endif()
     endforeach()
 
     # Now all cached relative paths has been updated.
     # Let's check if anyone uses relative path as scoped variable, and fail
-    foreach(path ${${ARGV1}})
+    foreach(path ${${FILE_APPLICATION_ROOT}})
       if(NOT IS_ABSOLUTE ${path})
         message(FATAL_ERROR
-"Relative path encountered in scoped variable: ${ARGV1}, value=${path}\n \
-Please adjust any `set(${ARGV1} ${path})` or `list(APPEND ${ARGV1} ${path})`\n \
+"Relative path encountered in scoped variable: ${FILE_APPLICATION_ROOT}, value=${path}\n \
+Please adjust any `set(${FILE_APPLICATION_ROOT} ${path})` or `list(APPEND ${FILE_APPLICATION_ROOT} ${path})`\n \
 to absolute path using `\${CMAKE_CURRENT_SOURCE_DIR}/${path}` or similar. \n \
 Relative paths are only allowed with `-D${ARGV1}=<path>`")
       endif()
     endforeach()
 
     # This updates the provided argument in parent scope (callers scope)
-    set(${ARGV1} ${${ARGV1}} PARENT_SCOPE)
+    set(${FILE_APPLICATION_ROOT} ${${FILE_APPLICATION_ROOT}} PARENT_SCOPE)
+  endif()
+
+  if(FILE_CONF_FILES)
+    if(DEFINED FILE_BOARD_REVISION AND NOT FILE_BOARD)
+        message(FATAL_ERROR
+          "zephyr_file(${ARGV0} <path> BOARD_REVISION ${FILE_BOARD_REVISION} ...)"
+          " given without BOARD argument, please specify BOARD"
+        )
+    endif()
+
+    if(NOT DEFINED FILE_BOARD)
+      # Defaulting to system wide settings when BOARD is not given as argument
+      set(FILE_BOARD ${BOARD})
+      if(DEFINED BOARD_REVISION)
+        set(FILE_BOARD_REVISION ${BOARD_REVISION})
+      endif()
+    endif()
+
+    set(FILENAMES ${FILE_BOARD})
+
+    if(DEFINED FILE_BOARD_REVISION)
+      string(REPLACE "." "_" revision_string ${FILE_BOARD_REVISION})
+      list(APPEND FILENAMES "${FILE_BOARD}_${revision_string}")
+    endif()
+
+    if(FILE_DTS)
+      foreach(filename ${FILENAMES})
+        if(EXISTS ${FILE_CONF_FILES}/${filename}.overlay)
+          list(APPEND ${FILE_DTS} ${FILE_CONF_FILES}/${filename}.overlay)
+        endif()
+      endforeach()
+
+      # This updates the provided list in parent scope (callers scope)
+      set(${FILE_DTS} ${${FILE_DTS}} PARENT_SCOPE)
+    endif()
+
+    if(FILE_KCONF)
+      foreach(filename ${FILENAMES})
+        if(FILE_BUILD)
+          set(filename "${filename}_${FILE_BUILD}")
+        endif()
+
+        if(EXISTS ${FILE_CONF_FILES}/${filename}.conf)
+          list(APPEND ${FILE_KCONF} ${FILE_CONF_FILES}/${filename}.conf)
+        endif()
+      endforeach()
+
+      # This updates the provided list in parent scope (callers scope)
+      set(${FILE_KCONF} ${${FILE_KCONF}} PARENT_SCOPE)
+    endif()
+  endif()
+endfunction()
+
+# Usage:
+#   zephyr_string(<mode> <out-var> <input> ...)
+#
+# Zephyr string function extension.
+# This function extends the CMake string function by providing additional
+# manipulation arguments to CMake string.
+#
+# SANITIZE: Ensure that the output string does not contain any special
+#           characters. Special characters, such as -, +, =, $, etc. are
+#           converted to underscores '_'.
+#
+# SANITIZE TOUPPER: Ensure that the output string does not contain any special
+#                   characters. Special characters, such as -, +, =, $, etc. are
+#                   converted to underscores '_'.
+#                   The sanitized string will be returned in UPPER case.
+#
+# returns the updated string
+function(zephyr_string)
+  set(options SANITIZE TOUPPER)
+  cmake_parse_arguments(ZEPHYR_STRING "${options}" "" "" ${ARGN})
+
+  if (NOT ZEPHYR_STRING_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "Function zephyr_string() called without a return variable")
+  endif()
+
+  list(GET ZEPHYR_STRING_UNPARSED_ARGUMENTS 0 return_arg)
+  list(REMOVE_AT ZEPHYR_STRING_UNPARSED_ARGUMENTS 0)
+
+  list(JOIN ZEPHYR_STRING_UNPARSED_ARGUMENTS "" work_string)
+
+  if(ZEPHYR_STRING_SANITIZE)
+    string(REGEX REPLACE "[^a-zA-Z0-9_]" "_" work_string ${work_string})
+  endif()
+
+  if(ZEPHYR_STRING_TOUPPER)
+    string(TOUPPER ${work_string} work_string)
+  endif()
+
+  set(${return_arg} ${work_string} PARENT_SCOPE)
+endfunction()
+
+# Usage:
+#   zephyr_check_cache(<variable> [REQUIRED])
+#
+# Check the current CMake cache for <variable> and warn the user if the value
+# is being modified.
+#
+# This can be used to ensure the user does not accidentally try to change
+# Zephyr build variables, such as:
+# - BOARD
+# - SHIELD
+#
+# variable: Name of <variable> to check and set, for example BOARD.
+# REQUIRED: Optional flag. If specified, then an unset <variable> will be
+#           treated as an error.
+# WATCH: Optional flag. If specified, watch the variable and print a warning if
+#        the variable is later being changed.
+#
+# Details:
+#   <variable> can be set by 3 sources.
+#   - Using CMake argument, -D<variable>
+#   - Using an environment variable
+#   - In the project CMakeLists.txt before `find_package(Zephyr)`.
+#
+#   CLI has the highest precedence, then comes environment variables,
+#   and then finally CMakeLists.txt.
+#
+#   The value defined on the first CMake invocation will be stored in the CMake
+#   cache as CACHED_<variable>. This allows the Zephyr build system to detect
+#   when a user reconfigures a sticky variable.
+#
+#   A user can ignore all the precedence rules if the same source is always used
+#   E.g. always specifies -D<variable>= on the command line,
+#   always has an environment <variable> set, or always has a set(<variable> foo)
+#   line in his CMakeLists.txt and avoids mixing sources.
+#
+#   The selected <variable> can be accessed through the variable '<variable>' in
+#   following Zephyr CMake code.
+#
+#   If the user tries to change <variable> to a new value, then a warning will
+#   be printed, and the previously cached value (CACHED_<variable>) will be
+#   used, as it has precedence.
+#
+#   Together with the warning, user is informed that in order to change
+#   <variable> the build directory must be cleaned.
+#
+function(zephyr_check_cache variable)
+  cmake_parse_arguments(CACHE_VAR "REQUIRED;WATCH" "" "" ${ARGN})
+  string(TOLOWER ${variable} variable_text)
+  string(REPLACE "_" " " variable_text ${variable_text})
+
+  get_property(cached_value CACHE ${variable} PROPERTY VALUE)
+
+  # If the build has already been configured in an earlier CMake invocation,
+  # then CACHED_${variable} is set. The CACHED_${variable} setting takes
+  # precedence over any user or CMakeLists.txt input.
+  # If we detect that user tries to change the setting, then print a warning
+  # that a pristine build is needed.
+
+  # If user uses -D<variable>=<new_value>, then cli_argument will hold the new
+  # value, otherwise cli_argument will hold the existing (old) value.
+  set(cli_argument ${cached_value})
+  if(cli_argument STREQUAL CACHED_${variable})
+    # The is no changes to the <variable> value.
+    unset(cli_argument)
+  endif()
+
+  set(app_cmake_lists ${${variable}})
+  if(cached_value STREQUAL ${variable})
+    # The app build scripts did not set a default, The BOARD we are
+    # reading is the cached value from the CLI
+    unset(app_cmake_lists)
+  endif()
+
+  if(DEFINED CACHED_${variable})
+    # Warn the user if it looks like he is trying to change the board
+    # without cleaning first
+    if(cli_argument)
+      if(NOT ((CACHED_${variable} STREQUAL cli_argument) OR (${variable}_DEPRECATED STREQUAL cli_argument)))
+        message(WARNING "The build directory must be cleaned pristinely when "
+                        "changing ${variable_text},\n"
+                        "Current value=\"${CACHED_${variable}}\", "
+                        "Ignored value=\"${cli_argument}\"")
+      endif()
+    endif()
+
+    if(CACHED_${variable})
+      set(${variable} ${CACHED_${variable}} PARENT_SCOPE)
+      # This resets the user provided value with previous (working) value.
+      set(${variable} ${CACHED_${variable}} CACHE STRING "Selected ${variable_text}" FORCE)
+    else()
+      unset(${variable} PARENT_SCOPE)
+      unset(${variable} CACHE)
+    endif()
+  elseif(cli_argument)
+    set(${variable} ${cli_argument})
+
+  elseif(DEFINED ENV{${variable}})
+    set(${variable} $ENV{${variable}})
+
+  elseif(app_cmake_lists)
+    set(${variable} ${app_cmake_lists})
+
+  elseif(${CACHE_VAR_REQUIRED})
+    message(FATAL_ERROR "${variable} is not being defined on the CMake command-line in the environment or by the app.")
+  endif()
+
+  # Store the specified variable in parent scope and the cache
+  set(${variable} ${${variable}} PARENT_SCOPE)
+  set(CACHED_${variable} ${${variable}} CACHE STRING "Selected ${variable_text}")
+
+  if(CACHE_VAR_WATCH)
+    # The variable is now set to its final value.
+    zephyr_boilerplate_watch(${variable})
+  endif()
+endfunction(zephyr_check_cache variable)
+
+
+# Usage:
+#   zephyr_boilerplate_watch(SOME_BOILERPLATE_VAR)
+#
+# Inform the build system that SOME_BOILERPLATE_VAR, a variable
+# handled in cmake/app/boilerplate.cmake, is now fixed and should no
+# longer be changed.
+#
+# This function uses variable_watch() to print a noisy warning
+# if the variable is set after it returns.
+function(zephyr_boilerplate_watch variable)
+  variable_watch(${variable} zephyr_variable_set_too_late)
+endfunction()
+
+function(zephyr_variable_set_too_late variable access value current_list_file)
+  if (access STREQUAL "MODIFIED_ACCESS")
+    message(WARNING
+"
+   **********************************************************************
+   *
+   *                    WARNING
+   *
+   * CMake variable ${variable} set to \"${value}\" in:
+   *     ${current_list_file}
+   *
+   * This is too late to make changes! The change was ignored.
+   *
+   * Hint: ${variable} must be set before calling find_package(Zephyr ...).
+   *
+   **********************************************************************
+")
   endif()
 endfunction()
 
@@ -1802,3 +2420,1145 @@ function(zephyr_get_targets directory types targets)
     endforeach()
     set(${targets} ${${targets}} PARENT_SCOPE)
 endfunction()
+
+# Usage:
+#   target_byproducts(TARGET <target> BYPRODUCTS <file> [<file>...])
+#
+# Specify additional BYPRODUCTS that this target produces.
+#
+# This function allows the build system to specify additional byproducts to
+# target created with `add_executable()`. When linking an executable the linker
+# may produce additional files, like map files. Those files are not known to the
+# build system. This function makes it possible to describe such additional
+# byproducts in an easy manner.
+function(target_byproducts)
+  cmake_parse_arguments(TB "" "TARGET" "BYPRODUCTS" ${ARGN})
+
+  if(NOT DEFINED TB_TARGET)
+    message(FATAL_ERROR "target_byproducts() missing parameter: TARGET <target>")
+  endif()
+
+  add_custom_command(TARGET ${TB_TARGET}
+                     POST_BUILD COMMAND ${CMAKE_COMMAND} -E echo ""
+                     BYPRODUCTS ${TB_BYPRODUCTS}
+                     COMMENT "Logical command for additional byproducts on target: ${TB_TARGET}"
+  )
+endfunction()
+
+########################################################
+# 4. Zephyr devicetree function
+########################################################
+# 4.1. dt_*
+#
+# The following methods are for retrieving devicetree information in CMake.
+#
+# Note: In CMake we refer to the nodes using the node's path, therefore there
+# is no dt_path(...) function for obtaining a node identifier.
+
+# Usage:
+#   dt_nodelabel(<var> NODELABEL <label>)
+#
+# Function for retrieving the node path for the node having nodelabel
+# <label>.
+#
+# Example devicetree fragment:
+#
+#   / {
+#           soc {
+#                   nvic: interrupt-controller@e000e100  { ... };
+#           };
+#   };
+#
+# Example usage:
+#
+#   # Sets 'nvic_path' to "/soc/interrupt-controller@e000e100"
+#   dt_nodelabel(nvic_path NODELABEL "nvic")
+#
+# The node's path will be returned in the <var> parameter.
+# <var> will be undefined if node does not exist.
+#
+# <var>              : Return variable where the node path will be stored
+# NODELABEL <label>  : Node label
+function(dt_nodelabel var)
+  set(req_single_args "NODELABEL")
+  cmake_parse_arguments(DT_LABEL "" "${req_single_args}" "" ${ARGN})
+
+  if(${ARGV0} IN_LIST req_single_args)
+    message(FATAL_ERROR "dt_nodelabel(${ARGV0} ...) missing return parameter.")
+  endif()
+
+  foreach(arg ${req_single_args})
+    if(NOT DEFINED DT_LABEL_${arg})
+      message(FATAL_ERROR "dt_nodelabel(${ARGV0} ...) "
+                          "missing required argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  get_target_property(${var} devicetree_target "DT_NODELABEL|${DT_LABEL_NODELABEL}")
+  if(${${var}} STREQUAL ${var}-NOTFOUND)
+    set(${var})
+  endif()
+
+  set(${var} ${${var}} PARENT_SCOPE)
+endfunction()
+
+# Usage:
+#   dt_node_exists(<var> PATH <path>)
+#
+# Tests whether a node with path <path> exists in the devicetree.
+#
+# The result of the check, either TRUE or FALSE, will be returned in
+# the <var> parameter.
+#
+# <var>       : Return variable where the check result will be returned
+# PATH <path> : Node path
+function(dt_node_exists var)
+  set(req_single_args "PATH")
+  cmake_parse_arguments(DT_NODE "" "${req_single_args}" "" ${ARGN})
+
+  if(${ARGV0} IN_LIST req_single_args)
+    message(FATAL_ERROR "dt_node_existsl(${ARGV0} ...) missing return parameter.")
+  endif()
+
+  foreach(arg ${req_single_args})
+    if(NOT DEFINED DT_NODE_${arg})
+      message(FATAL_ERROR "dt_node_exists(${ARGV0} ...) "
+                          "missing required argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  get_target_property(${var} devicetree_target "DT_NODE|${DT_NODE_PATH}")
+
+  if(${var})
+    set(${var} ${${var}} PARENT_SCOPE)
+  else()
+    set(${var} FALSE PARENT_SCOPE)
+  endif()
+endfunction()
+
+# Usage:
+#   dt_node_has_status(<var> PATH <path> STATUS <status>)
+#
+# Tests whether <path> refers to a node which:
+# - exists in the devicetree, and
+# - has a status property matching the <status> argument
+#   (a missing status or an “ok” status is treated as if it
+#    were “okay” instead)
+#
+# The result of the check, either TRUE or FALSE, will be returned in
+# the <var> parameter.
+#
+# <var>           : Return variable where the check result will be returned
+# PATH <path>     : Node path
+# STATUS <status> : Status to check
+function(dt_node_has_status var)
+  set(req_single_args "PATH;STATUS")
+  cmake_parse_arguments(DT_NODE "" "${req_single_args}" "" ${ARGN})
+
+  if(${ARGV0} IN_LIST req_single_args)
+    message(FATAL_ERROR "dt_node_has_status(${ARGV0} ...) missing return parameter.")
+  endif()
+
+  foreach(arg ${req_single_args})
+    if(NOT DEFINED DT_NODE_${arg})
+      message(FATAL_ERROR "dt_node_has_status(${ARGV0} ...) "
+                          "missing required argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  dt_node_exists(${var} PATH ${DT_NODE_PATH})
+  if(NOT ${${var}})
+    set(${var} FALSE PARENT_SCOPE)
+  endif()
+
+  dt_prop(${var} PATH ${DT_NODE_PATH} PROPERTY status)
+
+  if(NOT DEFINED ${var} OR "${${var}}" STREQUAL ok)
+    set(${var} okay)
+  endif()
+
+  if(${var} STREQUAL ${DT_NODE_STATUS})
+    set(${var} TRUE PARENT_SCOPE)
+  else()
+    set(${var} FALSE PARENT_SCOPE)
+  endif()
+endfunction()
+
+# Usage:
+#
+#   dt_prop(<var> PATH <path> PROPERTY <prop> [INDEX <idx>])
+#
+# Get a devicetree property value. The value will be returned in the
+# <var> parameter.
+#
+# This function currently only supports properties with the following
+# devicetree binding types: string, int, boolean, array, uint8-array,
+# string-array, path.
+#
+# For array valued properties (including uint8-array and
+# string-array), the entire array is returned as a CMake list unless
+# INDEX is given. If INDEX is given, just the array element at index
+# <idx> is returned.
+#
+# The property value will be returned in the <var> parameter if the
+# node exists and has a property <prop> with one of the above types.
+# <var> will be undefined otherwise.
+#
+# To test if the property is defined before using it, use DEFINED on
+# the return <var>, like this:
+#
+#   dt_prop(reserved_ranges PATH "/soc/gpio@deadbeef" PROPERTY "gpio-reserved-ranges")
+#   if(DEFINED reserved_ranges)
+#     # Node exists and has the "gpio-reserved-ranges" property.
+#   endif()
+#
+# To distinguish a missing node from a missing property, combine
+# dt_prop() and dt_node_exists(), like this:
+#
+#   dt_node_exists(node_exists PATH "/soc/gpio@deadbeef")
+#   dt_prop(reserved_ranges    PATH "/soc/gpio@deadbeef" PROPERTY "gpio-reserved-ranges")
+#   if(DEFINED reserved_ranges)
+#     # Node "/soc/gpio@deadbeef" exists and has the "gpio-reserved-ranges" property
+#   elseif(node_exists)
+#     # Node exists, but doesn't have the property, or the property has an unsupported type.
+#   endif()
+#
+# <var>          : Return variable where the property value will be stored
+# PATH <path>    : Node path
+# PROPERTY <prop>: Property for which a value should be returned, as it
+#                  appears in the DTS source
+# INDEX <idx>    : Optional index when retrieving a value in an array property
+function(dt_prop var)
+  set(req_single_args "PATH;PROPERTY")
+  set(single_args "INDEX")
+  cmake_parse_arguments(DT_PROP "" "${req_single_args};${single_args}" "" ${ARGN})
+
+  if(${ARGV0} IN_LIST req_single_args)
+    message(FATAL_ERROR "dt_prop(${ARGV0} ...) missing return parameter.")
+  endif()
+
+  foreach(arg ${req_single_args})
+    if(NOT DEFINED DT_PROP_${arg})
+      message(FATAL_ERROR "dt_prop(${ARGV0} ...) "
+                          "missing required argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  get_property(exists TARGET devicetree_target
+      PROPERTY "DT_PROP|${DT_PROP_PATH}|${DT_PROP_PROPERTY}"
+      SET
+  )
+
+  if(NOT exists)
+    set(${var} PARENT_SCOPE)
+    return()
+  endif()
+
+  get_target_property(val devicetree_target
+      "DT_PROP|${DT_PROP_PATH}|${DT_PROP_PROPERTY}"
+  )
+
+  if(DEFINED DT_PROP_INDEX)
+    list(GET val ${DT_PROP_INDEX} element)
+    set(${var} "${element}" PARENT_SCOPE)
+  else()
+    set(${var} "${val}" PARENT_SCOPE)
+  endif()
+endfunction()
+
+
+# Usage:
+#   dt_num_regs(<var> PATH <path>)
+#
+# Get the number of register blocks in the node's reg property;
+# this may be zero.
+#
+# The value will be returned in the <var> parameter.
+#
+# <var>          : Return variable where the property value will be stored
+# PATH <path>    : Node path
+function(dt_num_regs var)
+  set(req_single_args "PATH")
+  cmake_parse_arguments(DT_REG "" "${req_single_args}" "" ${ARGN})
+
+  if(${ARGV0} IN_LIST req_single_args)
+    message(FATAL_ERROR "dt_num_regs(${ARGV0} ...) missing return parameter.")
+  endif()
+
+  foreach(arg ${req_single_args})
+    if(NOT DEFINED DT_REG_${arg})
+      message(FATAL_ERROR "dt_num_regs(${ARGV0} ...) "
+                          "missing required argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  get_target_property(${var} devicetree_target "DT_REG|${DT_REG_PATH}|NUM")
+
+  set(${var} ${${var}} PARENT_SCOPE)
+endfunction()
+
+# Usage:
+#   dt_reg_addr(<var> PATH <path> [INDEX <idx>])
+#
+# Get the base address of the register block at index <idx>.
+# If <idx> is omitted, then the value at index 0 will be returned.
+#
+# The value will be returned in the <var> parameter.
+#
+# Results can be:
+# - The base address of the register block
+# - <var> will be undefined if node does not exists or does not have a register
+#   block at the requested index.
+#
+# <var>          : Return variable where the address value will be stored
+# PATH <path>    : Node path
+# INDEX <idx>    : Index number
+function(dt_reg_addr var)
+  set(req_single_args "PATH")
+  set(single_args "INDEX")
+  cmake_parse_arguments(DT_REG "" "${req_single_args};${single_args}" "" ${ARGN})
+
+  if(${ARGV0} IN_LIST req_single_args)
+    message(FATAL_ERROR "dt_reg_addr(${ARGV0} ...) missing return parameter.")
+  endif()
+
+  foreach(arg ${req_single_args})
+    if(NOT DEFINED DT_REG_${arg})
+      message(FATAL_ERROR "dt_reg_addr(${ARGV0} ...) "
+                          "missing required argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  if(NOT DEFINED DT_REG_INDEX)
+    set(DT_REG_INDEX 0)
+  endif()
+
+  get_target_property(${var}_list devicetree_target "DT_REG|${DT_REG_PATH}|ADDR")
+
+  list(GET ${var}_list ${DT_REG_INDEX} ${var})
+
+  if("${var}" STREQUAL NONE)
+    set(${var})
+  endif()
+
+  set(${var} ${${var}} PARENT_SCOPE)
+endfunction()
+
+# Usage:
+#   dt_reg_size(<var> PATH <path> [INDEX <idx>])
+#
+# Get the size of the register block at index <idx>.
+# If INDEX is omitted, then the value at index 0 will be returned.
+#
+# The value will be returned in the <value> parameter.
+#
+# <var>          : Return variable where the size value will be stored
+# PATH <path>    : Node path
+# INDEX <idx>    : Index number
+function(dt_reg_size var)
+  set(req_single_args "PATH")
+  set(single_args "INDEX")
+  cmake_parse_arguments(DT_REG "" "${req_single_args};${single_args}" "" ${ARGN})
+
+  if(${ARGV0} IN_LIST req_single_args)
+    message(FATAL_ERROR "dt_reg_size(${ARGV0} ...) missing return parameter.")
+  endif()
+
+  foreach(arg ${req_single_args})
+    if(NOT DEFINED DT_REG_${arg})
+      message(FATAL_ERROR "dt_reg_size(${ARGV0} ...) "
+                          "missing required argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  if(NOT DEFINED DT_REG_INDEX)
+    set(DT_REG_INDEX 0)
+  endif()
+
+  get_target_property(${var}_list devicetree_target "DT_REG|${DT_REG_PATH}|SIZE")
+
+  list(GET ${var}_list ${DT_REG_INDEX} ${var})
+
+  if("${var}" STREQUAL NONE)
+    set(${var})
+  endif()
+
+  set(${var} ${${var}} PARENT_SCOPE)
+endfunction()
+
+# Usage:
+#   dt_has_chosen(<var> PROPERTY <prop>)
+#
+# Test if the devicetree's /chosen node has a given property
+# <prop> which contains the path to a node.
+#
+# Example devicetree fragment:
+#
+#       chosen {
+#               foo = &bar;
+#       };
+#
+# Example usage:
+#
+#       # Sets 'result' to TRUE
+#       dt_has_chosen(result PROPERTY "foo")
+#
+#       # Sets 'result' to FALSE
+#       dt_has_chosen(result PROPERTY "baz")
+#
+# The result of the check, either TRUE or FALSE, will be stored in the
+# <var> parameter.
+#
+# <var>           : Return variable
+# PROPERTY <prop> : Chosen property
+function(dt_has_chosen var)
+  set(req_single_args "PROPERTY")
+  cmake_parse_arguments(DT_CHOSEN "" "${req_single_args}" "" ${ARGN})
+
+  if(${ARGV0} IN_LIST req_single_args)
+    message(FATAL_ERROR "dt_has_chosen(${ARGV0} ...) missing return parameter.")
+  endif()
+
+  foreach(arg ${req_single_args})
+    if(NOT DEFINED DT_CHOSEN_${arg})
+      message(FATAL_ERROR "dt_has_chosen(${ARGV0} ...) "
+                          "missing required argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  get_target_property(exists devicetree_target "DT_CHOSEN|${DT_CHOSEN_PROPERTY}")
+
+  if(${exists} STREQUAL exists-NOTFOUND)
+    set(${var} FALSE PARENT_SCOPE)
+  else()
+    set(${var} TRUE PARENT_SCOPE)
+  endif()
+endfunction()
+
+# Usage:
+#   dt_chosen(<var> PROPERTY <prop>)
+#
+# Get a node path for a /chosen node property.
+#
+# the node path will be returned in the <value> parameter.
+#
+# <var>           : Return variable where the node path will be stored
+# PROPERTY <prop> : Chosen property
+function(dt_chosen var)
+  set(req_single_args "PROPERTY")
+  cmake_parse_arguments(DT_CHOSEN "" "${req_single_args}" "" ${ARGN})
+
+  if(${ARGV0} IN_LIST req_single_args)
+    message(FATAL_ERROR "dt_has_chosen(${ARGV0} ...) missing return parameter.")
+  endif()
+
+  foreach(arg ${req_single_args})
+    if(NOT DEFINED DT_CHOSEN_${arg})
+      message(FATAL_ERROR "dt_chosen(${ARGV0} ...) "
+                          "missing required argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  get_target_property(${var} devicetree_target "DT_CHOSEN|${DT_CHOSEN_PROPERTY}")
+
+  if(${${var}} STREQUAL ${var}-NOTFOUND)
+    set(${var} PARENT_SCOPE)
+  else()
+    set(${var} ${${var}} PARENT_SCOPE)
+  endif()
+endfunction()
+
+########################################################
+# 5. Zephyr linker function
+########################################################
+# 5.1. zephyr_linker*
+#
+# The following methods are for defining linker structure using CMake functions.
+#
+# This allows Zephyr developers to define linker sections and their content and
+# have this configuration rendered into an appropriate linker script based on
+# the toolchain in use.
+# For example:
+# ld linker scripts with GNU ld
+# ARM scatter files with ARM linker.
+#
+# Example usage:
+# zephyr_linker_section(
+#   NAME my_data
+#   VMA  RAM
+#   LMA  FLASH
+# )
+#
+# and to configure special input sections for the section
+# zephyr_linker_section_configure(
+#   SECTION my_data
+#   INPUT   "my_custom_data"
+#   KEEP
+# )
+
+
+# Usage:
+#   zephyr_linker([FORMAT <format>]
+#     [ENTRY <entry symbol>]
+#   )
+#
+# Zephyr linker general settings.
+# This function specifies general settings for the linker script to be generated.
+#
+# FORMAT <format>:            The output format of the linked executable.
+# ENTRY <entry symbolformat>: The code entry symbol.
+#
+function(zephyr_linker)
+  set(single_args "ENTRY;FORMAT")
+  cmake_parse_arguments(LINKER "" "${single_args}" "" ${ARGN})
+
+  if(LINKER_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "zephyr_linker(${ARGV0} ...) given unknown "
+                        "arguments: ${LINKER_UNPARSED_ARGUMENTS}"
+    )
+  endif()
+
+  if(DEFINED LINKER_FORMAT)
+    get_property(format_defined TARGET linker PROPERTY FORMAT SET)
+    if(format_defined)
+      message(FATAL_ERROR "zephyr_linker(FORMAT ...) already configured.")
+    else()
+      set_property(TARGET linker PROPERTY FORMAT ${LINKER_FORMAT})
+    endif()
+  endif()
+
+  if(DEFINED LINKER_ENTRY)
+    get_property(entry_defined TARGET linker PROPERTY ENTRY SET)
+    if(entry_defined)
+      message(FATAL_ERROR "zephyr_linker(ENTRY ...) already configured.")
+    else()
+      set_property(TARGET linker PROPERTY ENTRY ${LINKER_ENTRY})
+    endif()
+  endif()
+endfunction()
+
+# Usage:
+#   zephyr_linker_memory(NAME <name> START <address> SIZE <size> FLAGS <flags>)
+#
+# Zephyr linker memory.
+# This function specifies a memory region for the platform in use.
+#
+# Note:
+#   This function should generally be called with values obtained from
+#   devicetree or Kconfig.
+#
+# NAME <name>    : Name of the memory region, for example FLASH.
+# START <address>: Start address of the memory region.
+#                  Start address can be given as decimal or hex value.
+# SIZE <size>    : Size of the memory region.
+#                  Size can be given as decimal value, hex value, or decimal with postfix k or m.
+#                  All the following are valid values:
+#                    1048576, 0x10000, 1024k, 1024K, 1m, and 1M.
+# FLAGS <flags>  : Flags describing properties of the memory region.
+#                  Currently supported:
+#                  r: Read-only region
+#                  w: Read-write region
+#                  x: Executable region
+#                  The flags r and x, or w and x may be combined like: rx, wx.
+function(zephyr_linker_memory)
+  set(single_args "FLAGS;NAME;SIZE;START")
+  cmake_parse_arguments(MEMORY "" "${single_args}" "" ${ARGN})
+
+  if(MEMORY_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "zephyr_linker_memory(${ARGV0} ...) given unknown "
+                        "arguments: ${MEMORY_UNPARSED_ARGUMENTS}"
+    )
+  endif()
+
+  foreach(arg ${single_args})
+    if(NOT DEFINED MEMORY_${arg})
+      message(FATAL_ERROR "zephyr_linker_memory(${ARGV0} ...) missing required "
+                          "argument: ${arg}"
+      )
+    endif()
+  endforeach()
+
+  set(MEMORY)
+  zephyr_linker_arg_val_list(MEMORY "${single_args}")
+
+  string(REPLACE ";" "\;" MEMORY "${MEMORY}")
+  set_property(TARGET linker
+               APPEND PROPERTY MEMORY_REGIONS "{${MEMORY}}"
+  )
+endfunction()
+
+# Usage:
+#   zephyr_linker_memory_ifdef(<setting> NAME <name> START <address> SIZE <size> FLAGS <flags>)
+#
+# Will create memory region if <setting> is enabled.
+#
+# <setting>: Setting to check for True value before invoking
+#            zephyr_linker_memory()
+#
+# See zephyr_linker_memory() description for other supported arguments.
+#
+macro(zephyr_linker_memory_ifdef feature_toggle)
+  if(${${feature_toggle}})
+    zephyr_linker_memory(${ARGN})
+  endif()
+endmacro()
+
+# Usage:
+#   zephyr_linker_dts_memory(NAME <name> PATH <path> FLAGS <flags>)
+#   zephyr_linker_dts_memory(NAME <name> NODELABEL <nodelabel> FLAGS <flags>)
+#   zephyr_linker_dts_memory(NAME <name> CHOSEN <prop> FLAGS <flags>)
+#
+# Zephyr linker devicetree memory.
+# This function specifies a memory region for the platform in use based on its
+# devicetree configuration.
+#
+# The memory will only be defined if the devicetree node or a devicetree node
+# matching the nodelabel exists and has status okay.
+#
+# Only one of PATH, NODELABEL, and CHOSEN parameters may be given.
+#
+# NAME <name>      : Name of the memory region, for example FLASH.
+# PATH <path>      : Devicetree node identifier.
+# NODELABEL <label>: Node label
+# CHOSEN <prop>    : Chosen property, add memory section described by the
+#                    /chosen property if it exists.
+# FLAGS <flags>  : Flags describing properties of the memory region.
+#                  Currently supported:
+#                  r: Read-only region
+#                  w: Read-write region
+#                  x: Executable region
+#                  The flags r and x, or w and x may be combined like: rx, wx.
+#
+function(zephyr_linker_dts_memory)
+  set(single_args "CHOSEN;FLAGS;NAME;PATH;NODELABEL")
+  cmake_parse_arguments(DTS_MEMORY "" "${single_args}" "" ${ARGN})
+
+  if(DTS_MEMORY_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "zephyr_linker_dts_memory(${ARGV0} ...) given unknown "
+                        "arguments: ${DTS_MEMORY_UNPARSED_ARGUMENTS}"
+    )
+  endif()
+
+  if((DEFINED DTS_MEMORY_PATH AND (DEFINED DTS_MEMORY_NODELABEL OR DEFINED DTS_MEMORY_CHOSEN))
+     OR (DEFINED DTS_MEMORY_NODELABEL AND DEFINED DTS_MEMORY_CHOSEN))
+    message(FATAL_ERROR "zephyr_linker_dts_memory(${ARGV0} ...), only one of "
+                        "PATH, NODELABEL, and CHOSEN is allowed."
+    )
+  endif()
+
+  if(DEFINED DTS_MEMORY_NODELABEL)
+    dt_nodelabel(DTS_MEMORY_PATH NODELABEL ${DTS_MEMORY_NODELABEL})
+  endif()
+
+  if(DEFINED DTS_MEMORY_CHOSEN)
+    dt_chosen(DTS_MEMORY_PATH PROPERTY ${DTS_MEMORY_CHOSEN})
+  endif()
+
+  if(NOT DEFINED DTS_MEMORY_PATH)
+    return()
+  endif()
+
+  dt_node_exists(exists PATH ${DTS_MEMORY_PATH})
+  if(NOT ${exists})
+    return()
+  endif()
+
+  dt_reg_addr(addr PATH ${DTS_MEMORY_PATH})
+  dt_reg_size(size PATH ${DTS_MEMORY_PATH})
+
+  zephyr_linker_memory(
+    NAME  ${DTS_MEMORY_NAME}
+    START ${addr}
+    SIZE  ${size}
+    FLAGS ${DTS_MEMORY_FLAGS}
+  )
+endfunction()
+
+# Usage:
+#   zephyr_linker_group(NAME <name> [VMA <region|group>] [LMA <region|group>])
+#   zephyr_linker_group(NAME <name> GROUP <group>)
+#
+# Zephyr linker group.
+# This function specifies a group inside a memory region or another group.
+#
+# The group ensures that all section inside the group are located together inside
+# the specified group.
+#
+# This also allows for section placement inside a given group without the section
+# itself needing the precise knowledge regarding the exact memory region this
+# section will be placed in, as that will be determined by the group setup.
+#
+# Each group will define the following linker symbols:
+# __<name>_start      : Start address of the group
+# __<name>_end        : End address of the group
+# __<name>_size       : Size of the group
+#
+# Note: <name> will be converted to lower casing for linker symbols definitions.
+#
+# NAME <name>         : Name of the group.
+# VMA <region|group>  : VMA Memory region or group to be used for this group.
+#                       If a group is used then the VMA region of that group will be used.
+# LMA <region|group>  : Memory region or group to be used for this group.
+# GROUP <group>       : Place the new group inside the existing group <group>
+#
+# Note: VMA and LMA are mutual exclusive with GROUP
+#
+# Example:
+#   zephyr_linker_memory(NAME memA START ... SIZE ... FLAGS ...)
+#   zephyr_linker_group(NAME groupA LMA memA)
+#   zephyr_linker_group(NAME groupB LMA groupA)
+#
+# will create two groups in same memory region as groupB will inherit the LMA
+# from groupA:
+#
+# +-----------------+
+# | memory region A |
+# |                 |
+# | +-------------+ |
+# | | groupA      | |
+# | +-------------+ |
+# |                 |
+# | +-------------+ |
+# | | groupB      | |
+# | +-------------+ |
+# |                 |
+# +-----------------+
+#
+# whereas
+#   zephyr_linker_memory(NAME memA START ... SIZE ... FLAGS ...)
+#   zephyr_linker_group(NAME groupA LMA memA)
+#   zephyr_linker_group(NAME groupB GROUP groupA)
+#
+# will create groupB inside groupA:
+#
+# +---------------------+
+# | memory region A     |
+# |                     |
+# | +-----------------+ |
+# | | groupA          | |
+# | |                 | |
+# | | +-------------+ | |
+# | | | groupB      | | |
+# | | +-------------+ | |
+# | |                 | |
+# | +-----------------+ |
+# |                     |
+# +---------------------+
+function(zephyr_linker_group)
+  set(single_args "NAME;GROUP;LMA;VMA")
+  cmake_parse_arguments(GROUP "" "${single_args}" "" ${ARGN})
+
+  if(GROUP_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "zephyr_linker_group(${ARGV0} ...) given unknown "
+                        "arguments: ${GROUP_UNPARSED_ARGUMENTS}"
+    )
+  endif()
+
+  if(DEFINED GROUP_GROUP AND (DEFINED GROUP_VMA OR DEFINED GROUP_LMA))
+    message(FATAL_ERROR "zephyr_linker_group(GROUP ...) cannot be used with "
+                        "VMA or LMA"
+    )
+  endif()
+
+  set(GROUP)
+  zephyr_linker_arg_val_list(GROUP "${single_args}")
+
+  string(REPLACE ";" "\;" GROUP "${GROUP}")
+  set_property(TARGET linker
+               APPEND PROPERTY GROUPS "{${GROUP}}"
+  )
+endfunction()
+
+# Usage:
+#   zephyr_linker_section(NAME <name> [GROUP <group>]
+#                         [VMA <region|group>] [LMA <region|group>]
+#                         [ADDRESS <address>] [ALIGN <alignment>]
+#                         [SUBALIGN <alignment>] [FLAGS <flags>]
+#                         [HIDDEN] [NOINPUT] [NOINIT]
+#                         [PASS <no> [<no>...]
+#   )
+#
+# Zephyr linker output section.
+# This function specifies an output section for the linker.
+#
+# When using zephyr_linker_section(NAME <name>) an output section with <name>
+# will be configured. This section will default include input sections of the
+# same name, unless NOINPUT is specified.
+# This means the section named `foo` will default include the sections matching
+# `foo` and `foo.*`
+# Each output section will define the following linker symbols:
+# __<name>_start      : Start address of the section
+# __<name>_end        : End address of the section
+# __<name>_size       : Size of the section
+# __<name>_load_start : Load address of the section, if VMA = LMA then this
+#                       value will be identical to `__<name>_start`
+#
+# The location of the output section can be controlled using LMA, VMA, and
+# address parameters
+#
+# NAME <name>         : Name of the output section.
+# VMA <region|group>  : VMA Memory region or group where code / data is located runtime (VMA)
+#                       If <group> is used here it means the section will use the
+#                       same VMA memory region as <group> but will not be placed
+#                       inside the group itself, see also GROUP argument.
+# KVMA <region|group> : Kernel VMA Memory region or group where code / data is located runtime (VMA)
+#                       When MMU is active and Kernel VM base and offset is different
+#                       from SRAM base and offset, then the region defined by KVMA will
+#                       be used as VMA.
+#                       If <group> is used here it means the section will use the
+#                       same VMA memory region as <group> but will not be placed
+#                       inside the group itself, see also GROUP argument.
+# LMA <region|group>  : Memory region or group where code / data is loaded (LMA)
+#                       If VMA is different from LMA, the code / data will be loaded
+#                       from LMA into VMA at bootup, this is usually the case for
+#                       global or static variables that are loaded in rom and copied
+#                       to ram at boot time.
+#                       If <group> is used here it means the section will use the
+#                       same LMA memory region as <group> but will not be placed
+#                       inside the group itself, see also GROUP argument.
+# GROUP <group>       : Place this section inside the group <group>
+# ADDRESS <address>   : Specific address to use for this section.
+# ALIGN_WITH_INPUT    : The alignment difference between VMA and LMA is kept
+#                       intact for this section.
+# ALIGN <alignment>   : Align the execution address with alignment.
+# SUBALIGN <alignment>: Align input sections with alignment value.
+# ENDALIGN <alignment>: Align the end so that next output section will start aligned.
+#                       This only has effect on Scatter scripts.
+#  Note: Regarding all alignment attributes. Not all linkers may handle alignment
+#        in identical way. For example the Scatter file will align both load and
+#        execution address (LMA and VMA) to be aligned when given the ALIGN attribute.
+# NOINPUT             : No default input sections will be defined, to setup input
+#                       sections for section <name>, the corresponding
+#                       `zephyr_linker_section_configure()` must be used.
+# PASS <no> [<no> ..] : Linker pass iteration where this section should be active.
+#                       Default a section will be present during all linker passes
+#                       But in cases a section shall only be present at a specific
+#                       pass, this argument can be used. For example to only have
+#                       this section present on the first linker pass, use `PASS 1`.
+#
+# Note: VMA and LMA are mutual exclusive with GROUP
+#
+function(zephyr_linker_section)
+  set(options     "ALIGN_WITH_INPUT;HIDDEN;NOINIT;NOINPUT")
+  set(single_args "ADDRESS;ALIGN;ENDALIGN;GROUP;KVMA;LMA;NAME;SUBALIGN;TYPE;VMA")
+  set(multi_args  "PASS")
+  cmake_parse_arguments(SECTION "${options}" "${single_args}" "${multi_args}" ${ARGN})
+
+  if(SECTION_UNPARSED_ARGUMENTS)
+    message(WARNING "zephyr_linker_section(${ARGV0} ...) given unknown "
+                    "arguments: ${SECTION_UNPARSED_ARGUMENTS}"
+    )
+  endif()
+
+  if(DEFINED SECTION_GROUP AND (DEFINED SECTION_VMA OR DEFINED SECTION_LMA))
+    message(FATAL_ERROR "zephyr_linker_section(GROUP ...) cannot be used with "
+                        "VMA or LMA"
+    )
+  endif()
+
+  if(DEFINED SECTION_KVMA)
+    # If KVMA is set and the Kernel virtual memory settings reqs are met, we
+    # substitute the VMA setting with the specified KVMA value.
+    if(CONFIG_MMU)
+      math(EXPR KERNEL_MEM_VM_OFFSET
+           "(${CONFIG_KERNEL_VM_BASE} + ${CONFIG_KERNEL_VM_OFFSET})\
+            - (${CONFIG_SRAM_BASE_ADDRESS} + ${CONFIG_SRAM_OFFSET})"
+      )
+
+      if(NOT (${KERNEL_MEM_VM_OFFSET} EQUAL 0))
+        set(SECTION_VMA ${SECTION_KVMA})
+        set(SECTION_KVMA)
+      endif()
+    endif()
+  endif()
+
+  set(SECTION)
+  zephyr_linker_arg_val_list(SECTION "${single_args}")
+  zephyr_linker_arg_val_list(SECTION "${options}")
+  zephyr_linker_arg_val_list(SECTION "${multi_args}")
+
+  string(REPLACE ";" "\;" SECTION "${SECTION}")
+  set_property(TARGET linker
+               APPEND PROPERTY SECTIONS "{${SECTION}}"
+  )
+endfunction()
+
+# Usage:
+#   zephyr_linker_section_ifdef(<setting>
+#                               NAME <name> [VMA <region>] [LMA <region>]
+#                               [ADDRESS <address>] [ALIGN <alignment>]
+#                               [SUBALIGN <alignment>] [FLAGS <flags>]
+#                               [HIDDEN] [NOINPUT] [NOINIT]
+#                               [PASS <no> [<no>...]
+#   )
+#
+# Will create an output section if <setting> is enabled.
+#
+# <setting>: Setting to check for True value before invoking
+#            zephyr_linker_section()
+#
+# See zephyr_linker_section() description for other supported arguments.
+#
+macro(zephyr_linker_section_ifdef feature_toggle)
+  if(${${feature_toggle}})
+    zephyr_linker_section(${ARGN})
+  endif()
+endmacro()
+
+# Usage:
+#   zephyr_iterable_section(NAME <name> [GROUP <group>]
+#                           [VMA <region|group>] [LMA <region|group>]
+#                           [ALIGN_WITH_INPUT] [SUBALIGN <alignment>]
+#   )
+#
+#
+# Define an output section which will set up an iterable area
+# of equally-sized data structures. For use with Z_STRUCT_SECTION_ITERABLE.
+# Input sections will be sorted by name in lexicographical order.
+#
+# Each list for an input section will define the following linker symbols:
+# _<name>_list_start: Start of the iterable list
+# _<name>_list_end  : End of the iterable list
+#
+# The output section will be named `<name>_area` and define the following linker
+# symbols:
+# __<name>_area_start      : Start address of the section
+# __<name>_area_end        : End address of the section
+# __<name>_area_size       : Size of the section
+# __<name>_area_load_start : Load address of the section, if VMA = LMA then this
+#                            value will be identical to `__<name>_area_start`
+#
+# NAME <name>         : Name of the struct type, the output section be named
+#                       accordingly as: <name>_area.
+# VMA <region|group>  : VMA Memory region where code / data is located runtime (VMA)
+# LMA <region|group>  : Memory region where code / data is loaded (LMA)
+#                       If VMA is different from LMA, the code / data will be loaded
+#                       from LMA into VMA at bootup, this is usually the case for
+#                       global or static variables that are loaded in rom and copied
+#                       to ram at boot time.
+# GROUP <group>       : Place this section inside the group <group>
+# ADDRESS <address>   : Specific address to use for this section.
+# ALIGN_WITH_INPUT    : The alignment difference between VMA and LMA is kept
+#                       intact for this section.
+# SUBALIGN <alignment>: Force input alignment with size <alignment>
+#  Note: Regarding all alignment attributes. Not all linkers may handle alignment
+#        in identical way. For example the Scatter file will align both load and
+#        execution address (LMA and VMA) to be aligned when given the ALIGN attribute.
+#/
+function(zephyr_iterable_section)
+  # ToDo - Should we use ROM, RAM, etc as arguments ?
+  set(options     "ALIGN_WITH_INPUT")
+  set(single_args "GROUP;LMA;NAME;SUBALIGN;VMA")
+  set(multi_args  "")
+  set(align_input)
+  cmake_parse_arguments(SECTION "${options}" "${single_args}" "${multi_args}" ${ARGN})
+
+  if(NOT DEFINED SECTION_NAME)
+    message(FATAL_ERROR "zephyr_iterable_section(${ARGV0} ...) missing "
+                        "required argument: NAME"
+    )
+  endif()
+
+  if(NOT DEFINED SECTION_SUBALIGN)
+    message(FATAL_ERROR "zephyr_iterable_section(${ARGV0} ...) missing "
+                        "required argument: SUBALIGN"
+    )
+  endif()
+
+  if(SECTION_ALIGN_WITH_INPUT)
+    set(align_input ALIGN_WITH_INPUT)
+  endif()
+
+  zephyr_linker_section(
+    NAME ${SECTION_NAME}_area
+    GROUP "${SECTION_GROUP}"
+    VMA "${SECTION_VMA}" LMA "${SECTION_LMA}"
+    NOINPUT ${align_input} SUBALIGN ${SECTION_SUBALIGN}
+  )
+  zephyr_linker_section_configure(
+    SECTION ${SECTION_NAME}_area
+    INPUT "._${SECTION_NAME}.static.*"
+    SYMBOLS _${SECTION_NAME}_list_start _${SECTION_NAME}_list_end
+    KEEP SORT NAME
+  )
+endfunction()
+
+# Usage:
+#   zephyr_linker_section_obj_level(SECTION <section> LEVEL <level>)
+#
+# generate a symbol to mark the start of the objects array for
+# the specified object and level, then link all of those objects
+# (sorted by priority). Ensure the objects aren't discarded if there is
+# no direct reference to them.
+#
+# This is useful content such as struct devices.
+#
+# For example: zephyr_linker_section_obj_level(SECTION init LEVEL PRE_KERNEL_1)
+# will create an input section matching `.z_init_PRE_KERNEL_1?_` and
+# `.z_init_PRE_KERNEL_1??_`.
+#
+# SECTION <section>: Section in which the objects shall be placed
+# LEVEL <level>    : Priority level, all input sections matching the level
+#                    will be sorted.
+#
+function(zephyr_linker_section_obj_level)
+  set(single_args "SECTION;LEVEL")
+  cmake_parse_arguments(OBJ "" "${single_args}" "" ${ARGN})
+
+  if(NOT DEFINED OBJ_SECTION)
+    message(FATAL_ERROR "zephyr_linker_section_obj_level(${ARGV0} ...) "
+                        "missing required argument: SECTION"
+    )
+  endif()
+
+  if(NOT DEFINED OBJ_LEVEL)
+    message(FATAL_ERROR "zephyr_linker_section_obj_level(${ARGV0} ...) "
+                        "missing required argument: LEVEL"
+    )
+  endif()
+
+  zephyr_linker_section_configure(
+    SECTION ${OBJ_SECTION}
+    INPUT ".z_${OBJ_SECTION}_${OBJ_LEVEL}?_"
+    SYMBOLS __${OBJ_SECTION}_${OBJ_LEVEL}_start
+    KEEP SORT NAME
+  )
+  zephyr_linker_section_configure(
+    SECTION ${OBJ_SECTION}
+    INPUT ".z_${OBJ_SECTION}_${OBJ_LEVEL}??_"
+    KEEP SORT NAME
+  )
+endfunction()
+
+# Usage:
+#   zephyr_linker_section_configure(SECTION <section> [ALIGN <alignment>]
+#                                   [PASS <no>] [PRIO <no>] [SORT <sort>]
+#                                   [ANY] [FIRST] [KEEP]
+#   )
+#
+# Configure an output section with additional input sections.
+# An output section can be configured with additional input sections besides its
+# default section.
+# For example, adding the input section `foo` to the output section bar, with KEEP
+# attribute, then call:
+#   zephyr_linker_section_configure(SECTION bar INPUT foo KEEP)
+#
+# ALIGN <alignment>   : Will align the input section placement inside the load
+#                       region with <alignment>
+# FIRST               : The first input section in the list should be marked as
+#                       first section in output.
+# SORT <NAME>         : Sort the input sections according to <type>.
+#                       Currently only `NAME` is supported.
+# KEEP                : Do no eliminate input section during linking
+# PRIO                : The priority of the input section. Per default, input
+#                       sections order is not guaranteed by all linkers, but
+#                       using priority, then Zephyr CMake linker will create
+#                       sections so order can be guaranteed. All unprioritized
+#                       sections will internally be given a CMake process order
+#                       priority counting from 100, so first unprioritized section
+#                       is handles internal pri0 100, next 101, and so on.
+#                       To ensure a specific input section come before those,
+#                       you may use `PRIO 50`, `PRIO 20` and so on.
+#                       To ensure an input section is at the end, it is advised
+#                       to use `PRIO 200` and above.
+# PASS <no>           : The call should only be considered for linker pass number <no>.
+#                       For example, `PASS 1` means the call is only effective
+#                       on first linker pass iteration. `PASS 2` on second iteration,
+#                       and so on.
+# FLAGS <flags>       : Special section flags such as "+RO", +XO, "+ZI".
+# ANY                 : ANY section flag in scatter file.
+#                       The FLAGS and ANY arguments only has effect for scatter files.
+#
+function(zephyr_linker_section_configure)
+  set(options     "ANY;FIRST;KEEP")
+  set(single_args "ALIGN;OFFSET;PASS;PRIO;SECTION;SORT")
+  set(multi_args  "FLAGS;INPUT;SYMBOLS")
+  cmake_parse_arguments(SECTION "${options}" "${single_args}" "${multi_args}" ${ARGN})
+
+  if(SECTION_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "zephyr_linker_section_configure(${ARGV0} ...) given unknown arguments: ${SECTION_UNPARSED_ARGUMENTS}")
+  endif()
+
+  if(DEFINED SECTION_SYMBOLS)
+    list(LENGTH SECTION_SYMBOLS symbols_count)
+    if(${symbols_count} GREATER 2)
+      message(FATAL_ERROR "zephyr_linker_section_configure(SYMBOLS [start_sym [end_sym]]) takes maximum two symbol names (start and end).")
+
+    endif()
+  endif()
+
+  set(SECTION)
+  zephyr_linker_arg_val_list(SECTION "${single_args}")
+  zephyr_linker_arg_val_list(SECTION "${options}")
+  zephyr_linker_arg_val_list(SECTION "${multi_args}")
+
+  string(REPLACE ";" "\;" SECTION "${SECTION}")
+  set_property(TARGET linker
+               APPEND PROPERTY SECTION_SETTINGS "{${SECTION}}"
+  )
+endfunction()
+
+# Usage:
+#   zephyr_linker_symbol(SYMBOL <name> EXPR <expr>)
+#
+# Add additional user defined symbol to the generated linker script.
+#
+# SYMBOL <name>: Symbol name to be available.
+# EXPR <expr>  : Expression that defines the symbol. Due to linker limitations
+#                all expressions should only contain simple math, such as
+#                `+, -, *` and similar. The expression will go directly into the
+#                linker, and all `%<symbol>%` will be replaced with the referred
+#                symbol.
+#
+# Example:
+#   To create a new symbol `bar` pointing to the start VMA address of section
+#   `foo` + 1024, one can write:
+#     zephyr_linker_symbol(SYMBOL bar EXPR "(%foo% + 1024)")
+#
+function(zephyr_linker_symbol)
+  set(single_args "EXPR;SYMBOL")
+  cmake_parse_arguments(SYMBOL "" "${single_args}" "" ${ARGN})
+
+  if(SECTION_UNPARSED_ARGUMENTS)
+    message(WARNING "zephyr_linker_symbol(${ARGV0} ...) given unknown "
+                    "arguments: ${SECTION_UNPARSED_ARGUMENTS}"
+    )
+  endif()
+
+  set(SYMBOL)
+  zephyr_linker_arg_val_list(SYMBOL "${single_args}")
+
+  string(REPLACE ";" "\;" SYMBOL "${SYMBOL}")
+  set_property(TARGET linker
+               APPEND PROPERTY SYMBOLS "{${SYMBOL}}"
+  )
+endfunction()
+
+# Internal helper macro for zephyr_linker*() functions.
+# The macro will create a list of argument-value pairs for defined arguments
+# that can be passed on to linker script generators and processed as a CMake
+# function call using cmake_parse_arguments.
+#
+# For example, having the following argument and value:
+# FOO: bar
+# BAZ: <undefined>
+# QUX: option set
+#
+# will create a list as: "FOO;bar;QUX:TRUE" which can then be parsed as argument
+# list later.
+macro(zephyr_linker_arg_val_list list arguments)
+  foreach(arg ${arguments})
+    if(DEFINED ${list}_${arg})
+      list(APPEND ${list} ${arg} "${${list}_${arg}}")
+    endif()
+  endforeach()
+endmacro()

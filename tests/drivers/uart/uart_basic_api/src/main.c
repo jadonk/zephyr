@@ -11,6 +11,7 @@
  * @}
  */
 
+#include <usb/usb_device.h>
 #include "test_uart.h"
 
 #ifdef CONFIG_SHELL
@@ -20,6 +21,7 @@ TC_CMD_DEFINE(test_uart_fifo_read)
 TC_CMD_DEFINE(test_uart_fifo_fill)
 TC_CMD_DEFINE(test_uart_poll_in)
 TC_CMD_DEFINE(test_uart_poll_out)
+TC_CMD_DEFINE(test_uart_pending)
 
 SHELL_CMD_REGISTER(test_uart_configure, NULL, NULL,
 			TC_CMD_ITEM(test_uart_configure));
@@ -33,6 +35,8 @@ SHELL_CMD_REGISTER(test_uart_poll_in, NULL, NULL,
 			TC_CMD_ITEM(test_uart_poll_in));
 SHELL_CMD_REGISTER(test_uart_poll_out, NULL, NULL,
 			TC_CMD_ITEM(test_uart_poll_out));
+SHELL_CMD_REGISTER(test_uart_pending, NULL, NULL,
+			TC_CMD_ITEM(test_uart_pending));
 #endif
 
 #ifndef CONFIG_UART_INTERRUPT_DRIVEN
@@ -45,10 +49,29 @@ void test_uart_fifo_read(void)
 {
 	ztest_test_skip();
 }
+
+void test_uart_pending(void)
+{
+	ztest_test_skip();
+}
 #endif
 
 void test_main(void)
 {
+#if defined(CONFIG_USB_UART_CONSOLE)
+	const struct device *dev;
+	uint32_t dtr = 0;
+
+	dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+	if (!device_is_ready(dev) || usb_enable(NULL)) {
+		return;
+	}
+
+	while (!dtr) {
+		uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
+		k_sleep(K_MSEC(100));
+	}
+#endif
 #ifndef CONFIG_SHELL
 	ztest_test_suite(uart_basic_test,
 			 ztest_unit_test(test_uart_configure),
@@ -56,7 +79,8 @@ void test_main(void)
 			 ztest_unit_test(test_uart_fifo_fill),
 			 ztest_unit_test(test_uart_fifo_read),
 			 ztest_unit_test(test_uart_poll_in),
-			 ztest_unit_test(test_uart_poll_out));
+			 ztest_unit_test(test_uart_poll_out),
+			 ztest_unit_test(test_uart_pending));
 	ztest_run_test_suite(uart_basic_test);
 #endif
 }

@@ -52,6 +52,7 @@
 #include <net/net_ip.h>
 #include <sys/printk.h>
 #include <sys/util.h>
+#include <sys/types.h>
 
 #include <net/coap.h>
 #include <net/lwm2m.h>
@@ -108,23 +109,20 @@
 #define LWM2M_RES_TYPE_NONE	0
 #define LWM2M_RES_TYPE_OPAQUE	1
 #define LWM2M_RES_TYPE_STRING	2
-#define LWM2M_RES_TYPE_UINT64	3
-#define LWM2M_RES_TYPE_U64	3
-#define LWM2M_RES_TYPE_UINT	4
-#define LWM2M_RES_TYPE_U32	4
-#define LWM2M_RES_TYPE_U16	5
-#define LWM2M_RES_TYPE_U8	6
-#define LWM2M_RES_TYPE_INT64	7
-#define LWM2M_RES_TYPE_S64	7
-#define LWM2M_RES_TYPE_INT	8
-#define LWM2M_RES_TYPE_S32	8
-#define LWM2M_RES_TYPE_S16	9
-#define LWM2M_RES_TYPE_S8	10
-#define LWM2M_RES_TYPE_BOOL	11
-#define LWM2M_RES_TYPE_TIME	12
-#define LWM2M_RES_TYPE_FLOAT32	13
-#define LWM2M_RES_TYPE_FLOAT64	14
-#define LWM2M_RES_TYPE_OBJLNK	15
+#define LWM2M_RES_TYPE_UINT	3
+#define LWM2M_RES_TYPE_U32	3
+#define LWM2M_RES_TYPE_U16	4
+#define LWM2M_RES_TYPE_U8	5
+#define LWM2M_RES_TYPE_INT64	6
+#define LWM2M_RES_TYPE_S64	6
+#define LWM2M_RES_TYPE_INT	7
+#define LWM2M_RES_TYPE_S32	7
+#define LWM2M_RES_TYPE_S16	8
+#define LWM2M_RES_TYPE_S8	9
+#define LWM2M_RES_TYPE_BOOL	10
+#define LWM2M_RES_TYPE_TIME	11
+#define LWM2M_RES_TYPE_FLOAT	12
+#define LWM2M_RES_TYPE_OBJLNK	13
 
 /* remember that we have already output a value - can be between two block's */
 #define WRITER_OUTPUT_VALUE      1
@@ -139,6 +137,12 @@
 
 struct lwm2m_engine_obj;
 struct lwm2m_message;
+
+#define LWM2M_PATH_LEVEL_NONE 0
+#define LWM2M_PATH_LEVEL_OBJECT 1
+#define LWM2M_PATH_LEVEL_OBJECT_INST 2
+#define LWM2M_PATH_LEVEL_RESOURCE 3
+#define LWM2M_PATH_LEVEL_RESOURCE_INST 4
 
 /* path representing object instances */
 struct lwm2m_obj_path {
@@ -191,21 +195,44 @@ struct lwm2m_engine_obj {
 	uint16_t field_count;
 	uint16_t instance_count;
 	uint16_t max_instance_count;
+
+	/* Object version information. */
+	uint8_t version_major;
+	uint8_t version_minor;
+
+	/* Object is a core object (defined in the official LwM2M spec.) */
+	bool is_core : 1;
 };
 
 /* Resource instances with this value are considered "not created" yet */
 #define RES_INSTANCE_NOT_CREATED 65535
 
 /* Resource macros */
-#define _INIT_OBJ_RES(_id, _r_ptr, _r_idx, _ri_ptr, _ri_count, \
-		      _r_cb, _pre_w_cb, _post_w_cb, _ex_cb) \
+
+#if CONFIG_LWM2M_ENGINE_VALIDATION_BUFFER_SIZE > 0
+#define _INIT_OBJ_RES(_id, _r_ptr, _r_idx, _ri_ptr, _ri_count, _multi_ri, \
+		      _r_cb, _pre_w_cb, _val_cb, _post_w_cb, _ex_cb) \
 	_r_ptr[_r_idx].res_id = _id; \
 	_r_ptr[_r_idx].res_instances = _ri_ptr; \
 	_r_ptr[_r_idx].res_inst_count = _ri_count; \
+	_r_ptr[_r_idx].multi_res_inst = _multi_ri; \
+	_r_ptr[_r_idx].read_cb = _r_cb; \
+	_r_ptr[_r_idx].pre_write_cb = _pre_w_cb; \
+	_r_ptr[_r_idx].validate_cb = _val_cb; \
+	_r_ptr[_r_idx].post_write_cb = _post_w_cb; \
+	_r_ptr[_r_idx].execute_cb = _ex_cb
+#else
+#define _INIT_OBJ_RES(_id, _r_ptr, _r_idx, _ri_ptr, _ri_count, _multi_ri, \
+		      _r_cb, _pre_w_cb, _val_cb, _post_w_cb, _ex_cb) \
+	_r_ptr[_r_idx].res_id = _id; \
+	_r_ptr[_r_idx].res_instances = _ri_ptr; \
+	_r_ptr[_r_idx].res_inst_count = _ri_count; \
+	_r_ptr[_r_idx].multi_res_inst = _multi_ri; \
 	_r_ptr[_r_idx].read_cb = _r_cb; \
 	_r_ptr[_r_idx].pre_write_cb = _pre_w_cb; \
 	_r_ptr[_r_idx].post_write_cb = _post_w_cb; \
 	_r_ptr[_r_idx].execute_cb = _ex_cb
+#endif /* CONFIG_LWM2M_ENGINE_VALIDATION_BUFFER_SIZE > 0 */
 
 #define _INIT_OBJ_RES_INST(_ri_ptr, _ri_idx, _ri_count, _ri_create, \
 			   _data_ptr, _data_len) \
@@ -250,13 +277,13 @@ struct lwm2m_engine_obj {
 	} while (false)
 
 #define INIT_OBJ_RES(_id, _r_ptr, _r_idx, \
-		     _ri_ptr, _ri_idx, _ri_count, _ri_create, \
+		     _ri_ptr, _ri_idx, _ri_count, _multi_ri, _ri_create, \
 		     _data_ptr, _data_len, \
-		     _r_cb, _pre_w_cb, _post_w_cb, _ex_cb) \
+		     _r_cb, _pre_w_cb, _val_cb, _post_w_cb, _ex_cb) \
 	do { \
 		_INIT_OBJ_RES(_id, _r_ptr, _r_idx, \
-			      (_ri_ptr + _ri_idx), _ri_count, \
-			      _r_cb, _pre_w_cb, _post_w_cb, _ex_cb); \
+			      (_ri_ptr + _ri_idx), _ri_count, _multi_ri, \
+			      _r_cb, _pre_w_cb, _val_cb, _post_w_cb, _ex_cb); \
 		_INIT_OBJ_RES_INST(_ri_ptr, _ri_idx, _ri_count, _ri_create, \
 				   _data_ptr, _data_len); \
 	++_r_idx; \
@@ -264,12 +291,12 @@ struct lwm2m_engine_obj {
 
 
 #define INIT_OBJ_RES_OPT(_id, _r_ptr, _r_idx, \
-			 _ri_ptr, _ri_idx, _ri_count, _ri_create, \
-			 _r_cb, _pre_w_cb, _post_w_cb, _ex_cb) \
+			 _ri_ptr, _ri_idx, _ri_count, _multi_ri, _ri_create, \
+			 _r_cb, _pre_w_cb, _val_cb, _post_w_cb, _ex_cb) \
 	do { \
 		_INIT_OBJ_RES(_id, _r_ptr, _r_idx, \
-			      (_ri_ptr + _ri_idx), _ri_count, \
-			      _r_cb, _pre_w_cb, _post_w_cb, _ex_cb); \
+			      (_ri_ptr + _ri_idx), _ri_count, _multi_ri, \
+			      _r_cb, _pre_w_cb, _val_cb, _post_w_cb, _ex_cb); \
 		_INIT_OBJ_RES_INST_OPT(_ri_ptr, _ri_idx, _ri_count, _ri_create); \
 		++_r_idx; \
 	} while (false)
@@ -278,28 +305,28 @@ struct lwm2m_engine_obj {
 				_ri_ptr, _ri_idx, _ri_count, _ri_create, \
 				_data_ptr, _data_len) \
 	INIT_OBJ_RES(_id, _r_ptr, _r_idx, \
-		     _ri_ptr, _ri_idx, _ri_count, _ri_create, \
-		     _data_ptr, _data_len, NULL, NULL, NULL, NULL)
+		     _ri_ptr, _ri_idx, _ri_count, true, _ri_create, \
+		     _data_ptr, _data_len, NULL, NULL, NULL, NULL, NULL)
 
 #define INIT_OBJ_RES_MULTI_OPTDATA(_id, _r_ptr, _r_idx, \
 				   _ri_ptr, _ri_idx, _ri_count, _ri_create) \
 	INIT_OBJ_RES_OPT(_id, _r_ptr, _r_idx, \
-			 _ri_ptr, _ri_idx, _ri_count, _ri_create, \
-			 NULL, NULL, NULL, NULL)
+			 _ri_ptr, _ri_idx, _ri_count, true, _ri_create, \
+			 NULL, NULL, NULL, NULL, NULL)
 
 #define INIT_OBJ_RES_DATA(_id, _r_ptr, _r_idx, _ri_ptr, _ri_idx, \
 			  _data_ptr, _data_len) \
-	INIT_OBJ_RES(_id, _r_ptr, _r_idx, _ri_ptr, _ri_idx, 1U, true, \
-		     _data_ptr, _data_len, NULL, NULL, NULL, NULL)
+	INIT_OBJ_RES(_id, _r_ptr, _r_idx, _ri_ptr, _ri_idx, 1U, false, true, \
+		     _data_ptr, _data_len, NULL, NULL, NULL, NULL, NULL)
 
 #define INIT_OBJ_RES_OPTDATA(_id, _r_ptr, _r_idx, _ri_ptr, _ri_idx) \
-	INIT_OBJ_RES_OPT(_id, _r_ptr, _r_idx, _ri_ptr, _ri_idx, 1U, true, \
-			 NULL, NULL, NULL, NULL)
+	INIT_OBJ_RES_OPT(_id, _r_ptr, _r_idx, _ri_ptr, _ri_idx, 1U, false, \
+			 true, NULL, NULL, NULL, NULL, NULL)
 
 #define INIT_OBJ_RES_EXECUTE(_id, _r_ptr, _r_idx, _ex_cb) \
 	do { \
-		_INIT_OBJ_RES(_id, _r_ptr, _r_idx, NULL, 0, \
-			      NULL, NULL, NULL, _ex_cb); \
+		_INIT_OBJ_RES(_id, _r_ptr, _r_idx, NULL, 0, false, \
+			      NULL, NULL, NULL, NULL, _ex_cb); \
 		++_r_idx; \
 	} while (false)
 
@@ -335,12 +362,16 @@ struct lwm2m_engine_res_inst {
 struct lwm2m_engine_res {
 	lwm2m_engine_get_data_cb_t		read_cb;
 	lwm2m_engine_get_data_cb_t		pre_write_cb;
+#if CONFIG_LWM2M_ENGINE_VALIDATION_BUFFER_SIZE > 0
+	lwm2m_engine_set_data_cb_t		validate_cb;
+#endif
 	lwm2m_engine_set_data_cb_t		post_write_cb;
 	lwm2m_engine_execute_cb_t		execute_cb;
 
 	struct lwm2m_engine_res_inst *res_instances;
 	uint16_t res_id;
 	uint8_t  res_inst_count;
+	bool multi_res_inst;
 };
 
 struct lwm2m_engine_obj_inst {
@@ -380,6 +411,7 @@ struct lwm2m_block_context {
 	uint8_t token[8];
 	uint8_t tkl;
 	bool last_block : 1;
+	uint16_t res_id;
 };
 
 struct lwm2m_output_context {
@@ -409,6 +441,8 @@ typedef void (*lwm2m_message_timeout_cb_t)(struct lwm2m_message *msg);
 
 /* Internal LwM2M message structure to track in-flight messages. */
 struct lwm2m_message {
+	sys_snode_t node;
+
 	/** LwM2M context related to this message */
 	struct lwm2m_ctx *ctx;
 
@@ -440,9 +474,6 @@ struct lwm2m_message {
 
 	/** Incoming message action */
 	uint8_t operation;
-
-	/** Counter for message re-send / abort handling */
-	uint8_t send_attempts;
 
 	/* Information whether the message was acknowledged. */
 	bool acknowledged : 1;
@@ -484,9 +515,6 @@ struct lwm2m_writer {
 	size_t (*put_float32fix)(struct lwm2m_output_context *out,
 				 struct lwm2m_obj_path *path,
 				 float32_value_t *value);
-	size_t (*put_float64fix)(struct lwm2m_output_context *out,
-				 struct lwm2m_obj_path *path,
-				 float64_value_t *value);
 	size_t (*put_bool)(struct lwm2m_output_context *out,
 			   struct lwm2m_obj_path *path,
 			   bool value);
@@ -496,6 +524,8 @@ struct lwm2m_writer {
 	size_t (*put_objlnk)(struct lwm2m_output_context *out,
 			     struct lwm2m_obj_path *path,
 			     struct lwm2m_objlnk *value);
+	ssize_t (*put_corelink)(struct lwm2m_output_context *out,
+				const struct lwm2m_obj_path *path);
 };
 
 struct lwm2m_reader {
@@ -507,8 +537,6 @@ struct lwm2m_reader {
 			     uint8_t *buf, size_t buflen);
 	size_t (*get_float32fix)(struct lwm2m_input_context *in,
 				 float32_value_t *value);
-	size_t (*get_float64fix)(struct lwm2m_input_context *in,
-				 float64_value_t *value);
 	size_t (*get_bool)(struct lwm2m_input_context *in,
 			   bool *value);
 	size_t (*get_opaque)(struct lwm2m_input_context *in,
@@ -679,13 +707,6 @@ static inline size_t engine_put_float32fix(struct lwm2m_output_context *out,
 	return out->writer->put_float32fix(out, path, value);
 }
 
-static inline size_t engine_put_float64fix(struct lwm2m_output_context *out,
-					   struct lwm2m_obj_path *path,
-					   float64_value_t *value)
-{
-	return out->writer->put_float64fix(out, path, value);
-}
-
 static inline size_t engine_put_bool(struct lwm2m_output_context *out,
 				     struct lwm2m_obj_path *path,
 				     bool value)
@@ -711,6 +732,16 @@ static inline size_t engine_put_objlnk(struct lwm2m_output_context *out,
 	return out->writer->put_objlnk(out, path, value);
 }
 
+static inline ssize_t engine_put_corelink(struct lwm2m_output_context *out,
+					  const struct lwm2m_obj_path *path)
+{
+	if (out->writer->put_corelink) {
+		return out->writer->put_corelink(out, path);
+	}
+
+	return -ENOTSUP;
+}
+
 static inline size_t engine_get_s32(struct lwm2m_input_context *in,
 				    int32_t *value)
 {
@@ -733,12 +764,6 @@ static inline size_t engine_get_float32fix(struct lwm2m_input_context *in,
 					   float32_value_t *value)
 {
 	return in->reader->get_float32fix(in, value);
-}
-
-static inline size_t engine_get_float64fix(struct lwm2m_input_context *in,
-					   float64_value_t *value)
-{
-	return in->reader->get_float64fix(in, value);
 }
 
 static inline size_t engine_get_bool(struct lwm2m_input_context *in,

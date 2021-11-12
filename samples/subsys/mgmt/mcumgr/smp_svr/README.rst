@@ -263,6 +263,38 @@ The general sequence of a DFU process is as follows:
 * Reset the device remotely using :file:`mcumgr`
 * Confirm the uploaded image using :file:`mcumgr` (optional)
 
+Direct image upload and Image mapping to MCUboot slot
+=====================================================
+
+Currently the mcumgr supports, for direct upload, 4 target images, of which first two are mapped
+into MCUboot primary (slot-0) and secondary (slot-1) respectively.
+
+The mcumgr ``image upload`` command may be provided optional ``-e -n <image>`` parameter that will
+select target image for upload; when parameter is no provided, 0 is assumed, which means "default
+behaviour", and it performs upload to the "image-1", the MCUboot secondary slot.
+
+For clarity, here is DTS label to slot to ``<image>`` translation table:
+
+    +-----------+--------+------------+
+    | DTS label | Slot   | -n <image> |
+    +===========+========+============+
+    | "image-0" | slot-0 |     1      |
+    +-----------+--------+------------+
+    | "image-1" | slot-1 |     0, 1   |
+    +-----------+--------+------------+
+    | "image-2" |        |     2      |
+    +-----------+--------+------------+
+    | "image-3" |        |     3      |
+    +-----------+--------+------------+
+
+.. note::
+
+   The ``-e`` option actually means "no erase", and is provided to the mcumgr
+   to prevent it from sending erase command to target, before updating image.
+   The options is always needed when ``-n`` is used for image selection,
+   as the erase command is hardcoded to erase slot-1 ("image-1"),
+   regardless of which slot is uploaded at the time.
+
 Upload the signed image
 =======================
 
@@ -333,3 +365,16 @@ on the next reset unless the image is confirmed. To confirm the new image:
 Note that if you try to send the very same image that is already flashed in
 slot-0 then the procedure will not complete successfully since the hash values
 for both slots will be identical.
+
+Download file from File System
+******************************
+
+SMP server supports downloading files from File System on device via
+:file:`mcumgr`. This is useful with FS log backend, when files are stored in
+non-volatile memory. Build and flash both MCUboot and smp_svr applications and
+then use :file:`mcumgr` with :file:`download` command, e.g.:
+
+.. code-block:: console
+
+   mcumgr --conntype serial --connstring='dev=/dev/ttyACM0,baud=115200' \
+   fs download /lfs/log.0000 ~/log.txt

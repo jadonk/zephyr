@@ -18,10 +18,15 @@
 #include <init.h>
 
 #include <drivers/clock_control/stm32_clock_control.h>
-#include <pinmux/stm32/pinmux_stm32.h>
+#include <pinmux/pinmux_stm32.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(pwm_stm32, CONFIG_PWM_LOG_LEVEL);
+
+/* L0 series MCUs only have 16-bit timers and don't have below macro defined */
+#ifndef IS_TIM_32B_COUNTER_INSTANCE
+#define IS_TIM_32B_COUNTER_INSTANCE(INSTANCE) (0)
+#endif
 
 /** PWM data. */
 struct pwm_stm32_data {
@@ -46,15 +51,18 @@ struct pwm_stm32_config {
 /** Series F3, F7, G0, G4, H7, L4, MP1 and WB have up to 6 channels, others up
  *  to 4.
  */
-#define TIMER_HAS_6CH                                                          \
-	(defined(CONFIG_SOC_SERIES_STM32F3X) ||                                \
-	 defined(CONFIG_SOC_SERIES_STM32F7X) ||                                \
-	 defined(CONFIG_SOC_SERIES_STM32G0X) ||                                \
-	 defined(CONFIG_SOC_SERIES_STM32G4X) ||                                \
-	 defined(CONFIG_SOC_SERIES_STM32H7X) ||                                \
-	 defined(CONFIG_SOC_SERIES_STM32L4X) ||                                \
-	 defined(CONFIG_SOC_SERIES_STM32MP1X) ||                               \
-	 defined(CONFIG_SOC_SERIES_STM32WBX))
+#if defined(CONFIG_SOC_SERIES_STM32F3X) ||				       \
+	defined(CONFIG_SOC_SERIES_STM32F7X) ||				       \
+	defined(CONFIG_SOC_SERIES_STM32G0X) ||				       \
+	defined(CONFIG_SOC_SERIES_STM32G4X) ||				       \
+	defined(CONFIG_SOC_SERIES_STM32H7X) ||				       \
+	defined(CONFIG_SOC_SERIES_STM32L4X) ||				       \
+	defined(CONFIG_SOC_SERIES_STM32MP1X) ||				       \
+	defined(CONFIG_SOC_SERIES_STM32WBX)
+#define TIMER_HAS_6CH 1
+#else
+#define TIMER_HAS_6CH 0
+#endif
 
 /** Maximum number of timer channels. */
 #if TIMER_HAS_6CH
@@ -112,8 +120,7 @@ static int get_tim_clk(const struct stm32_pclken *pclken, uint32_t *tim_clk)
 	const struct device *clk;
 	uint32_t bus_clk, apb_psc;
 
-	clk = device_get_binding(STM32_CLOCK_CONTROL_NAME);
-	__ASSERT_NO_MSG(clk);
+	clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 
 	r = clock_control_get_rate(clk, (clock_control_subsys_t *)pclken,
 				   &bus_clk);
@@ -123,17 +130,17 @@ static int get_tim_clk(const struct stm32_pclken *pclken, uint32_t *tim_clk)
 
 #if defined(CONFIG_SOC_SERIES_STM32H7X)
 	if (pclken->bus == STM32_CLOCK_BUS_APB1) {
-		apb_psc = CONFIG_CLOCK_STM32_D2PPRE1;
+		apb_psc = STM32_D2PPRE1;
 	} else {
-		apb_psc = CONFIG_CLOCK_STM32_D2PPRE2;
+		apb_psc = STM32_D2PPRE2;
 	}
 #else
 	if (pclken->bus == STM32_CLOCK_BUS_APB1) {
-		apb_psc = CONFIG_CLOCK_STM32_APB1_PRESCALER;
+		apb_psc = STM32_APB1_PRESCALER;
 	}
 #if !defined(CONFIG_SOC_SERIES_STM32F0X) && !defined(CONFIG_SOC_SERIES_STM32G0X)
 	else {
-		apb_psc = CONFIG_CLOCK_STM32_APB2_PRESCALER;
+		apb_psc = STM32_APB2_PRESCALER;
 	}
 #endif
 #endif
@@ -233,7 +240,6 @@ static int pwm_stm32_pin_set(const struct device *dev, uint32_t pwm,
 		oc_init.OCState = LL_TIM_OCSTATE_ENABLE;
 		oc_init.CompareValue = pulse_cycles;
 		oc_init.OCPolarity = get_polarity(flags);
-		oc_init.OCIdleState = LL_TIM_OCIDLESTATE_LOW;
 
 		if (LL_TIM_OC_Init(cfg->timer, channel, &oc_init) != SUCCESS) {
 			LOG_ERR("Could not initialize timer channel output");
@@ -249,8 +255,6 @@ static int pwm_stm32_pin_set(const struct device *dev, uint32_t pwm,
 		set_timer_compare[pwm - 1u](cfg->timer, pulse_cycles);
 		LL_TIM_SetAutoReload(cfg->timer, period_cycles - 1u);
 	}
-
-
 
 	return 0;
 }
@@ -282,8 +286,7 @@ static int pwm_stm32_init(const struct device *dev)
 	LL_TIM_InitTypeDef init;
 
 	/* enable clock and store its speed */
-	clk = device_get_binding(STM32_CLOCK_CONTROL_NAME);
-	__ASSERT_NO_MSG(clk);
+	clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 
 	r = clock_control_on(clk, (clock_control_subsys_t *)&cfg->pclken);
 	if (r < 0) {
@@ -313,16 +316,18 @@ static int pwm_stm32_init(const struct device *dev)
 	init.CounterMode = LL_TIM_COUNTERMODE_UP;
 	init.Autoreload = 0u;
 	init.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
-	init.RepetitionCounter = 0u;
+
 	if (LL_TIM_Init(cfg->timer, &init) != SUCCESS) {
 		LOG_ERR("Could not initialize timer");
 		return -EIO;
 	}
 
+#if !defined(CONFIG_SOC_SERIES_STM32L0X) && !defined(CONFIG_SOC_SERIES_STM32L1X)
 	/* enable outputs and counter */
 	if (IS_TIM_BREAK_INSTANCE(cfg->timer)) {
 		LL_TIM_EnableAllOutputs(cfg->timer);
 	}
+#endif
 
 	LL_TIM_EnableCounter(cfg->timer);
 
@@ -350,7 +355,7 @@ static int pwm_stm32_init(const struct device *dev)
 		.pinctrl_len = ARRAY_SIZE(pwm_pins_##index),                   \
 	};                                                                     \
 									       \
-	DEVICE_DT_INST_DEFINE(index, &pwm_stm32_init, device_pm_control_nop,   \
+	DEVICE_DT_INST_DEFINE(index, &pwm_stm32_init, NULL,                    \
 			    &pwm_stm32_data_##index,                           \
 			    &pwm_stm32_config_##index, POST_KERNEL,            \
 			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,                \

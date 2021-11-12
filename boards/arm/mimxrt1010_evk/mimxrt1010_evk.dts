@@ -18,7 +18,8 @@
 	};
 
 	chosen {
-		zephyr,sram = &dtcm;
+		zephyr,sram = &ocram;
+		zephyr,itcm = &itcm;
 		zephyr,console = &lpuart1;
 		zephyr,shell-uart = &lpuart1;
 	};
@@ -45,7 +46,7 @@ arduino_serial: &lpuart1 {};
 &flexspi {
 	reg = <0x402a8000 0x4000>, <0x60000000 DT_SIZE_M(16)>;
 	at25sf128a: at25sf128a@0 {
-		compatible = "adesto,at25sf128a", "jedec,spi-nor";
+		compatible = "nxp,imx-flexspi-nor";
 		size = <134217728>;
 		label = "AT25SF128A";
 		reg = <0>;
@@ -64,6 +65,6 @@ arduino_serial: &lpuart1 {};
 	current-speed = <115200>;
 };
 
-&usb1 {
+zephyr_udc0: &usb1 {
 	status = "okay";
 };

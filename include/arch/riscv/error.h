@@ -36,14 +36,14 @@ extern "C" {
  */
 
 #define ARCH_EXCEPT(reason_p)	do {			\
-		if (_is_user_context()) {		\
+		if (k_is_user_context()) {		\
 			arch_syscall_invoke1(reason_p,	\
 				K_SYSCALL_USER_FAULT);	\
 		} else {				\
 			compiler_barrier();		\
 			z_impl_user_fault(reason_p);	\
 		}					\
-		CODE_UNREACHABLE;			\
+		CODE_UNREACHABLE; /* LCOV_EXCL_LINE */	\
 	} while (false)
 #else
 #define ARCH_EXCEPT(reason_p)	do {			\

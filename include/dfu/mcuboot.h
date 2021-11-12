@@ -17,26 +17,58 @@
 extern "C" {
 #endif
 
+#ifdef BOOT_SWAP_TYPE_NONE
+#if BOOT_SWAP_TYPE_NONE != 1 /*ensure the same definition in MCUboot */
+#error "definition incompatible"
+#endif
+#else
 /** Attempt to boot the contents of slot 0. */
 #define BOOT_SWAP_TYPE_NONE     1
+#endif
 
+#ifdef BOOT_SWAP_TYPE_TEST
+#if BOOT_SWAP_TYPE_TEST != 2  /*ensure the same definition in MCUboot */
+#error "definition incompatible"
+#endif
+#else
 /** Swap to slot 1.  Absent a confirm command, revert back on next boot. */
 #define BOOT_SWAP_TYPE_TEST     2
+#endif
 
+#ifdef BOOT_SWAP_TYPE_PERM
+#if BOOT_SWAP_TYPE_PERM != 3  /*ensure the same definition in MCUboot */
+#error "definition incompatible"
+#endif
+#else
 /** Swap to slot 1, and permanently switch to booting its contents. */
 #define BOOT_SWAP_TYPE_PERM     3
+#endif
 
+#ifdef BOOT_SWAP_TYPE_REVERT
+#if BOOT_SWAP_TYPE_REVERT != 4  /*ensure the same definition in MCUboot */
+#error "definition incompatible"
+#endif
+#else
 /** Swap back to alternate slot.  A confirm changes this state to NONE. */
 #define BOOT_SWAP_TYPE_REVERT   4
+#endif
 
+#ifdef BOOT_SWAP_TYPE_FAIL
+#if BOOT_SWAP_TYPE_FAIL != 5  /*ensure the same definition in MCUboot */
+#error "definition incompatible"
+#endif
+#else
 /** Swap failed because image to be run is not valid */
 #define BOOT_SWAP_TYPE_FAIL     5
+#endif
 
 #define BOOT_IMG_VER_STRLEN_MAX 25  /* 255.255.65535.4294967295\0 */
 
 /* Trailer: */
 #define BOOT_MAX_ALIGN		8
+#ifndef BOOT_MAGIC_SZ
 #define BOOT_MAGIC_SZ		16
+#endif
 
 #define BOOT_TRAILER_IMG_STATUS_OFFS(bank_area) ((bank_area)->fa_size -\
 						  BOOT_MAGIC_SZ -\
@@ -149,12 +181,39 @@ bool boot_is_img_confirmed(void);
 int boot_write_img_confirmed(void);
 
 /**
+ * @brief Marks the image with the given index in the primary slot as confirmed.
+ *
+ * This routine attempts to mark the firmware image in the primary slot
+ * as OK, which will install it permanently, preventing MCUboot from
+ * reverting it for an older image at the next reset.
+ *
+ * This routine is safe to call if the current image has already been
+ * confirmed. It will return a successful result in this case.
+ *
+ * @param image_index Image pair index.
+ *
+ * @return 0 on success, negative errno code on fail.
+ */
+int boot_write_img_confirmed_multi(int image_index);
+
+/**
  * @brief Determines the action, if any, that mcuboot will take on the next
  * reboot.
  * @return a BOOT_SWAP_TYPE_[...] constant on success, negative errno code on
  * fail.
  */
 int mcuboot_swap_type(void);
+
+/**
+ * @brief Determines the action, if any, that mcuboot will take on the next
+ * reboot.
+ *
+ * @param image_index Image pair index.
+ *
+ * @return a BOOT_SWAP_TYPE_[...] constant on success, negative errno code on
+ * fail.
+ */
+int mcuboot_swap_type_multi(int image_index);
 
 
 /** Boot upgrade request modes */
@@ -172,6 +231,20 @@ int mcuboot_swap_type(void);
  * @return 0 on success, negative errno code on fail.
  */
 int boot_request_upgrade(int permanent);
+
+/**
+ * @brief Marks the image with the given index in the secondary slot as pending.
+ * On the next reboot, the system will perform a boot of the secondary slot
+ * image.
+ *
+ * @param image_index Image pair index.
+ * @param permanent Whether the image should be used permanently or
+ * only tested once:
+ *   BOOT_UPGRADE_TEST=run image once, then confirm or revert.
+ *   BOOT_UPGRADE_PERMANENT=run image forever.
+ * @return 0 on success, negative errno code on fail.
+ */
+int boot_request_upgrade_multi(int image_index, int permanent);
 
 /**
  * @brief Erase the image Bank.

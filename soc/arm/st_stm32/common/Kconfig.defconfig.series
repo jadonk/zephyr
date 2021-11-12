@@ -8,9 +8,13 @@
 if SOC_FAMILY_STM32
 
 config CORTEX_M_SYSTICK
-	bool
-	default y
-	depends on !STM32_LPTIM_TIMER
+	default n if STM32_LPTIM_TIMER
+
+DT_STM32_RCC_PATH := $(dt_nodelabel_path,rcc)
+DT_STM32_RCC_CLOCK_FREQ := $(dt_node_int_prop_int,$(DT_STM32_RCC_PATH),clock-frequency)
+
+config SYS_CLOCK_HW_CYCLES_PER_SEC
+	default "$(DT_STM32_RCC_CLOCK_FREQ)" if "$(dt_nodelabel_enabled,rcc)"
 
 # set the tick per sec as a divider of the LPTIM clock source
 config SYS_CLOCK_TICKS_PER_SEC
@@ -36,16 +40,6 @@ config PINMUX_STM32
 	default y
 	depends on PINMUX
 
-if WATCHDOG
-
-config IWDG_STM32
-	default y
-
-config WWDG_STM32
-	default n
-
-endif # WATCHDOG
-
 config PWM_STM32
 	default y
 	depends on PWM
@@ -60,7 +54,7 @@ config I2S_STM32
 
 config USB_DC_STM32
 	default y
-	depends on USB
+	depends on USB_DEVICE_DRIVER
 
 config COUNTER_RTC_STM32
 	default y
@@ -74,10 +68,6 @@ if DMA
 
 config DMA_STM32
 	default y
-
-config HEAP_MEM_POOL_SIZE
-	default 1024
-	depends on DMAMUX_STM32
 
 endif # DMA
 

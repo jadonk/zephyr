@@ -33,6 +33,46 @@ extern "C" {
  */
 #include <sys/util_internal.h>
 
+#ifndef BIT
+#if defined(_ASMLANGUAGE)
+#define BIT(n)  (1 << (n))
+#else
+/**
+ * @brief Unsigned integer with bit position @p n set (signed in
+ * assembly language).
+ */
+#define BIT(n)  (1UL << (n))
+#endif
+#endif
+
+/** @brief 64-bit unsigned integer with bit position @p _n set. */
+#define BIT64(_n) (1ULL << (_n))
+
+/**
+ * @brief Set or clear a bit depending on a boolean value
+ *
+ * The argument @p var is a variable whose value is written to as a
+ * side effect.
+ *
+ * @param var Variable to be altered
+ * @param bit Bit number
+ * @param set if 0, clears @p bit in @p var; any other value sets @p bit
+ */
+#define WRITE_BIT(var, bit, set) \
+	((var) = (set) ? ((var) | BIT(bit)) : ((var) & ~BIT(bit)))
+
+/**
+ * @brief Bit mask with bits 0 through <tt>n-1</tt> (inclusive) set,
+ * or 0 if @p n is 0.
+ */
+#define BIT_MASK(n) (BIT(n) - 1UL)
+
+/**
+ * @brief 64-bit bit mask with bits 0 through <tt>n-1</tt> (inclusive) set,
+ * or 0 if @p n is 0.
+ */
+#define BIT64_MASK(n) (BIT64(n) - 1ULL)
+
 /**
  * @brief Check for macro definition in compiler-visible expressions
  *
@@ -265,7 +305,7 @@ extern "C" {
  *
  * @return Nth argument.
  */
-#define GET_ARG_N(N, ...) _Z_GET_ARG_N(N, 1, __VA_ARGS__)
+#define GET_ARG_N(N, ...) Z_GET_ARG_##N(__VA_ARGS__)
 
 /**
  * @brief Strips n first arguments from the argument list.
@@ -275,25 +315,7 @@ extern "C" {
  *
  * @return argument list without N first arguments.
  */
-#define GET_ARGS_LESS_N(N, ...) _Z_GET_ARG_N(UTIL_INC(N), 0, __VA_ARGS__)
-
-/** Expands to the first argument.
- *
- * @deprecated Use GET_ARG_N() instead.
- */
-#define GET_ARG1(...) GET_ARG_N(1, __VA_ARGS__)
-
-/** Expands to the second argument.
- *
- * @deprecated Use GET_ARG_N() instead.
- */
-#define GET_ARG2(...) __DEPRECATED GET_ARG_N(2, __VA_ARGS__)
-
-/** Expands to all arguments except the first one.
- *
- * @deprecated Use GET_ARGS_LESS_N() instead.
- */
-#define GET_ARGS_LESS_1(...) __DEPRECATED GET_ARGS_LESS_N(1, __VA_ARGS__)
+#define GET_ARGS_LESS_N(N, ...) Z_GET_ARGS_LESS_##N(__VA_ARGS__)
 
 /**
  * @brief Like <tt>a || b</tt>, but does evaluation and
@@ -344,7 +366,7 @@ extern "C" {
  * @note Calling UTIL_LISTIFY with undefined arguments has undefined
  * behavior.
  */
-#define UTIL_LISTIFY(LEN, F, ...) UTIL_EVAL(UTIL_REPEAT(LEN, F, __VA_ARGS__))
+#define UTIL_LISTIFY(LEN, F, ...) UTIL_CAT(Z_UTIL_LISTIFY_, LEN)(F, __VA_ARGS__)
 
 /**
  * @brief Call a macro @p F on each provided argument with a given
@@ -368,9 +390,7 @@ extern "C" {
  *            <tt>F(element)</tt> for each element in the list.
  */
 #define FOR_EACH(F, sep, ...) \
-	Z_FOR_EACH_IDX2(NUM_VA_ARGS_LESS_1(__VA_ARGS__, _), \
-			0, Z_FOR_EACH_SWALLOW_INDEX_FIXED_ARG, sep, \
-			F, 0, __VA_ARGS__)
+	Z_FOR_EACH(F, sep, REVERSE_ARGS(__VA_ARGS__))
 
 /**
  * @brief Like FOR_EACH(), but with a terminator instead of a separator,
@@ -462,9 +482,7 @@ extern "C" {
  *            <tt>F(index, element)</tt> for each element in the list.
  */
 #define FOR_EACH_IDX(F, sep, ...) \
-	Z_FOR_EACH_IDX2(NUM_VA_ARGS_LESS_1(__VA_ARGS__, _), \
-			0, Z_FOR_EACH_SWALLOW_FIXED_ARG, sep, \
-			F, 0, __VA_ARGS__)
+	Z_FOR_EACH_IDX(F, sep, REVERSE_ARGS(__VA_ARGS__))
 
 /**
  * @brief Call macro @p F on each provided argument, with an additional fixed
@@ -492,9 +510,7 @@ extern "C" {
  *            <tt>F(element, fixed_arg)</tt> for each element in the list.
  */
 #define FOR_EACH_FIXED_ARG(F, sep, fixed_arg, ...) \
-	Z_FOR_EACH_IDX2(NUM_VA_ARGS_LESS_1(__VA_ARGS__, _), \
-			0, Z_FOR_EACH_SWALLOW_INDEX, sep, \
-			F, fixed_arg, __VA_ARGS__)
+	Z_FOR_EACH_FIXED_ARG(F, sep, fixed_arg, REVERSE_ARGS(__VA_ARGS__))
 
 /**
  * @brief Calls macro @p F for each variable argument with an index and fixed
@@ -522,9 +538,14 @@ extern "C" {
  *            the list.
  */
 #define FOR_EACH_IDX_FIXED_ARG(F, sep, fixed_arg, ...) \
-	Z_FOR_EACH_IDX2(NUM_VA_ARGS_LESS_1(__VA_ARGS__, _), \
-			0, Z_FOR_EACH_SWALLOW_NOTHING, sep, \
-			F, fixed_arg, __VA_ARGS__)
+	Z_FOR_EACH_IDX_FIXED_ARG(F, sep, fixed_arg, REVERSE_ARGS(__VA_ARGS__))
+
+/** @brief Reverse arguments order.
+ *
+ * @param ... Variable argument list.
+ */
+#define REVERSE_ARGS(...) \
+	Z_FOR_EACH_ENGINE(Z_FOR_EACH_EXEC, (,), Z_BYPASS, _, __VA_ARGS__)
 
 /**
  * @brief Number of arguments in the variable arguments list minus one.

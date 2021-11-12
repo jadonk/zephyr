@@ -457,8 +457,8 @@ static const struct spi_driver_api spi_sam_driver_api = {
 	static const struct spi_sam_config spi_sam_config_##n = {	\
 		.regs = (Spi *)DT_INST_REG_ADDR(n),			\
 		.periph_id = DT_INST_PROP(n, peripheral_id),		\
-		.num_pins = ATMEL_SAM_DT_NUM_PINS(n),			\
-		.pins = ATMEL_SAM_DT_PINS(n),				\
+		.num_pins = ATMEL_SAM_DT_INST_NUM_PINS(n),		\
+		.pins = ATMEL_SAM_DT_INST_PINS(n),			\
 	}
 
 #define SPI_SAM_DEVICE_INIT(n)						\
@@ -467,7 +467,7 @@ static const struct spi_driver_api spi_sam_driver_api = {
 		SPI_CONTEXT_INIT_LOCK(spi_sam_dev_data_##n, ctx),	\
 		SPI_CONTEXT_INIT_SYNC(spi_sam_dev_data_##n, ctx),	\
 	};								\
-	DEVICE_DT_INST_DEFINE(n, &spi_sam_init, device_pm_control_nop,	\
+	DEVICE_DT_INST_DEFINE(n, &spi_sam_init, NULL,			\
 			    &spi_sam_dev_data_##n,			\
 			    &spi_sam_config_##n, POST_KERNEL,		\
 			    CONFIG_SPI_INIT_PRIORITY, &spi_sam_driver_api);

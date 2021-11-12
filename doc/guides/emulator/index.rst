@@ -1,7 +1,7 @@
 .. _emulators:
 
-Emulators
-#########
+Peripheral and Hardware Emulators
+#################################
 
 Overview
 ========
@@ -84,6 +84,9 @@ Zephyr includes the following emulators:
   tests can be performed without access to the real hardware
 
 * SPI emulator driver, which does the same for SPI
+
+* eSPI emulator driver, which does the same for eSPI. The emulator is being
+  developed to support more functionalities.
 
 A GPIO emulator is planned but is not yet complete.
 

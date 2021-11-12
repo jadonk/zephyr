@@ -85,6 +85,7 @@ static void eswifi_off_connect_work(struct k_work *work)
 	err = __eswifi_off_start_client(eswifi, socket);
 	if (!err) {
 		socket->state = ESWIFI_SOCKET_STATE_CONNECTED;
+		net_context_set_state(socket->context, NET_CONTEXT_CONNECTED);
 	} else {
 		socket->state = ESWIFI_SOCKET_STATE_NONE;
 	}
@@ -432,8 +433,8 @@ static int eswifi_off_get(sa_family_t family,
 	k_sem_init(&socket->read_sem, 1, 1);
 	k_sem_init(&socket->accept_sem, 1, 1);
 
-	k_delayed_work_submit_to_queue(&eswifi->work_q, &socket->read_work,
-				       K_MSEC(500));
+	k_work_reschedule_for_queue(&eswifi->work_q, &socket->read_work,
+				    K_MSEC(500));
 
 unlock:
 	eswifi_unlock(eswifi);

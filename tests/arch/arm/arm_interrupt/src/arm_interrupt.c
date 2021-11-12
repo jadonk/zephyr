@@ -15,7 +15,7 @@ static volatile int expected_reason = -1;
 static volatile int run_esf_validation;
 static volatile int esf_validation_rv;
 static volatile uint32_t expected_msp;
-static K_THREAD_STACK_DEFINE(esf_collection_stack, 1024);
+static K_THREAD_STACK_DEFINE(esf_collection_stack, 2048);
 static struct k_thread esf_collection_thread;
 #define MAIN_PRIORITY 7
 #define PRIORITY 5
@@ -191,6 +191,15 @@ void arm_isr_handler(const void *args)
 {
 	ARG_UNUSED(args);
 
+#if defined(CONFIG_CPU_CORTEX_M) && defined(CONFIG_FPU) && \
+	defined(CONFIG_FPU_SHARING)
+	/* Clear Floating Point Status and Control Register (FPSCR),
+	 * to prevent from having the interrupt line set to pending again,
+	 * in case FPU IRQ is selected by the test as "Available IRQ line"
+	 */
+	__set_FPSCR(0);
+#endif
+
 	test_flag++;
 
 	if (test_flag == 1) {
@@ -206,15 +215,6 @@ void arm_isr_handler(const void *args)
 		expected_reason = K_ERR_KERNEL_PANIC;
 		__ASSERT(0, "Intentional assert\n");
 	} else if (test_flag == 4) {
-#if defined(CONFIG_CPU_CORTEX_M_HAS_SYSTICK)
-#if !defined(CONFIG_SYS_CLOCK_EXISTS) || !defined(CONFIG_CORTEX_M_SYSTICK)
-		expected_reason = K_ERR_CPU_EXCEPTION;
-		SCB->ICSR |= SCB_ICSR_PENDSTSET_Msk;
-		__DSB();
-		__ISB();
-#endif
-#endif
-	} else if (test_flag == 5) {
 #if defined(CONFIG_HW_STACK_PROTECTION)
 		/*
 		 * Verify that the Stack Overflow has been reported by the core
@@ -322,29 +322,6 @@ void test_arm_interrupt(void)
 		zassert_true(post_flag == j, "Test flag not set by ISR\n");
 	}
 
-#if defined(CONFIG_CPU_CORTEX_M_HAS_SYSTICK)
-#if !defined(CONFIG_SYS_CLOCK_EXISTS) || !defined(CONFIG_CORTEX_M_SYSTICK)
-	/* Verify that triggering a Cortex-M exception (accidentally) that has
-	 * not been installed in the vector table, leads to the reserved
-	 * exception been called and a resulting CPU fault. We test this using
-	 * the SysTick exception in platforms that are not expecting to use the
-	 * SysTick timer for system timing.
-	 */
-
-	/* The ISR will manually set the SysTick exception to pending state. */
-	NVIC_SetPendingIRQ(i);
-	__DSB();
-	__ISB();
-
-	/* Verify that the spurious exception has led to the fault and the
-	 * expected reason variable is reset.
-	 */
-	reason = expected_reason;
-	zassert_equal(reason, -1,
-		"expected_reason has not been reset (%d)\n", reason);
-#endif
-#endif
-
 #if defined(CONFIG_HW_STACK_PROTECTION)
 	/*
 	 * Simulate a stacking error that is caused explicitly by the
@@ -361,14 +338,25 @@ void test_arm_interrupt(void)
 	NVIC_EnableIRQ(i);
 	NVIC_SetPendingIRQ(i);
 
-	/* Set test flag so the IRQ handler executes the appropriate case. */
-	test_flag = 4;
-
 	/* Manually set PSP almost at the bottom of the stack. An exception
 	 * entry will make PSP descend below the limit and into the MPU guard
 	 * section (or beyond the address pointed by PSPLIM in ARMv8-M MCUs).
 	 */
+#if defined(CONFIG_FPU) && defined(CONFIG_FPU_SHARING) && \
+	defined(CONFIG_MPU_STACK_GUARD)
+#define FPU_STACK_EXTRA_SIZE 0x48
+	/* If an FP context is present, we should not set the PSP
+	 * too close to the end of the stack, because stacking of
+	 * the ESF might corrupt kernel memory, making it not
+	 * possible to continue the test execution.
+	 */
+	uint32_t fp_extra_size =
+		(__get_CONTROL() & CONTROL_FPCA_Msk) ?
+			FPU_STACK_EXTRA_SIZE : 0;
+	__set_PSP(_current->stack_info.start + 0x10 + fp_extra_size);
+#else
 	__set_PSP(_current->stack_info.start + 0x10);
+#endif
 
 	__enable_irq();
 	__DSB();
@@ -458,6 +446,37 @@ void test_arm_user_interrupt(void)
 }
 #endif /* CONFIG_USERSPACE */
 
+#if defined(CONFIG_CORTEX_M_NULL_POINTER_EXCEPTION)
+#pragma GCC push_options
+#pragma GCC optimize("O0")
+/* Avoid compiler optimizing null pointer de-referencing. */
+void test_arm_null_pointer_exception(void)
+{
+	int reason;
+
+	struct test_struct {
+		uint32_t val[2];
+	};
+
+	struct test_struct *test_struct_null_pointer = 0x0;
+
+	expected_reason = K_ERR_CPU_EXCEPTION;
+
+	printk("Reading a null pointer value: 0x%0x\n",
+		test_struct_null_pointer->val[1]);
+
+	reason = expected_reason;
+	zassert_equal(reason, -1,
+		"expected_reason has not been reset (%d)\n", reason);
+}
+#pragma GCC pop_options
+#else
+void test_arm_null_pointer_exception(void)
+{
+	TC_PRINT("Skipped\n");
+}
+
+#endif /* CONFIG_CORTEX_M_NULL_POINTER_EXCEPTION */
 
 /**
  * @}

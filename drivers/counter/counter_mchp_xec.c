@@ -241,13 +241,6 @@ static int counter_xec_set_top_value(const struct device *dev,
 	return ret;
 }
 
-static uint32_t counter_xec_get_max_relative_alarm(const struct device *dev)
-{
-	const struct counter_xec_config *counter_cfg = COUNTER_XEC_CONFIG(dev);
-
-	return counter_cfg->info.max_top_value;
-}
-
 static void counter_xec_isr(const struct device *dev)
 {
 	BTMR_Type *counter = COUNTER_XEC_REG_BASE(dev);
@@ -284,7 +277,6 @@ static const struct counter_driver_api counter_xec_api = {
 		.set_top_value = counter_xec_set_top_value,
 		.get_pending_int = counter_xec_get_pending_int,
 		.get_top_value = counter_xec_get_top_value,
-		.get_max_relative_alarm = counter_xec_get_max_relative_alarm,
 };
 
 static int counter_xec_init(const struct device *dev)
@@ -326,12 +318,13 @@ static int counter_xec_init(const struct device *dev)
 		.config_func = counter_xec_irq_config_##inst,		\
 		.base_address = DT_INST_REG_ADDR(inst),			\
 		.prescaler = DT_INST_PROP(inst, prescaler),		\
-		.girq_id = DT_INST_PROP(inst, girq),			\
-		.girq_bit = DT_INST_PROP(inst, girq_bit),		\
+		.girq_id = DT_INST_PROP_BY_IDX(0, girqs, 0),		\
+		.girq_bit = DT_INST_PROP_BY_IDX(0, girqs, 1),		\
 	};								\
 									\
-	DEVICE_AND_API_INIT(counter_xec_##inst, DT_INST_LABEL(inst),	\
+	DEVICE_DT_INST_DEFINE(inst,					\
 			    counter_xec_init,				\
+			    NULL,					\
 			    &counter_xec_dev_data_##inst,		\
 			    &counter_xec_dev_config_##inst,		\
 			    POST_KERNEL,				\
@@ -343,7 +336,7 @@ static int counter_xec_init(const struct device *dev)
 		IRQ_CONNECT(DT_INST_IRQN(inst),				\
 			    DT_INST_IRQ(inst, priority),		\
 			    counter_xec_isr,				\
-			    DEVICE_GET(counter_xec_##inst), 0);		\
+			    DEVICE_DT_INST_GET(inst), 0);		\
 		irq_enable(DT_INST_IRQN(inst));				\
 	}
 

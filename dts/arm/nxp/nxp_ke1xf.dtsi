@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Vestas Wind Systems A/S
+ * Copyright (c) 2019-2021 Vestas Wind Systems A/S
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -23,10 +23,35 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		cpu@0 {
+		cpu0: cpu@0 {
 			device_type = "cpu";
 			compatible = "arm,cortex-m4f";
 			reg = <0>;
+		};
+	};
+
+	power-states {
+		idle: idle {
+			compatible = "zephyr,power-state";
+			power-state-name = "runtime-idle";
+		};
+
+		stop: stop {
+			compatible = "zephyr,power-state";
+			power-state-name = "suspend-to-idle";
+			substate-id = <0>;
+		};
+
+		pstop1: pstop1 {
+			compatible = "zephyr,power-state";
+			power-state-name = "suspend-to-idle";
+			substate-id = <1>;
+		};
+
+		pstop2: pstop2 {
+			compatible = "zephyr,power-state";
+			power-state-name = "suspend-to-idle";
+			substate-id = <2>;
 		};
 	};
 
@@ -100,6 +125,123 @@
 			reg = <0x40064000 0x1000>;
 			label = "SCG";
 			#clock-cells = <1>;
+
+			sosc_clk: sosc_clk {
+				compatible = "fixed-clock";
+				status = "disabled";
+				#clock-cells = <0>;
+			};
+
+			sirc_clk: sirc_clk {
+				compatible = "fixed-clock";
+				clock-frequency = <8000000>;
+				#clock-cells = <0>;
+			};
+
+			firc_clk: firc_clk {
+				compatible = "fixed-clock";
+				clock-frequency = <48000000>;
+				#clock-cells = <0>;
+			};
+
+			pll: pll {
+				compatible = "fixed-factor-clock";
+				clocks = <&sosc_clk>;
+				clock-div = <1>;
+				clock-mult = <16>;
+				#clock-cells = <0>;
+			};
+
+			spll_clk: spll_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&pll>;
+				clock-div = <2>;
+				#clock-cells = <0>;
+			};
+
+			core_clk: core_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&firc_clk>;
+				clock-div = <1>;
+				#clock-cells = <0>;
+			};
+
+			bus_clk: bus_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&core_clk>;
+				clock-div = <1>;
+				#clock-cells = <0>;
+			};
+
+			slow_clk: slow_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&core_clk>;
+				clock-div = <2>;
+				#clock-cells = <0>;
+			};
+
+			clkout_clk: clkout_clk {
+				compatible = "fixed-factor-clock";
+				status = "disabled";
+				clocks = <&firc_clk>;
+				#clock-cells = <0>;
+			};
+
+			splldiv1_clk: splldiv1_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&spll_clk>;
+				clock-div = <0>;
+				#clock-cells = <0>;
+			};
+
+			splldiv2_clk: splldiv2_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&spll_clk>;
+				clock-div = <0>;
+				#clock-cells = <0>;
+			};
+
+			sircdiv1_clk: sircdiv1_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&sirc_clk>;
+				clock-div = <0>;
+				#clock-cells = <0>;
+			};
+
+			sircdiv2_clk: sircdiv2_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&sirc_clk>;
+				clock-div = <0>;
+				#clock-cells = <0>;
+			};
+
+			fircdiv1_clk: fircdiv1_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&firc_clk>;
+				clock-div = <0>;
+				#clock-cells = <0>;
+			};
+
+			fircdiv2_clk: fircdiv2_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&firc_clk>;
+				clock-div = <0>;
+				#clock-cells = <0>;
+			};
+
+			soscdiv1_clk: soscdiv1_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&sosc_clk>;
+				clock-div = <0>;
+				#clock-cells = <0>;
+			};
+
+			soscdiv2_clk: soscdiv2_clk {
+				compatible = "fixed-factor-clock";
+				clocks = <&sosc_clk>;
+				clock-div = <0>;
+				#clock-cells = <0>;
+			};
 		};
 
 		pmc: pmc@4007d000 {
@@ -161,6 +303,18 @@
 			clk-source = <1>;
 			clk-divider = <256>;
 			label = "WDT_0";
+		};
+
+		pwt: pwt@40056000 {
+			compatible = "nxp,kinetis-pwt";
+			reg = <0x40056000 0x1000>;
+			interrupts = <29 0>;
+			clocks = <&scg KINETIS_SCG_BUS_CLK>;
+			prescaler = <1>;
+			label = "PWT_0";
+			status = "disabled";
+
+			#pwm-cells = <3>;
 		};
 
 		ftfe: flash-controller@40020000 {
@@ -445,6 +599,36 @@
 			prescaler = <16>;
 			label = "FTM_3";
 			status = "disabled";
+		};
+
+		cmp0: cmp@40073000 {
+			compatible = "nxp,kinetis-acmp";
+			reg = <0x40073000 0x1000>;
+			interrupts = <40 0>;
+			clocks = <&scg KINETIS_SCG_BUS_CLK>;
+			label = "CMP_0";
+			status = "disabled";
+			#io-channel-cells = <2>;
+		};
+
+		cmp1: cmp@40074000 {
+			compatible = "nxp,kinetis-acmp";
+			reg = <0x40074000 0x1000>;
+			interrupts = <41 0>;
+			clocks = <&scg KINETIS_SCG_BUS_CLK>;
+			label = "CMP_1";
+			status = "disabled";
+			#io-channel-cells = <2>;
+		};
+
+		cmp2: cmp@40075000 {
+			compatible = "nxp,kinetis-acmp";
+			reg = <0x40075000 0x1000>;
+			interrupts = <70 0>;
+			clocks = <&scg KINETIS_SCG_BUS_CLK>;
+			label = "CMP_2";
+			status = "disabled";
+			#io-channel-cells = <2>;
 		};
 	};
 };

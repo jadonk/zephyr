@@ -21,3 +21,5 @@ supported:
   - usb_device
   - watchdog
   - adc
+  - dac
+  - dma

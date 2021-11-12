@@ -36,7 +36,7 @@ static void efi_putchar(int c)
 	efibuf[n++] = c;
 
 	if (c == '\n' || n == PUTCHAR_BUFSZ) {
-		efibuf[n] = 0;
+		efibuf[n] = 0U;
 		efi->ConOut->OutputString(efi->ConOut, efibuf);
 		n = 0;
 	}
@@ -77,7 +77,7 @@ uintptr_t __abi efi_entry(void *img_handle, struct efi_system_table *sys_tab)
 
 		printf("Zeroing %d bytes of memory at %p\n", bytes, dst);
 		for (int j = 0; j < bytes; j++) {
-			dst[j] = 0;
+			dst[j] = 0U;
 		}
 	}
 
@@ -91,6 +91,20 @@ uintptr_t __abi efi_entry(void *img_handle, struct efi_system_table *sys_tab)
 		       bytes, dst, zefi_dsegs[i].off);
 		for (int j = 0; j < bytes; j++) {
 			dst[j] = src[j];
+		}
+
+		/* Page-aligned blocks below 1M are the .locore
+		 * section, which has a jump in its first bytes for
+		 * the benefit of 32 bit entry.  Those have to be
+		 * written over with NOP instructions. (See comment
+		 * about OUTRAGEOUS HACK in locore.S) before Zephyr
+		 * starts, because the very first thing it does is
+		 * install its own page table that disallows writes.
+		 */
+		if (((long)dst & 0xfff) == 0 && dst < (uint8_t *)0x100000L) {
+			for (int i = 0; i < 8; i++) {
+				dst[i] = 0x90; /* 0x90 == 1-byte NOP */
+			}
 		}
 	}
 

@@ -31,7 +31,7 @@
 		sw1 = &btn1;
 		sensor0 = &sensor0;
 		sensor1 = &sensor1;
-		/* TODO: add support for hdc2080 */
+		sensor2 = &sensor2;
 	};
 
 	chosen {
@@ -69,10 +69,26 @@
 			label = "Push button 2";
 		};
 	};
+
+	power-states {
+		idle: idle {
+			compatible = "zephyr,power-state";
+			power-state-name = "suspend-to-idle";
+			min-residency-us = <1000>;
+		};
+
+		standby: standby {
+			compatible = "zephyr,power-state";
+			power-state-name = "standby";
+			min-residency-us = <5000>;
+			exit-latency-us = <240>;
+		};
+	};
 };
 
 &cpu0 {
 	clock-frequency = <48000000>;
+	cpu-power-states = <&idle &standby>;
 };
 
 &trng {
@@ -101,7 +117,12 @@
 		label = "OPT3001";
 	};
 
-	/* TODO: add hdc2080 at 0x41 */
+	sensor2: sensor@41 {
+		compatible = "ti,hdc2080";
+		reg = <0x41>;
+		label = "HDC2080";
+		int-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
+	};
 };
 
 &spi0 {

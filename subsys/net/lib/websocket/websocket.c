@@ -46,7 +46,6 @@ static struct websocket_context contexts[CONFIG_WEBSOCKET_MAX_CONTEXTS];
 
 static struct k_sem contexts_lock;
 
-extern const struct socket_op_vtable sock_fd_op_vtable;
 static const struct socket_op_vtable websocket_fd_op_vtable;
 
 #if defined(CONFIG_NET_TEST)
@@ -435,9 +434,88 @@ static int websocket_close_vmeth(void *obj)
 	return ret;
 }
 
+static inline int websocket_poll_offload(struct zsock_pollfd *fds, int nfds,
+					 int timeout)
+{
+	int fd_backup[CONFIG_NET_SOCKETS_POLL_MAX];
+	const struct fd_op_vtable *vtable;
+	void *ctx;
+	int ret = 0;
+	int i;
+
+	/* Overwrite websocket file decriptors with underlying ones. */
+	for (i = 0; i < nfds; i++) {
+		fd_backup[i] = fds[i].fd;
+
+		ctx = z_get_fd_obj(fds[i].fd,
+				   (const struct fd_op_vtable *)
+						     &websocket_fd_op_vtable,
+				   0);
+		if (ctx == NULL) {
+			continue;
+		}
+
+		fds[i].fd = ((struct websocket_context *)ctx)->real_sock;
+	}
+
+	/* Get offloaded sockets vtable. */
+	ctx = z_get_fd_obj_and_vtable(fds[0].fd,
+				      (const struct fd_op_vtable **)&vtable,
+				      NULL);
+	if (ctx == NULL) {
+		errno = EINVAL;
+		ret = -1;
+		goto exit;
+	}
+
+	ret = z_fdtable_call_ioctl(vtable, ctx, ZFD_IOCTL_POLL_OFFLOAD,
+				   fds, nfds, timeout);
+
+exit:
+	/* Restore original fds. */
+	for (i = 0; i < nfds; i++) {
+		fds[i].fd = fd_backup[i];
+	}
+
+	return ret;
+}
+
 static int websocket_ioctl_vmeth(void *obj, unsigned int request, va_list args)
 {
-	return sock_fd_op_vtable.fd_vtable.ioctl(obj, request, args);
+	struct websocket_context *ctx = obj;
+
+	switch (request) {
+	case ZFD_IOCTL_POLL_OFFLOAD: {
+		struct zsock_pollfd *fds;
+		int nfds;
+		int timeout;
+
+		fds = va_arg(args, struct zsock_pollfd *);
+		nfds = va_arg(args, int);
+		timeout = va_arg(args, int);
+
+		return websocket_poll_offload(fds, nfds, timeout);
+	}
+
+	default: {
+		const struct fd_op_vtable *vtable;
+		void *core_obj;
+
+		core_obj = z_get_fd_obj_and_vtable(
+				ctx->real_sock,
+				(const struct fd_op_vtable **)&vtable,
+				NULL);
+		if (core_obj == NULL) {
+			errno = EBADF;
+			return -1;
+		}
+
+		/* Pass the call to the core socket implementation. */
+		return vtable->ioctl(core_obj, request, args);
+	}
+	}
+
+	return 0;
 }
 
 static int websocket_prepare_and_send(struct websocket_context *ctx,
@@ -502,7 +580,7 @@ int websocket_send_msg(int ws_sock, const uint8_t *payload, size_t payload_len,
 	/* Websocket unit test does not use socket layer but feeds
 	 * the data directly here when testing this function.
 	 */
-	ctx = INT_TO_POINTER(ws_sock);
+	ctx = UINT_TO_POINTER((unsigned int) ws_sock);
 #else
 	ctx = z_get_fd_obj(ws_sock, NULL, 0);
 	if (ctx == NULL) {
@@ -675,7 +753,8 @@ int websocket_recv_msg(int ws_sock, uint8_t *buf, size_t buf_len,
 		struct websocket_context *ctx;
 	};
 
-	struct test_data *test_data = INT_TO_POINTER(ws_sock);
+	struct test_data *test_data =
+	    UINT_TO_POINTER((unsigned int) ws_sock);
 
 	ctx = test_data->ctx;
 #else
@@ -987,5 +1066,5 @@ void websocket_context_foreach(websocket_context_cb_t cb, void *user_data)
 
 void websocket_init(void)
 {
-	k_sem_init(&contexts_lock, 1, UINT_MAX);
+	k_sem_init(&contexts_lock, 1, K_SEM_MAX_LIMIT);
 }

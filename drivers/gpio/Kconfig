@@ -21,6 +21,8 @@ config GPIO_SHELL
 	help
 	  Enable GPIO Shell for testing.
 
+source "drivers/gpio/Kconfig.b91"
+
 source "drivers/gpio/Kconfig.dw"
 
 source "drivers/gpio/Kconfig.pca95xx"
@@ -59,6 +61,8 @@ source "drivers/gpio/Kconfig.sx1509b"
 
 source "drivers/gpio/Kconfig.imx"
 
+source "drivers/gpio/Kconfig.it8xxx2"
+
 source "drivers/gpio/Kconfig.intel"
 
 source "drivers/gpio/Kconfig.xec"
@@ -66,8 +70,6 @@ source "drivers/gpio/Kconfig.xec"
 source "drivers/gpio/Kconfig.stellaris"
 
 source "drivers/gpio/Kconfig.rv32m1"
-
-source "drivers/gpio/Kconfig.ht16k33"
 
 source "drivers/gpio/Kconfig.lmp90xxx"
 
@@ -80,5 +82,25 @@ source "drivers/gpio/Kconfig.xlnx"
 source "drivers/gpio/Kconfig.npcx"
 
 source "drivers/gpio/Kconfig.emul"
+
+source "drivers/gpio/Kconfig.psoc6"
+
+source "drivers/gpio/Kconfig.pcal6408a"
+
+source "drivers/gpio/Kconfig.eos_s3"
+
+source "drivers/gpio/Kconfig.rcar"
+
+source "drivers/gpio/Kconfig.cy8c95xx"
+
+source "drivers/gpio/Kconfig.creg_gpio"
+
+source "drivers/gpio/Kconfig.stmpe1600"
+
+source "drivers/gpio/Kconfig.pca953x"
+
+source "drivers/gpio/Kconfig.fxl6408"
+
+source "drivers/gpio/Kconfig.andes_atcgpio100"
 
 endif # GPIO

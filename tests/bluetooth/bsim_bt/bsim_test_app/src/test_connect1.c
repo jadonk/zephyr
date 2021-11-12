@@ -113,7 +113,8 @@ static uint8_t notify_func(struct bt_conn *conn,
 		int err;
 
 		/* Disconnect before actually passing */
-		err = bt_conn_disconnect(default_conn, BT_HCI_ERR_SUCCESS);
+		err = bt_conn_disconnect(default_conn,
+					 BT_HCI_ERR_REMOTE_USER_TERM_CONN);
 		if (err) {
 			FAIL("Disconnection failed (err %d)\n", err);
 			return BT_GATT_ITER_STOP;
@@ -263,8 +264,8 @@ static void params_updated(struct bt_conn *conn, uint16_t interval,
 	memcpy(&uuid, BT_UUID_HRS, sizeof(uuid));
 	discover_params.uuid = &uuid.uuid;
 	discover_params.func = discover_func;
-	discover_params.start_handle = 0x0001;
-	discover_params.end_handle = 0xffff;
+	discover_params.start_handle = BT_ATT_FIRST_ATTTRIBUTE_HANDLE;
+	discover_params.end_handle = BT_ATT_LAST_ATTTRIBUTE_HANDLE;
 	discover_params.type = BT_GATT_DISCOVER_PRIMARY;
 
 	err = bt_gatt_discover(conn, &discover_params);
@@ -360,7 +361,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	}
 }
 
-static struct bt_conn_cb conn_callbacks = {
+BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.connected = connected,
 	.disconnected = disconnected,
 	.le_param_updated = params_updated,
@@ -378,8 +379,6 @@ static void test_con1_main(void)
 	}
 
 	printk("Bluetooth initialized\n");
-
-	bt_conn_cb_register(&conn_callbacks);
 
 	err = bt_le_scan_start(BT_LE_SCAN_ACTIVE, device_found);
 

@@ -20,6 +20,9 @@
 
 #define LOG_MODULE_NAME log_test
 LOG_MODULE_REGISTER(LOG_MODULE_NAME, LOG_LEVEL_INF);
+static K_SEM_DEFINE(log_sem, 0, 1);
+
+ZTEST_BMEM uint32_t source_id;
 
 struct backend_cb {
 	/* count log messages handled by this backend */
@@ -34,6 +37,11 @@ struct backend_cb {
 	uint16_t exp_severity[4];
 	/* inform put() to check domain_id of message */
 	bool check_domain_id;
+	/* How many messages have been logged.
+	 * used in async mode, to make sure all logs have been handled by compare
+	 * counter with total_logs
+	 */
+	size_t total_logs;
 };
 
 static void put(struct log_backend const *const backend, struct log_msg *msg)
@@ -60,6 +68,11 @@ static void put(struct log_backend const *const backend, struct log_msg *msg)
 	}
 
 	cb->counter++;
+	if (IS_ENABLED(CONFIG_LOG_PROCESS_THREAD)) {
+		if (cb->counter == cb->total_logs) {
+			k_sem_give(&log_sem);
+		}
+	}
 	log_msg_put(msg);
 }
 
@@ -113,6 +126,9 @@ static void log_setup(bool backend2_enable)
 	stamp = 0U;
 
 	log_init();
+#ifndef CONFIG_LOG_PROCESS_THREAD
+	log_thread_set(k_current_get());
+#endif
 
 	memset(&backend1_cb, 0, sizeof(backend1_cb));
 
@@ -130,8 +146,8 @@ static void log_setup(bool backend2_enable)
 static bool log_test_process(bool bypass)
 {
 	if (IS_ENABLED(CONFIG_LOG_PROCESS_THREAD)) {
-		/* a dedicate thread handle log messages, wait for 1 second */
-		k_sleep(K_MSEC(1000));
+		/* waiting for all logs have been handled */
+		k_sem_take(&log_sem, K_FOREVER);
 		return false;
 	} else {
 		return log_process(bypass);
@@ -152,13 +168,14 @@ static void test_log_domain_id(void)
 	log_setup(false);
 
 	backend1_cb.check_domain_id = true;
+	backend1_cb.total_logs = 1;
 
 	LOG_INF("info message for domain id test");
 
 	while (log_test_process(false)) {
 	}
 
-	zassert_equal(1, backend1_cb.counter,
+	zassert_equal(backend1_cb.total_logs, backend1_cb.counter,
 		      "Unexpected amount of messages received by the backend");
 }
 
@@ -221,12 +238,13 @@ static void test_log_early_logging(void)
 
 		TC_PRINT("Activate backend with context");
 		memset(&backend1_cb, 0, sizeof(backend1_cb));
+		backend1_cb.total_logs = 3;
 		log_backend_enable(&backend1, &backend1_cb, LOG_LEVEL_DBG);
 
 		while (log_test_process(false)) {
 		}
 
-		zassert_equal(3, backend1_cb.counter,
+		zassert_equal(backend1_cb.total_logs, backend1_cb.counter,
 			      "Unexpected amount of messages received. %d",
 			      backend1_cb.counter);
 	}
@@ -253,11 +271,12 @@ static void test_log_severity(void)
 	LOG_INF("info message");
 	LOG_WRN("warning message");
 	LOG_ERR("error message");
+	backend1_cb.total_logs = 3;
 
 	while (log_test_process(false)) {
 	}
 
-	zassert_equal(3, backend1_cb.counter,
+	zassert_equal(backend1_cb.total_logs, backend1_cb.counter,
 		      "Unexpected amount of messages received by the backend.");
 }
 
@@ -283,7 +302,9 @@ static void test_log_timestamping(void)
 	}
 
 	TC_PRINT("Register timestamp function\n");
-	zassert_equal(0, log_set_timestamp_func(timestamp_get, 0),
+	zassert_equal(-EINVAL, log_set_timestamp_func(NULL, 0),
+		      "Expects successful timestamp function setting.");
+	zassert_equal(0, log_set_timestamp_func(timestamp_get, 2000000),
 		      "Expects successful timestamp function setting.");
 
 	memset(&backend1_cb, 0, sizeof(backend1_cb));
@@ -298,11 +319,12 @@ static void test_log_timestamping(void)
 	LOG_INF("test timestamp");
 	LOG_INF("test timestamp");
 	LOG_WRN("test timestamp");
+	backend1_cb.total_logs = 3;
 
 	while (log_test_process(false)) {
 	}
 
-	zassert_equal(3,
+	zassert_equal(backend1_cb.total_logs,
 		      backend1_cb.counter,
 		      "Unexpected amount of messages received by the backend.");
 }
@@ -372,6 +394,37 @@ static void test_log_thread(void)
 }
 #endif
 
+static void call_log_generic(uint32_t source_id, const char *fmt, ...)
+{
+	struct log_msg_ids src_level = {
+		.level = LOG_LEVEL_INF,
+		.domain_id = CONFIG_LOG_DOMAIN_ID,
+		.source_id = source_id,
+	};
+
+	va_list ap;
+
+	va_start(ap, fmt);
+	log_generic(src_level, fmt, ap, LOG_STRDUP_EXEC);
+	va_end(ap);
+}
+
+void test_log_generic(void)
+{
+	source_id = LOG_CURRENT_MODULE_ID();
+	char *log_msg = "log user space";
+
+	log_setup(false);
+	backend1_cb.total_logs = 4;
+
+	call_log_generic(source_id, "log generic");
+	call_log_generic(source_id, "log generic: %s", log_msg);
+	call_log_generic(source_id, "log generic %d\n", source_id);
+	call_log_generic(source_id, "log generic %d, %d\n", source_id, 1);
+	while (log_test_process(false)) {
+	}
+}
+
 /* The log process thread has the K_LOWEST_APPLICATION_THREAD_PRIO, adjust it
  * to a higher priority to increase the chances of being scheduled to handle
  * log message as soon as possible
@@ -391,6 +444,7 @@ void test_main(void)
 #endif
 	ztest_test_suite(test_log_list,
 			 ztest_unit_test(test_multiple_backends),
+			 ztest_unit_test(test_log_generic),
 			 ztest_unit_test(test_log_domain_id),
 			 ztest_unit_test(test_log_severity),
 			 ztest_unit_test(test_log_timestamping),

@@ -18,6 +18,8 @@
 #include <sys/byteorder.h>
 #include <net/buf.h>
 
+#include <hci_core.h>
+
 #include <logging/log.h>
 #define LOG_MODULE_NAME bttester_gap
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
@@ -235,8 +237,10 @@ static void oob_data_request(struct bt_conn *conn,
 
 	bt_addr_le_to_str(info.le.dst, addr, sizeof(addr));
 
+	switch (oob_info->type) {
 #if !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY)
-	if (oob_info->type == BT_CONN_OOB_LE_SC) {
+	case BT_CONN_OOB_LE_SC:
+	{
 		LOG_DBG("Set %s OOB SC data for %s, ",
 			oob_config_str(oob_info->lesc.oob_config),
 			log_strdup(addr));
@@ -272,15 +276,24 @@ static void oob_data_request(struct bt_conn *conn,
 			LOG_DBG("bt_le_oob_set_sc_data failed with: %d", err);
 		}
 
-		return;
+		break;
 	}
 #endif /* !defined(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY) */
 
-	LOG_DBG("Legacy OOB TK requested from remote %s", log_strdup(addr));
+#if !defined(CONFIG_BT_SMP_SC_PAIR_ONLY)
+	case BT_CONN_OOB_LE_LEGACY:
+		LOG_DBG("Legacy OOB TK requested from remote %s", log_strdup(addr));
 
-	err = bt_le_oob_set_legacy_tk(conn, oob_legacy_tk);
-	if (err < 0) {
-		LOG_ERR("Failed to set OOB Temp Key: %d", err);
+		err = bt_le_oob_set_legacy_tk(conn, oob_legacy_tk);
+		if (err < 0) {
+			LOG_ERR("Failed to set OOB TK: %d", err);
+		}
+
+		break;
+#endif /* !defined(CONFIG_BT_SMP_SC_PAIR_ONLY) */
+	default:
+		LOG_ERR("Unhandled OOB type %d", oob_info->type);
+		break;
 	}
 }
 
@@ -727,6 +740,30 @@ static void auth_cancel(struct bt_conn *conn)
 	/* TODO */
 }
 
+enum bt_security_err auth_pairing_accept(struct bt_conn *conn,
+					 const struct bt_conn_pairing_feat *const feat)
+{
+	struct gap_bond_lost_ev ev;
+	const bt_addr_le_t *addr = bt_conn_get_dst(conn);
+
+	if (!bt_addr_le_is_bonded(BT_ID_DEFAULT, addr)) {
+		return BT_SECURITY_ERR_SUCCESS;
+	}
+
+	/* If a peer is already bonded and tries to pair again then it means that
+	 * the it has lost its bond information.
+	 */
+	LOG_DBG("Bond lost");
+
+	memcpy(ev.address, addr->a.val, sizeof(ev.address));
+	ev.address_type = addr->type;
+
+	tester_send(BTP_SERVICE_ID_GAP, GAP_EV_BOND_LOST, CONTROLLER_INDEX, (uint8_t *)&ev,
+		    sizeof(ev));
+
+	return BT_SECURITY_ERR_SUCCESS;
+}
+
 static void set_io_cap(const uint8_t *data, uint16_t len)
 {
 	const struct gap_set_io_cap_cmd *cmd = (void *) data;
@@ -762,6 +799,8 @@ static void set_io_cap(const uint8_t *data, uint16_t len)
 		status = BTP_STATUS_FAILED;
 		goto rsp;
 	}
+
+	cb.pairing_accept = auth_pairing_accept;
 
 	if (bt_conn_auth_cb_register(&cb)) {
 		status = BTP_STATUS_FAILED;
@@ -1082,6 +1121,13 @@ static void tester_init_gap_cb(int err)
 uint8_t tester_init_gap(void)
 {
 	int err;
+
+	(void)memset(&cb, 0, sizeof(cb));
+	bt_conn_auth_cb_register(NULL);
+	cb.pairing_accept = auth_pairing_accept;
+	if (bt_conn_auth_cb_register(&cb)) {
+		return BTP_STATUS_FAILED;
+	}
 
 	err = bt_enable(tester_init_gap_cb);
 	if (err < 0) {

@@ -109,7 +109,7 @@ struct npcx_vw_out_config {
 
 /*
  * eSPI VW input/Output signal configuration tables. Please refer
- * npcx7-espi-vws-map.dtsi device tree file for more detail.
+ * npcxn-espi-vws-map.dtsi device tree file for more detail.
  */
 static const struct npcx_vw_in_config vw_in_tbl[] = {
 	/* index 02h (In)  */
@@ -326,6 +326,12 @@ static void espi_vw_config_output(const struct device *dev,
 	valid |= config_out->bitmask;
 	SET_FIELD(inst->VWEVSM[idx], NPCX_VWEVSM_VALID, valid);
 
+	/*
+	 * Turn off hardware-wire feature which generates VW events that
+	 * connected to hardware signals. We will set it manually by software.
+	 */
+	SET_FIELD(inst->VWEVSM[idx], NPCX_VWEVSM_HW_WIRE, 0);
+
 	LOG_DBG("VWEVSM%d 0x%08X", idx, inst->VWEVSM[idx]);
 }
 
@@ -427,9 +433,11 @@ static void espi_vw_generic_isr(const struct device *dev, struct npcx_wui *wui)
 		}
 	}
 
-	if (idx == ARRAY_SIZE(vw_in_tbl))
+	if (idx == ARRAY_SIZE(vw_in_tbl)) {
 		LOG_ERR("Unknown VW event! %d %d %d", wui->table,
 				wui->group, wui->bit);
+		return;
+	}
 
 	signal = vw_in_tbl[idx].sig;
 	if (signal == ESPI_VWIRE_SIGNAL_SLP_S3
@@ -628,10 +636,6 @@ static int espi_npcx_read_lpc_request(const struct device *dev,
 				     uint32_t  *data)
 {
 	ARG_UNUSED(dev);
-	struct espi_reg *const inst = HAL_INSTANCE(dev);
-
-	if (!IS_BIT_SET(inst->ESPICFG, NPCX_ESPICFG_PCHANEN))
-		return -ENOTSUP;
 
 	return npcx_host_periph_read_request(op, data);
 }
@@ -641,10 +645,6 @@ static int espi_npcx_write_lpc_request(const struct device *dev,
 				      uint32_t *data)
 {
 	ARG_UNUSED(dev);
-	struct espi_reg *const inst = HAL_INSTANCE(dev);
-
-	if (!IS_BIT_SET(inst->ESPICFG, NPCX_ESPICFG_PCHANEN))
-		return -ENOTSUP;
 
 	return npcx_host_periph_write_request(op, data);
 }
@@ -787,6 +787,33 @@ static int espi_npcx_receive_oob(const struct device *dev,
 }
 #endif
 
+/* Platform specific espi module functions */
+void npcx_espi_enable_interrupts(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	/* Enable eSPI bus interrupt */
+	irq_enable(DT_INST_IRQN(0));
+
+	/* Turn on all VW inputs' MIWU interrupts */
+	for (int idx = 0; idx < ARRAY_SIZE(vw_in_tbl); idx++) {
+		npcx_miwu_irq_enable(&(vw_in_tbl[idx].vw_wui));
+	}
+}
+
+void npcx_espi_disable_interrupts(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	/* Disable eSPI bus interrupt */
+	irq_disable(DT_INST_IRQN(0));
+
+	/* Turn off all VW inputs' MIWU interrupts */
+	for (int idx = 0; idx < ARRAY_SIZE(vw_in_tbl); idx++) {
+		npcx_miwu_irq_disable(&(vw_in_tbl[idx].vw_wui));
+	}
+}
+
 /* eSPI driver registration */
 static int espi_npcx_init(const struct device *dev);
 
@@ -816,8 +843,8 @@ static const struct espi_npcx_config espi_npcx_config = {
 	.alts_list = espi_alts,
 };
 
-DEVICE_AND_API_INIT(espi_npcx_0, DT_INST_LABEL(0),
-		    &espi_npcx_init, &espi_npcx_data, &espi_npcx_config,
+DEVICE_DT_INST_DEFINE(0, &espi_npcx_init, NULL,
+		    &espi_npcx_data, &espi_npcx_config,
 		    PRE_KERNEL_2, CONFIG_ESPI_INIT_PRIORITY,
 		    &espi_npcx_driver_api);
 
@@ -826,8 +853,13 @@ static int espi_npcx_init(const struct device *dev)
 	const struct espi_npcx_config *const config = DRV_CONFIG(dev);
 	struct espi_npcx_data *const data = DRV_DATA(dev);
 	struct espi_reg *const inst = HAL_INSTANCE(dev);
-	const struct device *clk_dev = device_get_binding(NPCX_CLK_CTRL_NAME);
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	int i, ret;
+
+	/* If booter doesn't set the host interface type */
+	if (!NPCX_BOOTER_IS_HIF_TYPE_SET()) {
+		npcx_host_interface_sel(NPCX_HIF_TYPE_ESPI_SHI);
+	}
 
 	/* Turn on eSPI device clock first */
 	ret = clock_control_on(clk_dev, (clock_control_subsys_t *)
@@ -874,7 +906,7 @@ static int espi_npcx_init(const struct device *dev)
 	IRQ_CONNECT(DT_INST_IRQN(0),
 		    DT_INST_IRQ(0, priority),
 		    espi_bus_generic_isr,
-		    DEVICE_GET(espi_npcx_0), 0);
+		    DEVICE_DT_INST_GET(0), 0);
 
 	/* Enable eSPI bus interrupt */
 	irq_enable(DT_INST_IRQN(0));

@@ -243,7 +243,6 @@ static int stm32_clock_control_get_subsys_rate(const struct device *clock,
 		case LL_APB3_GRP1_PERIPH_SYSCFG:
 		case LL_APB3_GRP1_PERIPH_VREF:
 		case LL_APB3_GRP1_PERIPH_TMPSENS:
-		case LL_APB3_GRP1_PERIPH_PMBCTRL:
 		case LL_APB3_GRP1_PERIPH_HDP:
 		default:
 			return -ENOTSUP;
@@ -342,7 +341,6 @@ static int stm32_clock_control_get_subsys_rate(const struct device *clock,
 		case LL_AHB5_GRP1_PERIPH_CRYP1:
 		case LL_AHB5_GRP1_PERIPH_HASH1:
 		case LL_AHB5_GRP1_PERIPH_BKPSRAM:
-		case LL_AHB5_GRP1_PERIPH_AXIMC:
 		default:
 			return -ENOTSUP;
 		}
@@ -411,8 +409,9 @@ static int stm32_clock_control_init(const struct device *dev)
  * @brief RCC device, note that priority is intentionally set to 1 so
  * that the device init runs just after SOC init
  */
-DEVICE_AND_API_INIT(rcc_stm32, STM32_CLOCK_CONTROL_NAME,
+DEVICE_DT_DEFINE(DT_NODELABEL(rcc),
 		    &stm32_clock_control_init,
+		    NULL,
 		    NULL, NULL,
 		    PRE_KERNEL_1,
 		    CONFIG_CLOCK_CONTROL_STM32_DEVICE_INIT_PRIORITY,

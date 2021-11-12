@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13.1)
+cmake_minimum_required(VERSION 3.20.0)
 # Copyright (c) 2018 Nordic Semiconductor ASA
 # Copyright (c) 2019 Linaro Limited
 #
@@ -9,13 +9,13 @@ set(REMOTE_ZEPHYR_DIR ${CMAKE_CURRENT_BINARY_DIR}/openamp_remote-prefix/src/open
 
 if("${BOARD}" STREQUAL "lpcxpresso54114_m4")
   set(BOARD_REMOTE "lpcxpresso54114_m0")
+elseif("${BOARD}" STREQUAL "lpcxpresso55s69_cpu0")
+  set(BOARD_REMOTE "lpcxpresso55s69_cpu1")
 elseif("${BOARD}" STREQUAL "mps2_an521")
   set(QEMU_EXTRA_FLAGS "-device;loader,file=${REMOTE_ZEPHYR_DIR}/zephyr.elf")
-  set(BOARD_REMOTE "mps2_an521_nonsecure")
-elseif("${BOARD}" STREQUAL "v2m_musca")
-  set(BOARD_REMOTE "v2m_musca_nonsecure")
+  set(BOARD_REMOTE "mps2_an521_remote")
 elseif("${BOARD}" STREQUAL "v2m_musca_b1")
-  set(BOARD_REMOTE "v2m_musca_b1_nonsecure")
+  set(BOARD_REMOTE "v2m_musca_b1_ns")
 else()
   message(FATAL_ERROR "${BOARD} was not supported for this sample")
 endif()
@@ -41,9 +41,5 @@ ExternalProject_Add(
   # NB: Do we need to pass on more CMake variables?
   BUILD_ALWAYS True
 )
-
-if(("${BOARD}" STREQUAL "lpcxpresso54114_m4"))
-	add_dependencies(core_m0_inc_target openamp_remote)
-endif()
 
 target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

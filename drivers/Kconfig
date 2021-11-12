@@ -19,6 +19,8 @@ source "drivers/ec_host_cmd_periph/Kconfig"
 
 source "drivers/ethernet/Kconfig"
 
+source "drivers/mdio/Kconfig"
+
 source "drivers/net/Kconfig"
 
 source "drivers/serial/Kconfig"
@@ -102,5 +104,23 @@ source "drivers/peci/Kconfig"
 source "drivers/regulator/Kconfig"
 
 source "drivers/memc/Kconfig"
+
+source "drivers/virtualization/Kconfig"
+
+source "drivers/edac/Kconfig"
+
+source "drivers/pm_cpu_ops/Kconfig"
+
+source "drivers/misc/Kconfig"
+
+source "drivers/disk/Kconfig"
+
+source "drivers/cache/Kconfig"
+
+source "drivers/syscon/Kconfig"
+
+source "drivers/bbram/Kconfig"
+
+source "drivers/fpga/Kconfig"
 
 endmenu

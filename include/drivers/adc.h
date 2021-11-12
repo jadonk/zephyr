@@ -14,6 +14,7 @@
 #define ZEPHYR_INCLUDE_DRIVERS_ADC_H_
 
 #include <device.h>
+#include <dt-bindings/adc/adc.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,8 +39,11 @@ enum adc_gain {
 	ADC_GAIN_2,   /**< x 2. */
 	ADC_GAIN_3,   /**< x 3. */
 	ADC_GAIN_4,   /**< x 4. */
+	ADC_GAIN_6,   /**< x 6. */
 	ADC_GAIN_8,   /**< x 8. */
+	ADC_GAIN_12,  /**< x 12. */
 	ADC_GAIN_16,  /**< x 16. */
+	ADC_GAIN_24,  /**< x 24. */
 	ADC_GAIN_32,  /**< x 32. */
 	ADC_GAIN_64,  /**< x 64. */
 	ADC_GAIN_128, /**< x 128. */
@@ -74,20 +78,6 @@ enum adc_reference {
 	ADC_REF_EXTERNAL0, /**< External, input 0. */
 	ADC_REF_EXTERNAL1, /**< External, input 1. */
 };
-
-/** Acquisition time is expressed in microseconds. */
-#define ADC_ACQ_TIME_MICROSECONDS  (1u)
-/** Acquisition time is expressed in nanoseconds. */
-#define ADC_ACQ_TIME_NANOSECONDS   (2u)
-/** Acquisition time is expressed in ADC ticks. */
-#define ADC_ACQ_TIME_TICKS         (3u)
-/** Macro for composing the acquisition time value in given units. */
-#define ADC_ACQ_TIME(unit, value)  (((unit) << 14) | ((value) & BIT_MASK(14)))
-/** Value indicating that the default acquisition time should be used. */
-#define ADC_ACQ_TIME_DEFAULT       0
-
-#define ADC_ACQ_TIME_UNIT(time)    (((time) >> 14) & BIT_MASK(2))
-#define ADC_ACQ_TIME_VALUE(time)   ((time) & BIT_MASK(14))
 
 /**
  * @brief Structure for specifying the configuration of an ADC channel.
@@ -218,8 +208,15 @@ enum adc_action {
  *
  * @param dev             Pointer to the device structure for the driver
  *                        instance.
- * @param sequence        Pointer to the sequence structure that triggered the
- *                        sampling.
+ * @param sequence        Pointer to the sequence structure that triggered
+ *                        the sampling. This parameter points to a copy of
+ *                        the structure that was supplied to the call that
+ *                        started the sampling sequence, thus it cannot be
+ *                        used with the CONTAINER_OF() macro to retrieve
+ *                        some other data associated with the sequence.
+ *                        Instead, the adc_sequence_options::user_data field
+ *                        should be used for such purpose.
+ *
  * @param sampling_index  Index (0-65535) of the sampling done.
  *
  * @returns Action to be performed by the driver. See @ref adc_action.
@@ -248,6 +245,12 @@ struct adc_sequence_options {
 	 * Optional - set to NULL if it is not needed.
 	 */
 	adc_sequence_callback callback;
+
+	/**
+	 * Pointer to user data. It can be used to associate the sequence
+	 * with any other data that is needed in the callback function.
+	 */
+	void *user_data;
 
 	/**
 	 * Number of extra samplings to perform (the total number of samplings
@@ -336,7 +339,6 @@ typedef int (*adc_api_channel_setup)(const struct device *dev,
 typedef int (*adc_api_read)(const struct device *dev,
 			    const struct adc_sequence *sequence);
 
-#ifdef CONFIG_ADC_ASYNC
 /**
  * @brief Type definition of ADC API function for setting an asynchronous
  *        read request.
@@ -345,7 +347,6 @@ typedef int (*adc_api_read)(const struct device *dev,
 typedef int (*adc_api_read_async)(const struct device *dev,
 				  const struct adc_sequence *sequence,
 				  struct k_poll_signal *async);
-#endif
 
 /**
  * @brief ADC driver API
@@ -418,9 +419,11 @@ static inline int z_impl_adc_read(const struct device *dev,
 	return api->read(dev, sequence);
 }
 
-#ifdef CONFIG_ADC_ASYNC
 /**
  * @brief Set an asynchronous read request.
+ *
+ * @note This function is available only if @kconfig{CONFIG_ADC_ASYNC}
+ * is selected.
  *
  * If invoked from user mode, any sequence struct options for callback must
  * be NULL.
@@ -433,6 +436,7 @@ static inline int z_impl_adc_read(const struct device *dev,
  *                  or not).
  *
  * @returns 0 on success, negative error code otherwise.
+ *          See adc_read() for a list of possible error codes.
  *
  */
 __syscall int adc_read_async(const struct device *dev,
@@ -440,6 +444,7 @@ __syscall int adc_read_async(const struct device *dev,
 			     struct k_poll_signal *async);
 
 
+#ifdef CONFIG_ADC_ASYNC
 static inline int z_impl_adc_read_async(const struct device *dev,
 					const struct adc_sequence *sequence,
 					struct k_poll_signal *async)

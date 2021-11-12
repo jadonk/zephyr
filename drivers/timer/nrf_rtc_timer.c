@@ -51,27 +51,27 @@ static uint32_t counter_sub(uint32_t a, uint32_t b)
 	return (a - b) & COUNTER_MAX;
 }
 
-static void set_comparator(uint32_t chan, uint32_t cyc)
+static void set_comparator(int32_t chan, uint32_t cyc)
 {
 	nrf_rtc_cc_set(RTC, chan, cyc & COUNTER_MAX);
 }
 
-static uint32_t get_comparator(uint32_t chan)
+static uint32_t get_comparator(int32_t chan)
 {
 	return nrf_rtc_cc_get(RTC, chan);
 }
 
-static void event_clear(uint32_t chan)
+static void event_clear(int32_t chan)
 {
 	nrf_rtc_event_clear(RTC, RTC_CHANNEL_EVENT_ADDR(chan));
 }
 
-static void event_enable(uint32_t chan)
+static void event_enable(int32_t chan)
 {
 	nrf_rtc_event_enable(RTC, RTC_CHANNEL_INT_MASK(chan));
 }
 
-static void event_disable(uint32_t chan)
+static void event_disable(int32_t chan)
 {
 	nrf_rtc_event_disable(RTC, RTC_CHANNEL_INT_MASK(chan));
 }
@@ -86,13 +86,13 @@ uint32_t z_nrf_rtc_timer_read(void)
 	return nrf_rtc_counter_get(RTC);
 }
 
-uint32_t z_nrf_rtc_timer_compare_evt_address_get(uint32_t chan)
+uint32_t z_nrf_rtc_timer_compare_evt_address_get(int32_t chan)
 {
 	__ASSERT_NO_MSG(chan < CHAN_COUNT);
 	return nrf_rtc_event_address_get(RTC, nrf_rtc_compare_event_get(chan));
 }
 
-bool z_nrf_rtc_timer_compare_int_lock(uint32_t chan)
+bool z_nrf_rtc_timer_compare_int_lock(int32_t chan)
 {
 	__ASSERT_NO_MSG(chan && chan < CHAN_COUNT);
 
@@ -103,7 +103,7 @@ bool z_nrf_rtc_timer_compare_int_lock(uint32_t chan)
 	return prev & BIT(chan);
 }
 
-void z_nrf_rtc_timer_compare_int_unlock(uint32_t chan, bool key)
+void z_nrf_rtc_timer_compare_int_unlock(int32_t chan, bool key)
 {
 	__ASSERT_NO_MSG(chan && chan < CHAN_COUNT);
 
@@ -113,7 +113,7 @@ void z_nrf_rtc_timer_compare_int_unlock(uint32_t chan, bool key)
 	}
 }
 
-uint32_t z_nrf_rtc_timer_compare_read(uint32_t chan)
+uint32_t z_nrf_rtc_timer_compare_read(int32_t chan)
 {
 	__ASSERT_NO_MSG(chan < CHAN_COUNT);
 
@@ -129,7 +129,7 @@ int z_nrf_rtc_timer_get_ticks(k_timeout_t t)
 
 	do {
 		curr_count = counter();
-		curr_tick = z_tick_get();
+		curr_tick = sys_clock_tick_get();
 	} while (curr_count != counter());
 
 	abs_ticks = Z_TICK_ABS(t.ticks);
@@ -154,7 +154,7 @@ int z_nrf_rtc_timer_get_ticks(k_timeout_t t)
  * less than COUNTER_HALF_SPAN from now. It detects late setting and also
  * handle +1 cycle case.
  */
-static void set_absolute_alarm(uint32_t chan, uint32_t abs_val)
+static void set_absolute_alarm(int32_t chan, uint32_t abs_val)
 {
 	uint32_t now;
 	uint32_t now2;
@@ -171,7 +171,11 @@ static void set_absolute_alarm(uint32_t chan, uint32_t abs_val)
 		 */
 		set_comparator(chan, now);
 		if (counter_sub(prev_cc, now) == 1) {
-			k_busy_wait(15);
+			/* It should wait for half of RTC tick 15.26us. As
+			 * busy wait runs from different clock source thus
+			 * wait longer to cover for discrepancy.
+			 */
+			k_busy_wait(19);
 		}
 
 
@@ -199,7 +203,7 @@ static void set_absolute_alarm(uint32_t chan, uint32_t abs_val)
 		 (counter_sub(cc_val, now2 + 2) > COUNTER_HALF_SPAN));
 }
 
-static void compare_set(uint32_t chan, uint32_t cc_value,
+static void compare_set(int32_t chan, uint32_t cc_value,
 			z_nrf_rtc_timer_compare_handler_t handler,
 			void *user_data)
 {
@@ -209,7 +213,7 @@ static void compare_set(uint32_t chan, uint32_t cc_value,
 	set_absolute_alarm(chan, cc_value);
 }
 
-void z_nrf_rtc_timer_compare_set(uint32_t chan, uint32_t cc_value,
+void z_nrf_rtc_timer_compare_set(int32_t chan, uint32_t cc_value,
 			      z_nrf_rtc_timer_compare_handler_t handler,
 			      void *user_data)
 {
@@ -222,7 +226,7 @@ void z_nrf_rtc_timer_compare_set(uint32_t chan, uint32_t cc_value,
 	z_nrf_rtc_timer_compare_int_unlock(chan, key);
 }
 
-static void sys_clock_timeout_handler(uint32_t chan,
+static void sys_clock_timeout_handler(int32_t chan,
 				      uint32_t cc_value,
 				      void *user_data)
 {
@@ -238,7 +242,7 @@ static void sys_clock_timeout_handler(uint32_t chan,
 					  sys_clock_timeout_handler, NULL);
 	}
 
-	z_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL) ?
+	sys_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL) ?
 						dticks : (dticks > 0));
 }
 
@@ -254,15 +258,27 @@ void rtc_nrf_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
 
-	for (uint32_t chan = 0; chan < CHAN_COUNT; chan++) {
+	for (int32_t chan = 0; chan < CHAN_COUNT; chan++) {
 		if (nrf_rtc_int_enable_check(RTC, RTC_CHANNEL_INT_MASK(chan)) &&
 		    nrf_rtc_event_check(RTC, RTC_CHANNEL_EVENT_ADDR(chan))) {
 			uint32_t cc_val;
+			uint32_t now;
 			z_nrf_rtc_timer_compare_handler_t handler;
 
 			event_clear(chan);
 			event_disable(chan);
 			cc_val = get_comparator(chan);
+			now = counter();
+
+			/* Higher priority interrupt may already changed cc_val
+			 * which now points to the future. In that case return
+			 * current counter value. It is less precise than
+			 * returning exact CC value but this one is already lost.
+			 */
+			if (counter_sub(now, cc_val) > COUNTER_HALF_SPAN) {
+				cc_val = now;
+			}
+
 			handler = cc_data[chan].callback;
 			cc_data[chan].callback = NULL;
 			if (handler) {
@@ -273,9 +289,9 @@ void rtc_nrf_isr(const void *arg)
 	}
 }
 
-int z_nrf_rtc_timer_chan_alloc(void)
+int32_t z_nrf_rtc_timer_chan_alloc(void)
 {
-	int chan;
+	int32_t chan;
 	atomic_val_t prev;
 	do {
 		chan = alloc_mask ? 31 - __builtin_clz(alloc_mask) : -1;
@@ -288,16 +304,16 @@ int z_nrf_rtc_timer_chan_alloc(void)
 	return chan;
 }
 
-void z_nrf_rtc_timer_chan_free(uint32_t chan)
+void z_nrf_rtc_timer_chan_free(int32_t chan)
 {
 	__ASSERT_NO_MSG(chan && chan < CHAN_COUNT);
 
 	atomic_or(&alloc_mask, BIT(chan));
 }
 
-int z_clock_driver_init(const struct device *device)
+int sys_clock_driver_init(const struct device *dev)
 {
-	ARG_UNUSED(device);
+	ARG_UNUSED(dev);
 	static const enum nrf_lfclk_start_mode mode =
 		IS_ENABLED(CONFIG_SYSTEM_CLOCK_NO_WAIT) ?
 			CLOCK_CONTROL_NRF_LF_START_NOWAIT :
@@ -307,7 +323,7 @@ int z_clock_driver_init(const struct device *device)
 
 	/* TODO: replace with counter driver to access RTC */
 	nrf_rtc_prescaler_set(RTC, 0);
-	for (uint32_t chan = 0; chan < CHAN_COUNT; chan++) {
+	for (int32_t chan = 0; chan < CHAN_COUNT; chan++) {
 		nrf_rtc_int_enable(RTC, RTC_CHANNEL_INT_MASK(chan));
 	}
 
@@ -335,7 +351,7 @@ int z_clock_driver_init(const struct device *device)
 	return 0;
 }
 
-void z_clock_set_timeout(int32_t ticks, bool idle)
+void sys_clock_set_timeout(int32_t ticks, bool idle)
 {
 	ARG_UNUSED(idle);
 	uint32_t cyc;
@@ -376,20 +392,16 @@ void z_clock_set_timeout(int32_t ticks, bool idle)
 	compare_set(0, cyc, sys_clock_timeout_handler, NULL);
 }
 
-uint32_t z_clock_elapsed(void)
+uint32_t sys_clock_elapsed(void)
 {
 	if (!IS_ENABLED(CONFIG_TICKLESS_KERNEL)) {
 		return 0;
 	}
 
-	k_spinlock_key_t key = k_spin_lock(&lock);
-	uint32_t ret = counter_sub(counter(), last_count) / CYC_PER_TICK;
-
-	k_spin_unlock(&lock, key);
-	return ret;
+	return counter_sub(counter(), last_count) / CYC_PER_TICK;
 }
 
-uint32_t z_timer_cycle_get_32(void)
+uint32_t sys_clock_cycle_get_32(void)
 {
 	k_spinlock_key_t key = k_spin_lock(&lock);
 	uint32_t ret = counter_sub(counter(), last_count) + last_count;

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: MIT */
+
 /* Based on src/http/ngx_http_parse.c from NGINX copyright Igor Sysoev
  *
  * Additional changes are licensed under the same terms as NGINX and
@@ -990,6 +992,19 @@ reexecute:
 
 		case s_res_status_code: {
 			if (!IS_NUM(ch)) {
+				/* Numeric status only */
+				if ((ch == CR) || (ch == LF)) {
+					const char *no_status_txt = "";
+
+					rc = cb_data(parser,
+					     settings->on_status,
+					     HPE_CB_status, &p_state, parsed,
+					     p - data + 1, &no_status_txt, 0);
+					if (rc != 0) {
+						return rc;
+					}
+				}
+
 				switch (ch) {
 				case ' ':
 					UPDATE_STATE(s_res_status_start);
@@ -1019,6 +1034,18 @@ reexecute:
 		}
 
 		case s_res_status_start: {
+			if (!status_mark && ((ch == CR) || (ch == LF))) {
+				/* Numeric status only */
+				const char *no_status_txt = "";
+
+				rc = cb_data(parser,
+					settings->on_status,
+					HPE_CB_status, &p_state, parsed,
+					p - data + 1, &no_status_txt, 0);
+				if (rc != 0) {
+					return rc;
+				}
+			}
 			if (ch == CR) {
 				UPDATE_STATE(s_res_line_almost_done);
 				break;

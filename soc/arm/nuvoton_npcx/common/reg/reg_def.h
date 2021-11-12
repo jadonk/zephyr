@@ -98,6 +98,8 @@ struct cdcg_reg {
 #define NPCX_HFCGCTRL_LOCK                    2
 #define NPCX_HFCGCTRL_CLK_CHNG                7
 
+#define NPCX_LFCGCTL2_XT_OSC_SL_EN            6
+
 /*
  * Power Management Controller (PMC) device registers
  */
@@ -122,10 +124,19 @@ struct pmc_reg {
 	volatile uint8_t PWDWN_CTL7[1];
 };
 
-/* PMC multi-registers */
-#define NPCX_PWDWN_CTL_OFFSET(n) (((n) < 6) ? (0x008 + n) : (0x024 + (n - 6)))
+/* PMC internal inline functions for multi-registers */
+static inline uint32_t npcx_pwdwn_ctl_offset(uint32_t ctl_no)
+{
+	if (ctl_no < 6) {
+		return 0x008 + ctl_no;
+	} else {
+		return 0x024 + ctl_no - 6;
+	}
+}
+
+/* Macro functions for PMC multi-registers */
 #define NPCX_PWDWN_CTL(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_PWDWN_CTL_OFFSET(n)))
+						npcx_pwdwn_ctl_offset(n)))
 
 /* PMC register fields */
 #define NPCX_PMCSR_DI_INSTW                   0
@@ -168,15 +179,26 @@ struct scfg_reg {
 	volatile uint8_t LV_GPIO_CTL0[5];
 };
 
-/* SCFG multi-registers */
-#define NPCX_DEVALT_OFFSET(n) (0x010 + (n))
-#define NPCX_DEVALT(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_DEVALT_OFFSET(n)))
+/* SCFG internal inline functions for multi-registers */
+static inline uint32_t npcx_devalt_offset(uint32_t alt_no)
+{
+	return 0x010 + alt_no;
+}
 
-#define NPCX_LV_GPIO_CTL_OFFSET(n) (((n) < 5) ? (0x02A + (n)) \
-						: (0x026 + (n - 5)))
+static inline uint32_t npcx_lv_gpio_ctl_offset(uint32_t ctl_no)
+{
+	if (ctl_no < 5) {
+		return 0x02a + ctl_no;
+	} else {
+		return 0x026 + ctl_no - 5;
+	}
+}
+
+/* Macro functions for SCFG multi-registers */
+#define NPCX_DEVALT(base, n) (*(volatile uint8_t *)(base + \
+						npcx_devalt_offset(n)))
 #define NPCX_LV_GPIO_CTL(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_LV_GPIO_CTL_OFFSET(n)))
+						npcx_lv_gpio_ctl_offset(n)))
 
 /* SCFG register fields */
 #define NPCX_DEVCNT_F_SPI_TRIS                6
@@ -203,6 +225,39 @@ struct scfg_reg {
 #define NPCX_DEVPU0_I2C2_0_PUE                4
 #define NPCX_DEVPU0_I2C3_0_PUE                6
 #define NPCX_DEVPU1_F_SPI_PUD_EN              7
+
+/* Supported host interface type for HIF_TYP_SEL FILED in DEVCNT register. */
+enum npcx_hif_type {
+	NPCX_HIF_TYPE_NONE,
+	NPCX_HIF_TYPE_LPC,
+	NPCX_HIF_TYPE_ESPI_SHI,
+};
+
+/*
+ * System Glue (GLUE) device registers
+ */
+struct glue_reg {
+	volatile uint8_t reserved1[2];
+	/* 0x002: SMBus Start Bit Detection */
+	volatile uint8_t SMB_SBD;
+	/* 0x003: SMBus Event Enable */
+	volatile uint8_t SMB_EEN;
+	volatile uint8_t reserved2[12];
+	/* 0x010: Simple Debug Port Data 0 */
+	volatile uint8_t SDPD0;
+	volatile uint8_t reserved3;
+	/* 0x012: Simple Debug Port Data 1 */
+	volatile uint8_t SDPD1;
+	volatile uint8_t reserved4;
+	/* 0x014: Simple Debug Port Control and Status */
+	volatile uint8_t SDP_CTS;
+	volatile uint8_t reserved5[12];
+	/* 0x021: SMBus Bus Select */
+	volatile uint8_t SMB_SEL;
+	volatile uint8_t reserved6[5];
+	/* 0x027: PSL Control and Status */
+	volatile uint8_t PSL_CTS;
+};
 
 /*
  * Universal Asynchronous Receiver-Transmitter (UART) device registers
@@ -284,29 +339,91 @@ struct uart_reg {
  * Multi-Input Wake-Up Unit (MIWU) device registers
  */
 
-/* MIWU multi-registers */
-#define NPCX_WKEDG_OFFSET(n)    (0x000 + ((n) * 2L) + ((n) < 5 ? 0 : 0x1E))
-#define NPCX_WKAEDG_OFFSET(n)   (0x001 + ((n) * 2L) + ((n) < 5 ? 0 : 0x1E))
-#define NPCX_WKPND_OFFSET(n)    (0x00A + ((n) * 4L) + ((n) < 5 ? 0 : 0x10))
-#define NPCX_WKPCL_OFFSET(n)    (0x00C + ((n) * 4L) + ((n) < 5 ? 0 : 0x10))
-#define NPCX_WKEN_OFFSET(n)     (0x01E + ((n) * 2L) + ((n) < 5 ? 0 : 0x12))
-#define NPCX_WKINEN_OFFSET(n)   (0x01F + ((n) * 2L) + ((n) < 5 ? 0 : 0x12))
-#define NPCX_WKMOD_OFFSET(n)    (0x070 + (n))
+/* MIWU internal inline functions for multi-registers */
+static inline uint32_t npcx_wkedg_offset(uint32_t group)
+{
+	if (IS_ENABLED(CONFIG_SOC_SERIES_NPCX7)) {
+		return 0x000 + (group * 2ul) + (group < 5 ? 0 : 0x1e);
+	} else { /* NPCX9 and later series */
+		return 0x000 + group * 0x10UL;
+	}
+}
 
-#define NPCX_WKEDG(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_WKEDG_OFFSET(n)))
-#define NPCX_WKAEDG(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_WKAEDG_OFFSET(n)))
-#define NPCX_WKPND(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_WKPND_OFFSET(n)))
-#define NPCX_WKPCL(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_WKPCL_OFFSET(n)))
-#define NPCX_WKEN(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_WKEN_OFFSET(n)))
-#define NPCX_WKINEN(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_WKINEN_OFFSET(n)))
-#define NPCX_WKMOD(base, n) (*(volatile uint8_t *)(base + \
-						NPCX_WKMOD_OFFSET(n)))
+static inline uint32_t npcx_wkaedg_offset(uint32_t group)
+{
+	if (IS_ENABLED(CONFIG_SOC_SERIES_NPCX7)) {
+		return 0x001 + (group * 2ul) + (group < 5 ? 0 : 0x1e);
+	} else { /* NPCX9 and later series */
+		return 0x001 + group * 0x10ul;
+	}
+}
+
+static inline uint32_t npcx_wkmod_offset(uint32_t group)
+{
+	if (IS_ENABLED(CONFIG_SOC_SERIES_NPCX7)) {
+		return 0x070 + group;
+	} else { /* NPCX9 and later series */
+		return 0x002 + group * 0x10ul;
+	}
+}
+
+static inline uint32_t npcx_wkpnd_offset(uint32_t group)
+{
+	if (IS_ENABLED(CONFIG_SOC_SERIES_NPCX7)) {
+		return 0x00a + (group * 4ul) + (group < 5 ? 0 : 0x10);
+	} else { /* NPCX9 and later series */
+		return 0x003 + group * 0x10ul;
+	}
+}
+
+static inline uint32_t npcx_wkpcl_offset(uint32_t group)
+{
+	if (IS_ENABLED(CONFIG_SOC_SERIES_NPCX7)) {
+		return 0x00c + (group * 4ul) + (group < 5 ? 0 : 0x10);
+	} else { /* NPCX9 and later series */
+		return 0x004 + group * 0x10ul;
+	}
+}
+
+static inline uint32_t npcx_wken_offset(uint32_t group)
+{
+	if (IS_ENABLED(CONFIG_SOC_SERIES_NPCX7)) {
+		return 0x01e + (group * 2ul) + (group < 5 ? 0 : 0x12);
+	} else { /* NPCX9 and later series */
+		return 0x005 + group * 0x10ul;
+	}
+}
+
+static inline uint32_t npcx_wkst_offset(uint32_t group)
+{
+	/* NPCX9 and later series only */
+	return 0x006 + group * 0x10ul;
+}
+
+static inline uint32_t npcx_wkinen_offset(uint32_t group)
+{
+	if (IS_ENABLED(CONFIG_SOC_SERIES_NPCX7)) {
+		return 0x01f + (group * 2ul) + (group < 5 ? 0 : 0x12);
+	} else { /* NPCX9 and later series */
+		return 0x007 + group * 0x10ul;
+	}
+}
+
+/* Macro functions for MIWU multi-registers */
+#define NPCX_WKEDG(base, group) \
+	(*(volatile uint8_t *)(base +  npcx_wkedg_offset(group)))
+#define NPCX_WKAEDG(base, group) \
+	(*(volatile uint8_t *)(base + npcx_wkaedg_offset(group)))
+#define NPCX_WKPND(base, group) \
+	(*(volatile uint8_t *)(base + npcx_wkpnd_offset(group)))
+#define NPCX_WKPCL(base, group) \
+	(*(volatile uint8_t *)(base + npcx_wkpcl_offset(group)))
+#define NPCX_WKEN(base, group) \
+	(*(volatile uint8_t *)(base + npcx_wken_offset(group)))
+#define NPCX_WKINEN(base, group) \
+	(*(volatile uint8_t *)(base + npcx_wkinen_offset(group)))
+#define NPCX_WKMOD(base, group) \
+	(*(volatile uint8_t *)(base + npcx_wkmod_offset(group)))
 
 /*
  * General-Purpose I/O (GPIO) device registers
@@ -427,6 +544,51 @@ struct adc_reg {
 #define NPCX_THRCTS_THR1_STS                  0
 #define NPCX_THR_DCTL_THRD_EN                 15
 #define NPCX_THR_DCTL_THR_DVAL                FIELD(0, 10)
+
+/*
+ * Timer Watchdog (TWD) device registers
+ */
+struct twd_reg {
+	/* 0x000: Timer and Watchdog Configuration */
+	volatile uint8_t TWCFG;
+	volatile uint8_t reserved1;
+	/* 0x002: Timer and Watchdog Clock Prescaler */
+	volatile uint8_t TWCP;
+	volatile uint8_t reserved2;
+	/* 0x004: TWD Timer 0 */
+	volatile uint16_t TWDT0;
+	/* 0x006: TWDT0 Control and Status */
+	volatile uint8_t T0CSR;
+	volatile uint8_t reserved3;
+	/* 0x008: Watchdog Count */
+	volatile uint8_t WDCNT;
+	volatile uint8_t reserved4;
+	/* 0x00A: Watchdog Service Data Match */
+	volatile uint8_t WDSDM;
+	volatile uint8_t reserved5;
+	/* 0x00C: TWD Timer 0 Counter */
+	volatile uint16_t TWMT0;
+	/* 0x00E: Watchdog Counter */
+	volatile uint8_t TWMWD;
+	volatile uint8_t reserved6;
+	/* 0x010: Watchdog Clock Prescaler */
+	volatile uint8_t WDCP;
+	volatile uint8_t reserved7;
+};
+
+/* TWD register fields */
+#define NPCX_TWCFG_LTWCFG                      0
+#define NPCX_TWCFG_LTWCP                       1
+#define NPCX_TWCFG_LTWDT0                      2
+#define NPCX_TWCFG_LWDCNT                      3
+#define NPCX_TWCFG_WDCT0I                      4
+#define NPCX_TWCFG_WDSDME                      5
+#define NPCX_T0CSR_RST                         0
+#define NPCX_T0CSR_TC                          1
+#define NPCX_T0CSR_WDLTD                       3
+#define NPCX_T0CSR_WDRST_STS                   4
+#define NPCX_T0CSR_WD_RUN                      5
+#define NPCX_T0CSR_TESDIS                      7
 
 /*
  * Enhanced Serial Peripheral Interface (eSPI) device registers
@@ -570,6 +732,7 @@ struct espi_reg {
 #define NPCX_VWEVSM_WIRE                 FIELD(0, 4)
 #define NPCX_VWEVSM_VALID                FIELD(4, 4)
 #define NPCX_VWEVSM_BIT_VALID(n)         (4+n)
+#define NPCX_VWEVSM_HW_WIRE              FIELD(24, 4)
 #define NPCX_OOBCTL_OOB_FREE             0
 #define NPCX_OOBCTL_OOB_AVAIL            1
 #define NPCX_OOBCTL_RSTBUFHEADS          2
@@ -731,6 +894,8 @@ struct shm_reg {
 #define NPCX_SMC_CTL_HOSTWAIT            7
 #define NPCX_FLASH_SIZE_STALL_HOST       6
 #define NPCX_FLASH_SIZE_RD_BURST         7
+#define NPCX_WIN_SIZE_RWIN1_SIZE_FIELD   FIELD(0, 4)
+#define NPCX_WIN_SIZE_RWIN2_SIZE_FIELD   FIELD(4, 4)
 #define NPCX_WIN_PROT_RW1L_RP            0
 #define NPCX_WIN_PROT_RW1L_WP            1
 #define NPCX_WIN_PROT_RW1H_RP            2
@@ -837,6 +1002,7 @@ struct pmch_reg {
 #define NPCX_HIPMIE_SCIE                 1
 #define NPCX_HIPMIE_SMIE                 2
 #define NPCX_HIPMCTL_IBFIE               0
+#define NPCX_HIPMCTL_OBEIE               1
 #define NPCX_HIPMCTL_SCIPOL              6
 #define NPCX_HIPMST_OBF                  0
 #define NPCX_HIPMST_IBF                  1
@@ -879,5 +1045,369 @@ struct c2h_reg {
 #define NPCX_SIBCTRL_CSAE                0
 #define NPCX_SIBCTRL_CSRD                1
 #define NPCX_SIBCTRL_CSWR                2
+
+/*
+ * SMBUS (SMB) device registers
+ */
+struct smb_reg {
+	/* 0x000: SMB Serial Data */
+	volatile uint8_t SMBSDA;
+	volatile uint8_t reserved1;
+	/* 0x002: SMB Status */
+	volatile uint8_t SMBST;
+	volatile uint8_t reserved2;
+	/* 0x004: SMB Control Status */
+	volatile uint8_t SMBCST;
+	volatile uint8_t reserved3;
+	/* 0x006: SMB Control 1 */
+	volatile uint8_t SMBCTL1;
+	volatile uint8_t reserved4;
+	/* 0x008: SMB Own Address */
+	volatile uint8_t SMBADDR1;
+	volatile uint8_t reserved5;
+	/* 0x00A: SMB Control 2 */
+	volatile uint8_t SMBCTL2;
+	volatile uint8_t reserved6;
+	/* 0x00C: SMB Own Address */
+	volatile uint8_t SMBADDR2;
+	volatile uint8_t reserved7;
+	/* 0x00E: SMB Control 3 */
+	volatile uint8_t SMBCTL3;
+	/* 0x00F: SMB Bus Timeout */
+	volatile uint8_t SMBT_OUT;
+	/* 0x010: SMB Own Address 3 */
+	volatile uint8_t SMBADDR3;
+	/* 0x011: SMB Own Address 7 */
+	volatile uint8_t SMBADDR7;
+	/* 0x012: SMB Own Address 4 */
+	volatile uint8_t SMBADDR4;
+	/* 0x013: SMB Own Address 8 */
+	volatile uint8_t SMBADDR8;
+	/* 0x014: SMB Own Address 5 */
+	volatile uint8_t SMBADDR5;
+	volatile uint8_t reserved8;
+	/* 0x016: SMB Own Address 6 */
+	volatile uint8_t SMBADDR6;
+	volatile uint8_t reserved9;
+	/* 0x018: SMB Control Status 2 */
+	volatile uint8_t SMBCST2;
+	/* 0x019: SMB Control Status 3 */
+	volatile uint8_t SMBCST3;
+	/* 0x01A: SMB Control 4 */
+	volatile uint8_t SMBCTL4;
+	volatile uint8_t reserved10;
+	/* 0x01C: SMB SCL Low Time */
+	volatile uint8_t SMBSCLLT;
+	/* 0x01D: SMB FIFO Control */
+	volatile uint8_t SMBFIF_CTL;
+	/* 0x01E: SMB SCL High Time */
+	volatile uint8_t SMBSCLHT;
+	volatile uint8_t reserved11;
+};
+
+/*
+ * SMBUS (SMB) FIFO device registers
+ */
+struct smb_fifo_reg {
+	/* 0x000: SMB Serial Data */
+	volatile uint8_t SMBSDA;
+	volatile uint8_t reserved1;
+	/* 0x002: SMB Status */
+	volatile uint8_t SMBST;
+	volatile uint8_t reserved2;
+	/* 0x004: SMB Control Status */
+	volatile uint8_t SMBCST;
+	volatile uint8_t reserved3;
+	/* 0x006: SMB Control 1 */
+	volatile uint8_t SMBCTL1;
+	volatile uint8_t reserved4;
+	/* 0x008: SMB Own Address */
+	volatile uint8_t SMBADDR1;
+	volatile uint8_t reserved5;
+	/* 0x00A: SMB Control 2 */
+	volatile uint8_t SMBCTL2;
+	volatile uint8_t reserved6;
+	/* 0x00C: SMB Own Address */
+	volatile uint8_t SMBADDR2;
+	volatile uint8_t reserved7;
+	/* 0x00E: SMB Control 3 */
+	volatile uint8_t SMBCTL3;
+	/* 0x00F: SMB Bus Timeout */
+	volatile uint8_t SMBT_OUT;
+	/* 0x010: SMB FIFO Control */
+	volatile uint8_t SMBFIF_CTS;
+	volatile uint8_t reserved8;
+	/* 0x012: SMB Tx-FIFO Control */
+	volatile uint8_t SMBTXF_CTL;
+	volatile uint8_t reserved9;
+	/* 0x014: SMB Bus Timeout */
+	volatile uint8_t SMB_T_OUT;
+	volatile uint8_t reserved10[3];
+	/* 0x018: SMB Control Status 2 */
+	volatile uint8_t SMBCST2;
+	/* 0x019: SMB Control Status 3 */
+	volatile uint8_t SMBCST3;
+	/* 0x01A: SMB Tx-FIFO Status */
+	volatile uint8_t SMBTXF_STS;
+	volatile uint8_t reserved11;
+	/* 0x01C: SMB Rx-FIFO Status */
+	volatile uint8_t SMBRXF_STS;
+	volatile uint8_t reserved12;
+	/* 0x01E: SMB Rx-FIFO Contro */
+	volatile uint8_t SMBRXF_CTL;
+	volatile uint8_t reserved13;
+};
+
+/* SMB register fields */
+#define NPCX_SMBST_XMIT                  0
+#define NPCX_SMBST_MASTER                1
+#define NPCX_SMBST_NMATCH                2
+#define NPCX_SMBST_STASTR                3
+#define NPCX_SMBST_NEGACK                4
+#define NPCX_SMBST_BER                   5
+#define NPCX_SMBST_SDAST                 6
+#define NPCX_SMBST_SLVSTP                7
+#define NPCX_SMBCST_BUSY                 0
+#define NPCX_SMBCST_BB                   1
+#define NPCX_SMBCST_MATCH                2
+#define NPCX_SMBCST_GCMATCH              3
+#define NPCX_SMBCST_TSDA                 4
+#define NPCX_SMBCST_TGSCL                5
+#define NPCX_SMBCST_MATCHAF              6
+#define NPCX_SMBCST_ARPMATCH             7
+#define NPCX_SMBCST2_MATCHA1F            0
+#define NPCX_SMBCST2_MATCHA2F            1
+#define NPCX_SMBCST2_MATCHA3F            2
+#define NPCX_SMBCST2_MATCHA4F            3
+#define NPCX_SMBCST2_MATCHA5F            4
+#define NPCX_SMBCST2_MATCHA6F            5
+#define NPCX_SMBCST2_MATCHA7F            6
+#define NPCX_SMBCST2_INTSTS              7
+#define NPCX_SMBCST3_MATCHA8F            0
+#define NPCX_SMBCST3_MATCHA9F            1
+#define NPCX_SMBCST3_MATCHA10F           2
+#define NPCX_SMBCTL1_START               0
+#define NPCX_SMBCTL1_STOP                1
+#define NPCX_SMBCTL1_INTEN               2
+#define NPCX_SMBCTL1_ACK                 4
+#define NPCX_SMBCTL1_GCMEN               5
+#define NPCX_SMBCTL1_NMINTE              6
+#define NPCX_SMBCTL1_STASTRE             7
+#define NPCX_SMBCTL2_ENABLE              0
+#define NPCX_SMBCTL2_SCLFRQ0_6_FIELD     FIELD(1, 7)
+#define NPCX_SMBCTL3_ARPMEN              2
+#define NPCX_SMBCTL3_SCLFRQ7_8_FIELD     FIELD(0, 2)
+#define NPCX_SMBCTL3_IDL_START           3
+#define NPCX_SMBCTL3_400K                4
+#define NPCX_SMBCTL3_BNK_SEL             5
+#define NPCX_SMBCTL3_SDA_LVL             6
+#define NPCX_SMBCTL3_SCL_LVL             7
+#define NPCX_SMBCTL4_HLDT_FIELD          FIELD(0, 6)
+#define NPCX_SMBCTL4_LVL_WE              7
+#define NPCX_SMBADDR1_SAEN               7
+#define NPCX_SMBADDR2_SAEN               7
+#define NPCX_SMBADDR3_SAEN               7
+#define NPCX_SMBADDR4_SAEN               7
+#define NPCX_SMBADDR5_SAEN               7
+#define NPCX_SMBADDR6_SAEN               7
+#define NPCX_SMBADDR7_SAEN               7
+#define NPCX_SMBADDR8_SAEN               7
+#define NPCX_SMBSEL_SMB4SEL              4
+#define NPCX_SMBSEL_SMB5SEL              5
+#define NPCX_SMBSEL_SMB6SEL              6
+#define NPCX_SMBFIF_CTS_RXF_TXE          1
+#define NPCX_SMBFIF_CTS_CLR_FIFO         6
+#define NPCX_SMBFIF_CTL_FIFO_EN          4
+#define NPCX_SMBRXF_STS_RX_THST          6
+
+/* RX FIFO threshold */
+#define NPCX_SMBRXF_CTL_RX_THR           FIELD(0, 6)
+#define NPCX_SMBRXF_CTL_LAST             7
+
+/*
+ * Internal 32-bit Timer (ITIM32) device registers
+ */
+struct itim32_reg {
+	volatile uint8_t reserved1;
+	/* 0x001: Internal 32-bit Timer Prescaler */
+	volatile uint8_t ITPRE32;
+	volatile uint8_t reserved2[2];
+	/* 0x004: Internal 32-bit Timer Control and Status */
+	volatile uint8_t ITCTS32;
+	volatile uint8_t reserved3[3];
+	/* 0x008: Internal 32-Bit Timer Counter */
+	volatile uint32_t ITCNT32;
+};
+
+/*
+ * Internal 64-bit Timer (ITIM54) device registers
+ */
+struct itim64_reg {
+	volatile uint8_t reserved1;
+	/* 0x001: Internal 64-bit Timer Prescaler */
+	volatile uint8_t ITPRE64;
+	volatile uint8_t reserved2[2];
+	/* 0x004: Internal 64-bit Timer Control and Status */
+	volatile uint8_t ITCTS64;
+	volatile uint8_t reserved3[3];
+	/* 0x008: Internal 32-Bit Timer Counter */
+	volatile uint32_t ITCNT64L;
+	/* 0x00C: Internal 32-Bit Timer Counter */
+	volatile uint32_t ITCNT64H;
+};
+
+/* ITIM register fields */
+#define NPCX_ITCTSXX_TO_STS              0
+#define NPCX_ITCTSXX_TO_IE               2
+#define NPCX_ITCTSXX_TO_WUE              3
+#define NPCX_ITCTSXX_CKSEL               4
+#define NPCX_ITCTSXX_ITEN                7
+
+/*
+ * Tachometer (TACH) Sensor device registers
+ */
+struct tach_reg {
+	/* 0x000: Timer/Counter 1 */
+	volatile uint16_t TCNT1;
+	/* 0x002: Reload/Capture A */
+	volatile uint16_t TCRA;
+	/* 0x004: Reload/Capture B */
+	volatile uint16_t TCRB;
+	/* 0x006: Timer/Counter 2 */
+	volatile uint16_t TCNT2;
+	/* 0x008: Clock Prescaler */
+	volatile uint8_t TPRSC;
+	volatile uint8_t reserved1;
+	/* 0x00A: Clock Unit Control */
+	volatile uint8_t TCKC;
+	volatile uint8_t reserved2;
+	/* 0x00C: Timer Mode Control */
+	volatile uint8_t TMCTRL;
+	volatile uint8_t reserved3;
+	/* 0x00E: Timer Event Control */
+	volatile uint8_t TECTRL;
+	volatile uint8_t reserved4;
+	/* 0x010: Timer Event Clear */
+	volatile uint8_t TECLR;
+	volatile uint8_t reserved5;
+	/* 0x012: Timer Interrupt Enable */
+	volatile uint8_t TIEN;
+	volatile uint8_t reserved6;
+	/* 0x014: Compare A */
+	volatile uint16_t TCPA;
+	/* 0x016: Compare B */
+	volatile uint16_t TCPB;
+	/* 0x018: Compare Configuration */
+	volatile uint8_t TCPCFG;
+	volatile uint8_t reserved7;
+	/* 0x01A: Timer Wake-Up Enablen */
+	volatile uint8_t TWUEN;
+	volatile uint8_t reserved8;
+	/* 0x01C: Timer Configuration */
+	volatile uint8_t TCFG;
+	volatile uint8_t reserved9;
+};
+
+/* TACH register fields */
+#define NPCX_TCKC_LOW_PWR                7
+#define NPCX_TCKC_PLS_ACC_CLK            6
+#define NPCX_TCKC_C1CSEL_FIELD           FIELD(0, 3)
+#define NPCX_TCKC_C2CSEL_FIELD           FIELD(3, 3)
+#define NPCX_TMCTRL_MDSEL_FIELD          FIELD(0, 3)
+#define NPCX_TMCTRL_TAEN                 5
+#define NPCX_TMCTRL_TBEN                 6
+#define NPCX_TMCTRL_TAEDG                3
+#define NPCX_TMCTRL_TBEDG                4
+#define NPCX_TCFG_TADBEN                 6
+#define NPCX_TCFG_TBDBEN                 7
+#define NPCX_TECTRL_TAPND                0
+#define NPCX_TECTRL_TBPND                1
+#define NPCX_TECTRL_TCPND                2
+#define NPCX_TECTRL_TDPND                3
+#define NPCX_TECLR_TACLR                 0
+#define NPCX_TECLR_TBCLR                 1
+#define NPCX_TECLR_TCCLR                 2
+#define NPCX_TECLR_TDCLR                 3
+#define NPCX_TIEN_TAIEN                  0
+#define NPCX_TIEN_TBIEN                  1
+#define NPCX_TIEN_TCIEN                  2
+#define NPCX_TIEN_TDIEN                  3
+#define NPCX_TWUEN_TAWEN                 0
+#define NPCX_TWUEN_TBWEN                 1
+#define NPCX_TWUEN_TCWEN                 2
+#define NPCX_TWUEN_TDWEN                 3
+
+/* Debug Interface registers */
+struct dbg_reg {
+	/* 0x000: Debug Control */
+	volatile uint8_t DBGCTRL;
+	volatile uint8_t reserved1;
+	/* 0x002: Debug Freeze Enable 1 */
+	volatile uint8_t DBGFRZEN1;
+	/* 0x003: Debug Freeze Enable 2 */
+	volatile uint8_t DBGFRZEN2;
+	/* 0x004: Debug Freeze Enable 3 */
+	volatile uint8_t DBGFRZEN3;
+	/* 0x005: Debug Freeze Enable 4 */
+	volatile uint8_t DBGFRZEN4;
+};
+/* Debug Interface registers fields */
+#define NPCX_DBGFRZEN3_GLBL_FRZ_DIS      7
+
+/* PS/2 Interface registers */
+struct ps2_reg {
+	/* 0x000: PS/2 Data */
+	volatile uint8_t PSDAT;
+	volatile uint8_t reserved1;
+	/* 0x002: PS/2 Status */
+	volatile uint8_t PSTAT;
+	volatile uint8_t reserved2;
+	/* 0x004: PS/2 Control */
+	volatile uint8_t PSCON;
+	volatile uint8_t reserved3;
+	/* 0x006: PS/2 Output Signal */
+	volatile uint8_t PSOSIG;
+	volatile uint8_t reserved4;
+	/* 0x008: PS/2 Iutput Signal */
+	volatile uint8_t PSISIG;
+	volatile uint8_t reserved5;
+	/* 0x00A: PS/2 Interrupt Enable */
+	volatile uint8_t PSIEN;
+	volatile uint8_t reserved6;
+};
+
+/* PS/2 Interface registers fields */
+#define NPCX_PSTAT_SOT                   0
+#define NPCX_PSTAT_EOT                   1
+#define NPCX_PSTAT_PERR                  2
+#define NPCX_PSTAT_ACH                   FIELD(3, 3)
+#define NPCX_PSTAT_RFERR                 6
+
+#define NPCX_PSCON_EN                    0
+#define NPCX_PSCON_XMT                   1
+#define NPCX_PSCON_HDRV                  FIELD(2, 2)
+#define NPCX_PSCON_IDB                   FIELD(4, 3)
+#define NPCX_PSCON_WPUED                 7
+
+#define NPCX_PSOSIG_WDAT0                0
+#define NPCX_PSOSIG_WDAT1                1
+#define NPCX_PSOSIG_WDAT2                2
+#define NPCX_PSOSIG_CLK0                 3
+#define NPCX_PSOSIG_CLK1                 4
+#define NPCX_PSOSIG_CLK2                 5
+#define NPCX_PSOSIG_WDAT3                6
+#define NPCX_PSOSIG_CLK3                 7
+#define NPCX_PSOSIG_CLK(n)               (((n) < 3) ? ((n) + 3) : 7)
+#define NPCX_PSOSIG_WDAT(n)              (((n) < 3) ? ((n) + 0) : 6)
+#define NPCX_PSOSIG_CLK_MASK_ALL \
+					 (BIT(NPCX_PSOSIG_CLK0) | \
+					  BIT(NPCX_PSOSIG_CLK1) | \
+					  BIT(NPCX_PSOSIG_CLK2) | \
+					  BIT(NPCX_PSOSIG_CLK3))
+
+#define NPCX_PSIEN_SOTIE                 0
+#define NPCX_PSIEN_EOTIE                 1
+#define NPCX_PSIEN_PS2_WUE               4
+#define NPCX_PSIEN_PS2_CLK_SEL           7
 
 #endif /* _NUVOTON_NPCX_REG_DEF_H */

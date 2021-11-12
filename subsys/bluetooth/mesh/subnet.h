@@ -76,13 +76,11 @@ struct bt_mesh_subnet_cb {
  *
  *  @brief Register a subnet event callback.
  *
- *  @param _handler Handler function, see @ref bt_mesh_subnet_cb::evt_handler.
+ *  @param _name Handler name.
  */
-#define BT_MESH_SUBNET_CB_DEFINE(_handler)                                     \
-	static const Z_STRUCT_SECTION_ITERABLE(                                \
-		bt_mesh_subnet_cb, _CONCAT(bt_mesh_subnet_cb_, _handler)) = {  \
-		.evt_handler = (_handler),                                     \
-	}
+#define BT_MESH_SUBNET_CB_DEFINE(_name)                                    \
+	static const STRUCT_SECTION_ITERABLE(                               \
+		bt_mesh_subnet_cb, _CONCAT(bt_mesh_subnet_cb_, _name))
 
 /** @brief Reset all Network keys. */
 void bt_mesh_net_keys_reset(void);
@@ -199,5 +197,14 @@ bt_mesh_subnet_has_new_key(const struct bt_mesh_subnet *sub)
 {
 	return sub->kr_phase != BT_MESH_KR_NORMAL;
 }
+
+/** @brief Store the Subnet information in persistent storage.
+ *
+ * @param net_idx Network index to store.
+ */
+void bt_mesh_subnet_store(uint16_t net_idx);
+
+/** @brief Store the pending Subnets in persistent storage. */
+void bt_mesh_subnet_pending_store(void);
 
 #endif /* ZEPHYR_SUBSYS_BLUETOOTH_MESH_SUBNET_H_ */

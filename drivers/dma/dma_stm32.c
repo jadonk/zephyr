@@ -5,8 +5,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT st_stm32_dma
-
 /**
  * @brief Common part of DMA drivers for stm32.
  * @note  Functions named with stm32_dma_* are SoCs related functions
@@ -17,9 +15,18 @@
 
 #include <init.h>
 #include <drivers/clock_control.h>
+#include <drivers/dma/dma_stm32.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(dma_stm32, CONFIG_DMA_LOG_LEVEL);
+
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v1)
+#define DT_DRV_COMPAT st_stm32_dma_v1
+#elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v2)
+#define DT_DRV_COMPAT st_stm32_dma_v2
+#elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v2bis)
+#define DT_DRV_COMPAT st_stm32_dma_v2bis
+#endif
 
 #if DT_NODE_HAS_STATUS(DT_DRV_INST(0), okay)
 #if DT_INST_IRQ_HAS_IDX(0, 7)
@@ -97,14 +104,21 @@ static void dma_stm32_irq_handler(const struct device *dev, uint32_t id)
 	}
 
 	/* the dma stream id is in range from STREAM_OFFSET..<dma-requests> */
-	if (dma_stm32_is_tc_active(dma, id)) {
-		dma_stm32_clear_tc(dma, id);
+	if (stm32_dma_is_ht_irq_active(dma, id)) {
+		/* Let HAL DMA handle flags on its own */
+		if (!stream->hal_override) {
+			dma_stm32_clear_ht(dma, id);
+		}
+		stream->dma_callback(dev, stream->user_data, callback_arg, 0);
+	} else if (stm32_dma_is_tc_irq_active(dma, id)) {
 #ifdef CONFIG_DMAMUX_STM32
 		stream->busy = false;
 #endif
+		/* Let HAL DMA handle flags on its own */
+		if (!stream->hal_override) {
+			dma_stm32_clear_tc(dma, id);
+		}
 		stream->dma_callback(dev, stream->user_data, callback_arg, 0);
-	} else if (dma_stm32_is_ht_active(dma, id)) {
-		dma_stm32_clear_ht(dma, id);
 	} else if (stm32_dma_is_unexpected_irq_happened(dma, id)) {
 		LOG_ERR("Unexpected irq happened.");
 		stream->dma_callback(dev, stream->user_data,
@@ -120,17 +134,23 @@ static void dma_stm32_irq_handler(const struct device *dev, uint32_t id)
 
 #ifdef CONFIG_DMA_STM32_SHARED_IRQS
 
+#define HANDLE_IRQS(index)						       \
+	static const struct device *dev_##index = DEVICE_DT_INST_GET(index);   \
+	const struct dma_stm32_config *cfg_##index = dev_##index->config;      \
+	DMA_TypeDef *dma_##index = (DMA_TypeDef *)(cfg_##index->base);	       \
+									       \
+	for (id = 0; id < cfg_##index->max_streams; ++id) {		       \
+		if (stm32_dma_is_irq_active(dma_##index, id)) {		       \
+			dma_stm32_irq_handler(dev_##index, id);		       \
+		}							       \
+	}
+
 static void dma_stm32_shared_irq_handler(const struct device *dev)
 {
-	const struct dma_stm32_config *cfg = dev->config;
-	DMA_TypeDef *dma = (DMA_TypeDef *)(cfg->base);
+	ARG_UNUSED(dev);
 	uint32_t id = 0;
 
-	for (id = 0; id < cfg->max_streams; ++id) {
-		if (stm32_dma_is_irq_active(dma, id)) {
-			dma_stm32_irq_handler(dev, id);
-		}
-	}
+	DT_INST_FOREACH_STATUS_OKAY(HANDLE_IRQS)
 }
 
 #endif /* CONFIG_DMA_STM32_SHARED_IRQS */
@@ -245,11 +265,24 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 	struct dma_stm32_stream *stream =
 				&dev_config->streams[id - STREAM_OFFSET];
 	DMA_TypeDef *dma = (DMA_TypeDef *)dev_config->base;
-	LL_DMA_InitTypeDef DMA_InitStruct;
+	LL_DMA_InitTypeDef DMA_InitStruct = {0};
 	int ret;
 
 	/* give channel from index 0 */
 	id = id - STREAM_OFFSET;
+
+	/* Check potential DMA override */
+	if (config->linked_channel == STM32_DMA_HAL_OVERRIDE) {
+		/* DMA channel is overridden by HAL DMA
+		 * Retain that the channel is busy and proceed to the minimal
+		 * configuration to properly route the IRQ
+		 */
+		stream->busy = true;
+		stream->hal_override = true;
+		stream->dma_callback = config->dma_callback;
+		stream->user_data = config->user_data;
+		return 0;
+	}
 
 	if (id >= dev_config->max_streams) {
 		LOG_ERR("cannot configure the dma stream %d.", id);
@@ -384,7 +417,7 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 		DMA_InitStruct.Mode = LL_DMA_MODE_NORMAL;
 	}
 
-	stream->source_periph = stream->direction == MEMORY_TO_PERIPHERAL;
+	stream->source_periph = (stream->direction == PERIPHERAL_TO_MEMORY);
 
 	/* set the data width, when source_data_size equals dest_data_size */
 	int index = find_lsb_set(config->source_data_size) - 1;
@@ -398,6 +431,7 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 	DMA_InitStruct.PeriphBurst = stm32_dma_get_pburst(config,
 							stream->source_periph);
 
+#if !defined(CONFIG_SOC_SERIES_STM32H7X)
 	if (config->channel_direction != MEMORY_TO_MEMORY) {
 		if (config->dma_slot >= 8) {
 			LOG_ERR("dma slot error.");
@@ -409,7 +443,9 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 			config->dma_slot = 0;
 		}
 	}
+
 	DMA_InitStruct.Channel = dma_stm32_slot_to_channel(config->dma_slot);
+#endif
 
 	DMA_InitStruct.FIFOThreshold = stm32_dma_get_fifo_threshold(
 					config->head_block->fifo_mode_control);
@@ -428,7 +464,7 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 					config->dest_data_size;
 	}
 
-#if defined(CONFIG_DMA_STM32_V2) || defined(CONFIG_DMAMUX_STM32)
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v2) || DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dmamux)
 	/*
 	 * the with dma V2 and dma mux,
 	 * the request ID is stored in the dma_slot
@@ -438,7 +474,11 @@ DMA_STM32_EXPORT_API int dma_stm32_configure(const struct device *dev,
 	LL_DMA_Init(dma, dma_stm32_id_to_stream(id), &DMA_InitStruct);
 
 	LL_DMA_EnableIT_TC(dma, dma_stm32_id_to_stream(id));
-	/* Half-Transfer irq is not handled */
+
+	/* Enable Half-Transfer irq if circular mode is enabled */
+	if (config->head_block->source_reload_en) {
+		LL_DMA_EnableIT_HT(dma, dma_stm32_id_to_stream(id));
+	}
 
 #if defined(CONFIG_DMA_STM32_V1)
 	if (DMA_InitStruct.FIFOMode == LL_DMA_FIFOMODE_ENABLE) {
@@ -533,7 +573,7 @@ DMA_STM32_EXPORT_API int dma_stm32_stop(const struct device *dev, uint32_t id)
 		return -EINVAL;
 	}
 
-#ifndef CONFIG_DMAMUX_STM32
+#if !defined(CONFIG_DMAMUX_STM32) || defined(CONFIG_SOC_SERIES_STM32H7X)
 	LL_DMA_DisableIT_TC(dma, dma_stm32_id_to_stream(id));
 #endif /* CONFIG_DMAMUX_STM32 */
 
@@ -552,8 +592,7 @@ DMA_STM32_EXPORT_API int dma_stm32_stop(const struct device *dev, uint32_t id)
 static int dma_stm32_init(const struct device *dev)
 {
 	const struct dma_stm32_config *config = dev->config;
-	const struct device *clk =
-		device_get_binding(STM32_CLOCK_CONTROL_NAME);
+	const struct device *clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 
 	if (clock_control_on(clk,
 		(clock_control_subsys_t *) &config->pclken) != 0) {
@@ -571,11 +610,15 @@ static int dma_stm32_init(const struct device *dev)
 #endif /* CONFIG_DMAMUX_STM32 */
 	}
 
+	((struct dma_stm32_data *)dev->data)->dma_ctx.magic = 0;
+	((struct dma_stm32_data *)dev->data)->dma_ctx.dma_channels = 0;
+	((struct dma_stm32_data *)dev->data)->dma_ctx.atomic = 0;
+
 	return 0;
 }
 
-static int dma_stm32_get_status(const struct device *dev, uint32_t id,
-				struct dma_status *stat)
+DMA_STM32_EXPORT_API int dma_stm32_get_status(const struct device *dev,
+				uint32_t id, struct dma_status *stat)
 {
 	const struct dma_stm32_config *config = dev->config;
 	DMA_TypeDef *dma = (DMA_TypeDef *)(config->base);
@@ -610,6 +653,13 @@ static const struct dma_driver_api dma_funcs = {
 #define DMA_STM32_OFFSET_INIT(index)
 #endif /* CONFIG_DMAMUX_STM32 */
 
+#ifdef CONFIG_DMA_STM32_V1
+#define DMA_STM32_MEM2MEM_INIT(index)					\
+	.support_m2m = DT_INST_PROP(index, st_mem2mem),
+#else
+#define DMA_STM32_MEM2MEM_INIT(index)
+#endif /* CONFIG_DMA_STM32_V1 */					\
+
 #define DMA_STM32_INIT_DEV(index)					\
 static struct dma_stm32_stream						\
 	dma_stm32_streams_##index[DMA_STM32_##index##_STREAM_COUNT];	\
@@ -619,7 +669,7 @@ const struct dma_stm32_config dma_stm32_config_##index = {		\
 		    .enr = DT_INST_CLOCKS_CELL(index, bits) },		\
 	.config_irq = dma_stm32_config_irq_##index,			\
 	.base = DT_INST_REG_ADDR(index),				\
-	.support_m2m = DT_INST_PROP(index, st_mem2mem),			\
+	DMA_STM32_MEM2MEM_INIT(index)					\
 	.max_streams = DMA_STM32_##index##_STREAM_COUNT,		\
 	.streams = dma_stm32_streams_##index,				\
 	DMA_STM32_OFFSET_INIT(index)					\
@@ -628,8 +678,9 @@ const struct dma_stm32_config dma_stm32_config_##index = {		\
 static struct dma_stm32_data dma_stm32_data_##index = {			\
 };									\
 									\
-DEVICE_AND_API_INIT(dma_stm32_##index##_dev, DT_INST_LABEL(index),	\
+DEVICE_DT_INST_DEFINE(index,						\
 		    &dma_stm32_init,					\
+		    NULL,						\
 		    &dma_stm32_data_##index, &dma_stm32_config_##index,	\
 		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,	\
 		    &dma_funcs)
@@ -643,7 +694,7 @@ DEVICE_AND_API_INIT(dma_stm32_##index##_dev, DT_INST_LABEL(index),	\
 		IRQ_CONNECT(DT_INST_IRQ_BY_IDX(dma, chan, irq),		\
 			    DT_INST_IRQ_BY_IDX(dma, chan, priority),	\
 			    dma_stm32_shared_irq_handler,		\
-			    DEVICE_GET(dma_stm32_##dma##_dev), 0);	\
+			    DEVICE_DT_INST_GET(dma), 0);		\
 		irq_enable(DT_INST_IRQ_BY_IDX(dma, chan, irq));		\
 	} while (0)
 
@@ -662,7 +713,7 @@ static void dma_stm32_irq_##dma##_##chan(const struct device *dev)	\
 		IRQ_CONNECT(DT_INST_IRQ_BY_IDX(dma, chan, irq),		\
 			    DT_INST_IRQ_BY_IDX(dma, chan, priority),	\
 			    dma_stm32_irq_##dma##_##chan,		\
-			    DEVICE_GET(dma_stm32_##dma##_dev), 0);	\
+			    DEVICE_DT_INST_GET(dma), 0);		\
 		irq_enable(DT_INST_IRQ_BY_IDX(dma, chan, irq));		\
 	} while (0)
 
@@ -670,8 +721,6 @@ static void dma_stm32_irq_##dma##_##chan(const struct device *dev)	\
 
 
 #if DT_NODE_HAS_STATUS(DT_DRV_INST(0), okay)
-
-DEVICE_DECLARE(dma_stm32_0_dev);
 
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 0);
 DMA_STM32_DEFINE_IRQ_HANDLER(0, 1);
@@ -720,8 +769,6 @@ DMA_STM32_INIT_DEV(0);
 
 #if DT_NODE_HAS_STATUS(DT_DRV_INST(1), okay)
 
-DEVICE_DECLARE(dma_stm32_1_dev);
-
 DMA_STM32_DEFINE_IRQ_HANDLER(1, 0);
 DMA_STM32_DEFINE_IRQ_HANDLER(1, 1);
 DMA_STM32_DEFINE_IRQ_HANDLER(1, 2);
@@ -741,13 +788,11 @@ static void dma_stm32_config_irq_1(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
+#ifndef CONFIG_DMA_STM32_SHARED_IRQS
 	DMA_STM32_IRQ_CONNECT(1, 0);
 	DMA_STM32_IRQ_CONNECT(1, 1);
-#ifndef CONFIG_DMA_STM32_SHARED_IRQS
 	DMA_STM32_IRQ_CONNECT(1, 2);
-#endif /* CONFIG_DMA_STM32_SHARED_IRQS */
 	DMA_STM32_IRQ_CONNECT(1, 3);
-#ifndef CONFIG_DMA_STM32_SHARED_IRQS
 	DMA_STM32_IRQ_CONNECT(1, 4);
 #if DT_INST_IRQ_HAS_IDX(1, 5)
 	DMA_STM32_IRQ_CONNECT(1, 5);
@@ -759,7 +804,10 @@ static void dma_stm32_config_irq_1(const struct device *dev)
 #endif /* DT_INST_IRQ_HAS_IDX(1, 6) */
 #endif /* DT_INST_IRQ_HAS_IDX(1, 7) */
 #endif /* CONFIG_DMA_STM32_SHARED_IRQS */
-/* Either 5 or 6 or 7 or 8 channels for DMA across all stm32 series. */
+/*
+ * Either 5 or 6 or 7 or 8 channels for DMA across all stm32 series.
+ * STM32F0 and STM32G0: if dma2 exits, the channel interrupts overlap with dma1
+ */
 }
 
 DMA_STM32_INIT_DEV(1);

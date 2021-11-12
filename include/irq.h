@@ -163,16 +163,17 @@ irq_connect_dynamic(unsigned int irq, unsigned int priority,
  *
  * Example usage:
  *
- * ISR_DIRECT_DECLARE(my_isr)
- * {
- *	bool done = do_stuff();
- *	ISR_DIRECT_PM(); <-- done after do_stuff() due to latency concerns
- *	if (!done) {
- *		return 0;  <-- Don't bother checking if we have to z_swap()
- *	}
- *	k_sem_give(some_sem);
- *	return 1;
- * }
+ *     ISR_DIRECT_DECLARE(my_isr)
+ *     {
+ *             bool done = do_stuff();
+ *             ISR_DIRECT_PM(); // done after do_stuff() due to latency concerns
+ *             if (!done) {
+ *                 return 0; // don't bother checking if we have to z_swap()
+ *             }
+ *
+ *             k_sem_give(some_sem);
+ *             return 1;
+ *      }
  *
  * @param name symbol name of the ISR
  */
@@ -186,6 +187,10 @@ irq_connect_dynamic(unsigned int irq, unsigned int priority,
  * integer "lock-out key", which is an architecture-dependent indicator of
  * whether interrupts were locked prior to the call. The lock-out key must be
  * passed to irq_unlock() to re-enable interrupts.
+ *
+ * @note
+ * This routine must also serve as a memory barrier to ensure the uniprocessor
+ * implementation of `k_spinlock_t` is correct.
  *
  * This routine can be called recursively, as long as the caller keeps track
  * of each lock-out key that is generated. Interrupts are re-enabled by
@@ -230,6 +235,10 @@ unsigned int z_smp_global_lock(void);
  * the associated lock-out key. The caller must call the routine once for
  * each time it called irq_lock(), supplying the keys in the reverse order
  * they were acquired, before interrupts are enabled.
+ *
+ * @note
+ * This routine must also serve as a memory barrier to ensure the uniprocessor
+ * implementation of `k_spinlock_t` is correct.
  *
  * This routine can only be invoked from supervisor mode. Some architectures
  * (for example, ARM) will fail silently if invoked from user mode instead

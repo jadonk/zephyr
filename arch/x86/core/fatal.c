@@ -10,6 +10,7 @@
 #include <exc_handle.h>
 #include <logging/log.h>
 #include <x86_mmu.h>
+#include <mmu.h>
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
 #if defined(CONFIG_BOARD_QEMU_X86) || defined(CONFIG_BOARD_QEMU_X86_64)
@@ -51,6 +52,7 @@ static inline uintptr_t esf_get_code(const z_arch_esf_t *esf)
 }
 
 #ifdef CONFIG_THREAD_STACK_INFO
+__pinned_func
 bool z_x86_check_stack_bounds(uintptr_t addr, size_t size, uint16_t cs)
 {
 	uintptr_t start, end;
@@ -69,7 +71,7 @@ bool z_x86_check_stack_bounds(uintptr_t addr, size_t size, uint16_t cs)
 		    z_interrupt_stacks[cpu_id]);
 		end = start + CONFIG_ISR_STACK_SIZE;
 #ifdef CONFIG_USERSPACE
-	} else if ((cs & 0x3U) == 0 &&
+	} else if ((cs & 0x3U) == 0U &&
 		   (_current->base.user_options & K_USER) != 0) {
 		/* The low two bits of the CS register is the privilege
 		 * level. It will be 0 in supervisor mode and 3 in user mode
@@ -104,6 +106,7 @@ struct stack_frame {
 
 #define MAX_STACK_FRAMES 8
 
+__pinned_func
 static void unwind_stack(uintptr_t base_ptr, uint16_t cs)
 {
 	struct stack_frame *frame;
@@ -169,10 +172,11 @@ static inline uintptr_t get_cr3(const z_arch_esf_t *esf)
 
 static inline pentry_t *get_ptables(const z_arch_esf_t *esf)
 {
-	return (pentry_t *)get_cr3(esf);
+	return z_mem_virt_addr(get_cr3(esf));
 }
 
 #ifdef CONFIG_X86_64
+__pinned_func
 static void dump_regs(const z_arch_esf_t *esf)
 {
 	LOG_ERR("RAX: 0x%016lx RBX: 0x%016lx RCX: 0x%016lx RDX: 0x%016lx",
@@ -195,6 +199,7 @@ static void dump_regs(const z_arch_esf_t *esf)
 #endif
 }
 #else /* 32-bit */
+__pinned_func
 static void dump_regs(const z_arch_esf_t *esf)
 {
 	LOG_ERR("EAX: 0x%08x, EBX: 0x%08x, ECX: 0x%08x, EDX: 0x%08x",
@@ -214,6 +219,7 @@ static void dump_regs(const z_arch_esf_t *esf)
 }
 #endif /* CONFIG_X86_64 */
 
+__pinned_func
 static void log_exception(uintptr_t vector, uintptr_t code)
 {
 	switch (vector) {
@@ -279,10 +285,12 @@ static void log_exception(uintptr_t vector, uintptr_t code)
 		LOG_ERR("Security exception");
 		break;
 	default:
+		LOG_ERR("Exception not handled (code 0x%lx)", code);
 		break;
 	}
 }
 
+__pinned_func
 static void dump_page_fault(z_arch_esf_t *esf)
 {
 	uintptr_t err;
@@ -316,6 +324,7 @@ static void dump_page_fault(z_arch_esf_t *esf)
 }
 #endif /* CONFIG_EXCEPTION_DEBUG */
 
+__pinned_func
 FUNC_NORETURN void z_x86_fatal_error(unsigned int reason,
 				     const z_arch_esf_t *esf)
 {
@@ -338,6 +347,7 @@ FUNC_NORETURN void z_x86_fatal_error(unsigned int reason,
 	CODE_UNREACHABLE;
 }
 
+__pinned_func
 FUNC_NORETURN void z_x86_unhandled_cpu_exception(uintptr_t vector,
 						 const z_arch_esf_t *esf)
 {
@@ -357,8 +367,47 @@ static const struct z_exc_handle exceptions[] = {
 };
 #endif
 
+__pinned_func
 void z_x86_page_fault_handler(z_arch_esf_t *esf)
 {
+#ifdef CONFIG_DEMAND_PAGING
+	if ((esf->errorCode & PF_P) == 0) {
+		/* Page was non-present at time exception happened.
+		 * Get faulting virtual address from CR2 register
+		 */
+		void *virt = z_x86_cr2_get();
+		bool was_valid_access;
+
+#ifdef CONFIG_X86_KPTI
+		/* Protection ring is lowest 2 bits in interrupted CS */
+		bool was_user = ((esf->cs & 0x3) != 0U);
+
+		/* Need to check if the interrupted context was a user thread
+		 * that hit a non-present page that was flipped due to KPTI in
+		 * the thread's page tables, in which case this is an access
+		 * violation and we should treat this as an error.
+		 *
+		 * We're probably not locked, but if there is a race, we will
+		 * be fine, the kernel page fault code will later detect that
+		 * the page is present in the kernel's page tables and the
+		 * instruction will just be re-tried, producing another fault.
+		 */
+		if (was_user &&
+		    !z_x86_kpti_is_access_ok(virt, get_ptables(esf))) {
+			was_valid_access = false;
+		} else
+#else
+		{
+			was_valid_access = z_page_fault(virt);
+		}
+#endif /* CONFIG_X86_KPTI */
+		if (was_valid_access) {
+			/* Page fault handled, re-try */
+			return;
+		}
+	}
+#endif /* CONFIG_DEMAND_PAGING */
+
 #if !defined(CONFIG_X86_64) && defined(CONFIG_DEBUG_COREDUMP)
 	z_x86_exception_vector = IV_PAGE_FAULT;
 #endif
@@ -394,6 +443,7 @@ void z_x86_page_fault_handler(z_arch_esf_t *esf)
 	CODE_UNREACHABLE;
 }
 
+__pinned_func
 void z_x86_do_kernel_oops(const z_arch_esf_t *esf)
 {
 	uintptr_t reason;

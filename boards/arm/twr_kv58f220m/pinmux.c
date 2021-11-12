@@ -12,42 +12,31 @@ static int twr_kv58f220m_pinmux_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-#ifdef CONFIG_PINMUX_MCUX_PORTA
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(porta), okay)
 	__unused const struct device *porta =
-		device_get_binding(CONFIG_PINMUX_MCUX_PORTA_NAME);
+		DEVICE_DT_GET(DT_NODELABEL(porta));
+	__ASSERT_NO_MSG(device_is_ready(porta));
 #endif
-#ifdef CONFIG_PINMUX_MCUX_PORTB
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(portb), okay)
 	__unused const struct device *portb =
-		device_get_binding(CONFIG_PINMUX_MCUX_PORTB_NAME);
+		DEVICE_DT_GET(DT_NODELABEL(portb));
+	__ASSERT_NO_MSG(device_is_ready(portb));
 #endif
-#ifdef CONFIG_PINMUX_MCUX_PORTC
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(portc), okay)
 	__unused const struct device *portc =
-		device_get_binding(CONFIG_PINMUX_MCUX_PORTC_NAME);
+		DEVICE_DT_GET(DT_NODELABEL(portc));
+	__ASSERT_NO_MSG(device_is_ready(portc));
 #endif
-#ifdef CONFIG_PINMUX_MCUX_PORTD
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(portd), okay)
 	__unused const struct device *portd =
-		device_get_binding(CONFIG_PINMUX_MCUX_PORTD_NAME);
+		DEVICE_DT_GET(DT_NODELABEL(portd));
+	__ASSERT_NO_MSG(device_is_ready(portd));
 #endif
-#ifdef CONFIG_PINMUX_MCUX_PORTE
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(porte), okay)
 	__unused const struct device *porte =
-		device_get_binding(CONFIG_PINMUX_MCUX_PORTE_NAME);
+		DEVICE_DT_GET(DT_NODELABEL(porte));
+	__ASSERT_NO_MSG(device_is_ready(porte));
 #endif
-
-	/* LEDs */
-	pinmux_pin_set(porte, 11, PORT_PCR_MUX(kPORT_MuxAsGpio));
-	pinmux_pin_set(porte, 12, PORT_PCR_MUX(kPORT_MuxAsGpio));
-	pinmux_pin_set(porte, 29, PORT_PCR_MUX(kPORT_MuxAsGpio));
-	pinmux_pin_set(porte, 30, PORT_PCR_MUX(kPORT_MuxAsGpio));
-
-	/* Buttons */
-	pinmux_pin_set(porta, 4, PORT_PCR_MUX(kPORT_MuxAsGpio));
-	pinmux_pin_set(porte, 4, PORT_PCR_MUX(kPORT_MuxAsGpio));
-	pinmux_pin_set(portb, 5, PORT_PCR_MUX(kPORT_MuxAsGpio));
-	pinmux_pin_set(portb, 4, PORT_PCR_MUX(kPORT_MuxAsGpio));
-
-	/* FXOS8700 INT1, INT2 */
-	pinmux_pin_set(portc, 18, PORT_PCR_MUX(kPORT_MuxAsGpio));
-	pinmux_pin_set(portc, 19, PORT_PCR_MUX(kPORT_MuxAsGpio));
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(i2c1), okay) && CONFIG_I2C
 	/* I2C1 SCL, SDA */

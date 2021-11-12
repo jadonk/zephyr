@@ -3,10 +3,10 @@
 
 description: Properties for power management state
 
-compatible: "pm-state"
+compatible: "zephyr,power-state"
 
 properties:
-    pm-state:
+    power-state-name:
         type: string
         required: true
         description: indicates a power state
@@ -18,9 +18,19 @@ properties:
             - "suspend-to-ram"
             - "suspend-to-disk"
             - "soft-off"
+    substate-id:
+        type: int
+        required: false
+        description: Platform specific identification.
     min-residency-us:
         type: int
         required: false
         description: |
             Minimum residency duration in microseconds. It is the minimum time for a
-            given idle state to be worthwhile energywise.
+            given idle state to be worthwhile energywise. It includes the time to enter
+            in this state.
+    exit-latency-us:
+        type: int
+        required: false
+        description: |
+            Worst case latency in microseconds required to exit the idle state.

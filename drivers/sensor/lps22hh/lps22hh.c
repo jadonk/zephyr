@@ -56,11 +56,17 @@ static int lps22hh_sample_fetch(const struct device *dev,
 static inline void lps22hh_press_convert(struct sensor_value *val,
 					 int32_t raw_val)
 {
+	int32_t press_tmp = raw_val >> 8; /* raw value is left aligned (24 msb) */
+
 	/* Pressure sensitivity is 4096 LSB/hPa */
-	/* Convert raw_val to val in kPa */
-	val->val1 = (raw_val >> 12) / 10;
-	val->val2 = (raw_val >> 12) % 10 * 100000 +
-		(((int32_t)((raw_val) & 0x0FFF) * 100000L) >> 12);
+	/* Also convert hPa into kPa */
+
+	val->val1 = press_tmp / 40960;
+
+	/* For the decimal part use (3125 / 128) as a factor instead of
+	 * (1000000 / 40960) to avoid int32 overflow
+	 */
+	val->val2 = (press_tmp % 40960) * 3125 / 128;
 }
 
 static inline void lps22hh_temp_convert(struct sensor_value *val,
@@ -234,6 +240,6 @@ static const struct lps22hh_config lps22hh_config = {
 #endif
 };
 
-DEVICE_AND_API_INIT(lps22hh, DT_INST_LABEL(0), lps22hh_init,
+DEVICE_DT_INST_DEFINE(0, lps22hh_init, NULL,
 		    &lps22hh_data, &lps22hh_config, POST_KERNEL,
 		    CONFIG_SENSOR_INIT_PRIORITY, &lps22hh_api_funcs);

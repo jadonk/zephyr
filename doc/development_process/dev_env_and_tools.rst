@@ -23,7 +23,7 @@ submitting a change or an enhancement to any Zephyr component, a developer
 should use GitHub. GitHub automatically assigns a responsible reviewer on a
 component basis, as defined in the :zephyr_file:`CODEOWNERS` file stored with the code
 tree in the Zephyr project repository. A limited set of release managers are
-allowed to merge a pull request into the master branch once reviews are complete.
+allowed to merge a pull request into the main branch once reviews are complete.
 
 .. _review_time:
 
@@ -198,9 +198,9 @@ Closing Stale Issues and Pull Requests
 Continuous Integration
 ***********************
 
-All changes submitted to GitHub are subject to sanity tests that are run on
+All changes submitted to GitHub are subject to tests that are run on
 emulated platforms and architectures to identify breakage and regressions that
-can be immediately identified. Sanity testing additionally performs build tests
+can be immediately identified. Testing using Twister additionally performs build tests
 of all boards and platforms. Documentation changes are also verified
 through review and build testing to verify doc generation will be successful.
 

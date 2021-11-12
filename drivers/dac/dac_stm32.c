@@ -20,7 +20,7 @@
 LOG_MODULE_REGISTER(dac_stm32);
 
 #include <drivers/clock_control/stm32_clock_control.h>
-#include <pinmux/stm32/pinmux_stm32.h>
+#include <pinmux/pinmux_stm32.h>
 
 /* some low-end MCUs have DAC with only one channel */
 #ifdef LL_DAC_CHANNEL_2
@@ -121,8 +121,7 @@ static int dac_stm32_init(const struct device *dev)
 	int err;
 
 	/* enable clock for subsystem */
-	const struct device *clk =
-		device_get_binding(STM32_CLOCK_CONTROL_NAME);
+	const struct device *clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 
 	if (clock_control_on(clk,
 			     (clock_control_subsys_t *) &cfg->pclken) != 0) {
@@ -166,8 +165,8 @@ static struct dac_stm32_data dac_stm32_data_##index = {			\
 	.channel_count = STM32_CHANNEL_COUNT				\
 };									\
 									\
-DEVICE_AND_API_INIT(dac_##index, DT_INST_LABEL(index),			\
-		    &dac_stm32_init, &dac_stm32_data_##index,		\
+DEVICE_DT_INST_DEFINE(index, &dac_stm32_init, NULL,			\
+		    &dac_stm32_data_##index,				\
 		    &dac_stm32_cfg_##index, POST_KERNEL,		\
 		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,		\
 		    &api_stm32_driver_api);

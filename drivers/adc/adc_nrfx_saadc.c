@@ -390,8 +390,6 @@ static void saadc_irq_handler(const struct device *dev)
 	}
 }
 
-DEVICE_DT_INST_DECLARE(0);
-
 static int init_saadc(const struct device *dev)
 {
 	nrf_saadc_event_clear(NRF_SAADC, NRF_SAADC_EVENT_END);
@@ -431,7 +429,7 @@ static const struct adc_driver_api adc_nrfx_driver_api = {
 		     "multiple instances not supported");		\
 	DEVICE_DT_INST_DEFINE(0,					\
 			    init_saadc,					\
-			    device_pm_control_nop,			\
+			    NULL,					\
 			    NULL,					\
 			    NULL,					\
 			    POST_KERNEL,				\

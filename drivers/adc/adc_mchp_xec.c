@@ -51,9 +51,6 @@ struct adc_xec_regs {
 #define ADC_XEC_REG_BASE						\
 	((struct adc_xec_regs *)(DT_INST_REG_ADDR(0)))
 
-
-DEVICE_DT_INST_DECLARE(0);
-
 static void adc_context_start_sampling(struct adc_context *ctx)
 {
 	struct adc_xec_data *data = CONTAINER_OF(ctx, struct adc_xec_data, ctx);
@@ -310,7 +307,7 @@ static struct adc_xec_data adc_xec_dev_data_0 = {
 	ADC_CONTEXT_INIT_SYNC(adc_xec_dev_data_0, ctx),
 };
 
-DEVICE_DT_INST_DEFINE(0, adc_xec_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, adc_xec_init, NULL,
 		    &adc_xec_dev_data_0, NULL,
 		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		    &adc_xec_api);

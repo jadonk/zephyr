@@ -52,6 +52,41 @@
 	};
 };
 
+&clk_hse {
+	hse-bypass;
+	clock-frequency = <DT_FREQ_M(8)>; /* STLink 8MHz clock */
+	status = "okay";
+};
+
+&pll {
+	div-m = <8>;
+	mul-n = <240>;
+	div-p = <2>;
+	div-q = <5>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(120)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <4>;
+	apb2-prescaler = <2>;
+};
+
+&spi1 {
+	pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pa7>;
+	cs-gpios = <&gpiod 14 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	status = "okay";
+};
+
+&i2c1 {
+	pinctrl-0 = <&i2c1_scl_pb8 &i2c1_sda_pb9>;
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
 &usart3 {
 	pinctrl-0 = <&usart3_tx_pd8 &usart3_rx_pd9>;
 	current-speed = <115200>;
@@ -64,7 +99,7 @@
 	status = "okay";
 };
 
-&usbotg_fs {
+zephyr_udc0: &usbotg_fs {
 	pinctrl-0 = <&usb_otg_fs_dm_pa11 &usb_otg_fs_dp_pa12>;
 	status = "okay";
 };
@@ -77,8 +112,16 @@
 	status = "okay";
 };
 
+&rng {
+	status = "okay";
+};
+
 &adc1 {
 	pinctrl-0 = <&adc1_in0_pa0>;
+	status = "okay";
+};
+
+&dma2 {
 	status = "okay";
 };
 
@@ -95,7 +138,36 @@
 		     &eth_txd1_pb13>;
 };
 
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* Last sector of size 128KB at the end of 1MB flash is set
+		 * for storage.
+		 */
+		storage_partition: partition@e0000 {
+			label = "storage";
+			reg = <0x000e0000 0x00020000>;
+		};
+	};
+};
+
 &dac1 {
 	status = "okay";
 	pinctrl-0 = <&dac_out1_pa4>;
+};
+
+&backup_sram {
+	status = "okay";
+};
+
+&timers1 {
+	status = "okay";
+
+	pwm1: pwm {
+		status = "okay";
+		pinctrl-0 = <&tim1_ch1_pe9>;
+	};
 };

@@ -5,8 +5,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <toolchain.h>
-
 /*
  * PDU fields sizes
  */
@@ -34,6 +32,8 @@
 
 #define BYTES2US(bytes, phy) (((bytes)<<3)/BIT((phy&0x3)>>1))
 
+/* Advertisement channel minimum payload size */
+#define PDU_AC_PAYLOAD_SIZE_MIN 1
 /* Advertisement channel maximum legacy payload size */
 #define PDU_AC_LEG_PAYLOAD_SIZE_MAX 37
 /* Advertisement channel maximum extended payload size */
@@ -41,13 +41,14 @@
 
 /* Advertisement channel maximum payload size */
 #if defined(CONFIG_BT_CTLR_ADV_EXT)
+#define PDU_AC_EXT_HEADER_SIZE_MIN  offsetof(struct pdu_adv_com_ext_adv, \
+					     ext_hdr_adv_data)
 #define PDU_AC_EXT_HEADER_SIZE_MAX  63
 /* TODO: PDU_AC_EXT_PAYLOAD_OVERHEAD can be reduced based on supported
  *       features, like omitting support for periodic advertising will reduce
  *       18 octets in the Common Extended Advertising Payload Format.
  */
-#define PDU_AC_EXT_PAYLOAD_OVERHEAD (offsetof(struct pdu_adv_com_ext_adv, \
-					      ext_hdr_adv_data) + \
+#define PDU_AC_EXT_PAYLOAD_OVERHEAD (PDU_AC_EXT_HEADER_SIZE_MIN + \
 				     PDU_AC_EXT_HEADER_SIZE_MAX)
 #define PDU_AC_PAYLOAD_SIZE_MAX     MAX(MIN((PDU_AC_EXT_PAYLOAD_OVERHEAD + \
 					     CONFIG_BT_CTLR_ADV_DATA_LEN_MAX), \
@@ -64,7 +65,7 @@
 #define PDU_AC_LL_SIZE_MAX     (PDU_AC_LL_HEADER_SIZE + PDU_AC_PAYLOAD_SIZE_MAX)
 
 /* Advertisement channel maximum legacy advertising/scan data size */
-#define PDU_AC_DATA_SIZE_MAX 31
+#define PDU_AC_DATA_SIZE_MAX   31
 
 /* Advertisement channel Access Address */
 #define PDU_AC_ACCESS_ADDR     0x8e89bed6
@@ -79,18 +80,45 @@
 /* Link Layer Max size of an empty PDU. TODO: Remove; only used in Nordic LLL */
 #define PDU_EM_LL_SIZE_MAX     (PDU_DC_LL_HEADER_SIZE)
 
+/* Link Layer header size of BIS PDU. Assumes pdu_bis is packed */
+#define PDU_BIS_LL_HEADER_SIZE (offsetof(struct pdu_bis, payload))
+
+/* Event Active Clock Jitter */
+#define EVENT_CLOCK_JITTER_US   2
 /* Event interframe timings */
 #define EVENT_IFS_US            150
 /* Standard allows 2 us timing uncertainty inside the event */
-#define EVENT_IFS_MAX_US        (EVENT_IFS_US + 2)
+#define EVENT_IFS_MAX_US        (EVENT_IFS_US + EVENT_CLOCK_JITTER_US)
 /* Controller will layout extended adv with minimum separation */
 #define EVENT_MAFS_US           300
 /* Standard allows 2 us timing uncertainty inside the event */
-#define EVENT_MAFS_MAX_US       (EVENT_MAFS_US + 2)
+#define EVENT_MAFS_MAX_US       (EVENT_MAFS_US + EVENT_CLOCK_JITTER_US)
+/* Minimum Subevent Space timings */
+#define EVENT_MSS_US            150
+/* Standard allows 2 us timing uncertainty inside the event */
+#define EVENT_MSS_MAX_US        (EVENT_MSS_US + EVENT_CLOCK_JITTER_US)
+
+/* Instant maximum value and maximum latency (or delta) past the instant */
+#define EVENT_INSTANT_MAX         0xffff
+#define EVENT_INSTANT_LATENCY_MAX 0x7fff
 
 /* Offset Units field encoding */
 #define OFFS_UNIT_30_US         30
 #define OFFS_UNIT_300_US        300
+/* Value specified in BT Spec. Vol 6, Part B, section 2.3.4.6 */
+#define OFFS_ADJUST_US          245760
+
+/* Sleep Clock Accuracy, calculate drift in microseconds */
+#define SCA_DRIFT_50_PPM_US(t)  (((t) * 50UL) / 1000000UL)
+#define SCA_DRIFT_500_PPM_US(t) (((t) * 500UL) / 1000000UL)
+
+/* transmitWindowDelay times (us) */
+#define WIN_DELAY_LEGACY     1250
+#define WIN_DELAY_UNCODED    2500
+#define WIN_DELAY_CODED      3750
+
+/* Channel Map Size */
+#define PDU_CHANNEL_MAP_SIZE 5
 
 /*
  * Macros to return correct Data Channel PDU time
@@ -99,10 +127,12 @@
  * for packet formats and thus lengths
  */
 
-#define PHY_LEGACY 0
-#define PHY_1M     BIT(0)
-#define PHY_2M     BIT(1)
-#define PHY_CODED  BIT(2)
+#define PHY_LEGACY   0
+#define PHY_1M       BIT(0)
+#define PHY_2M       BIT(1)
+#define PHY_CODED    BIT(2)
+#define PHY_FLAGS_S2 0
+#define PHY_FLAGS_S8 BIT(0)
 
 #if defined(CONFIG_BT_CTLR_PHY_CODED)
 #define CODED_PHY_PREAMBLE_TIME_US       80
@@ -112,65 +142,60 @@
 #define CODED_PHY_CRC_SIZE               24
 #define CODED_PHY_TERM2_SIZE             3
 
-#define FEC_BLOCK1_TIME_US               ((CODED_PHY_ACCESS_ADDRESS_TIME_US) + \
+#define FEC_BLOCK1_US                    ((CODED_PHY_ACCESS_ADDRESS_TIME_US) + \
 					  (CODED_PHY_CI_TIME_US) + \
 					  (CODED_PHY_TERM1_TIME_US))
-#define FEC_BLOCK2_TIME_US(octets, mic)  (((((PDU_HEADER_SIZE) + \
-					     (octets) + \
-					     (mic))<<3) + \
-					    (CODED_PHY_CRC_SIZE) + \
-					    (CODED_PHY_TERM2_SIZE))<<3)
 
-#define PKT_DC_US(octets, mic, phy) (((phy) & PHY_CODED) ? \
-				     ((CODED_PHY_PREAMBLE_TIME_US) + \
-				      (FEC_BLOCK1_TIME_US) + \
-				      FEC_BLOCK2_TIME_US((octets), (mic))) : \
-				     (((PDU_PREAMBLE_SIZE(phy) + \
-					(PDU_ACCESS_ADDR_SIZE) + \
-					(PDU_HEADER_SIZE) + \
-					(octets) + \
-					(mic) + \
-					(PDU_CRC_SIZE))<<3) / \
-				      BIT(((phy) & 0x03) >> 1)))
+/* cs = 0, S2 coding scheme, use PHY_FLAGS_S2
+ * cs = 1, S8 coding scheme, use PHY_FLAGS_S8
+ *
+ * Not using the term CI, Coding Indicator, where in the Spec its defined value
+ * of 0 is S8 encoding, 1 is S2 encoding.
+ */
+#define FEC_BLOCK2_US(octets, mic, cs)   (((((PDU_HEADER_SIZE) + \
+					     (octets) + \
+					     (mic)) << 3) + \
+					   (CODED_PHY_CRC_SIZE) + \
+					   (CODED_PHY_TERM2_SIZE)) << \
+					  (1 + (((cs) & 0x01) << 1)))
+
+#define PDU_US(octets, mic, phy, cs)     (((phy) & PHY_CODED) ? \
+					  ((CODED_PHY_PREAMBLE_TIME_US) + \
+					   (FEC_BLOCK1_US) + \
+					   FEC_BLOCK2_US((octets), (mic), \
+							 (cs))) : \
+					  (((PDU_PREAMBLE_SIZE(phy) + \
+					     (PDU_ACCESS_ADDR_SIZE) + \
+					     (PDU_HEADER_SIZE) + \
+					     (octets) + \
+					     (mic) + \
+					     (PDU_CRC_SIZE)) << 3) / \
+					   BIT(((phy) & 0x03) >> 1)))
+
+#define PDU_MAX_US(octets, mic, phy)     PDU_US((octets), (mic), (phy), \
+						PHY_FLAGS_S8)
 
 #else /* !CONFIG_BT_CTLR_PHY_CODED */
-#define PKT_DC_US(octets, mic, phy) (((PDU_PREAMBLE_SIZE(phy) + \
-				       (PDU_ACCESS_ADDR_SIZE) + \
-				       (PDU_HEADER_SIZE) + \
-				       (octets) + \
-				       (mic) + \
-				       (PDU_CRC_SIZE))<<3) / \
-				     BIT(((phy) & 0x03) >> 1))
+#define PDU_US(octets, mic, phy, cs)     (((PDU_PREAMBLE_SIZE(phy) + \
+					    (PDU_ACCESS_ADDR_SIZE) + \
+					    (PDU_HEADER_SIZE) + \
+					    (octets) + \
+					    (mic) + \
+					    (PDU_CRC_SIZE)) << 3) / \
+					  BIT(((phy) & 0x03) >> 1))
+
+#define PDU_MAX_US(octets, mic, phy)     PDU_US((octets), (mic), (phy), 0)
 #endif /* !CONFIG_BT_CTLR_PHY_CODED */
 
-#define PKT_US(octets, phy) PKT_DC_US((octets), (PDU_MIC_SIZE), (phy))
+#define PDU_DC_MAX_US(octets, phy)   PDU_MAX_US((octets), (PDU_MIC_SIZE), (phy))
 
-#define PKT_AC_US(octets, mic, phy) PKT_DC_US((octets), (mic), (phy))
+#define PDU_DC_US(octets, mic, phy, cs)  PDU_US((octets), (mic), (phy), (cs))
 
-/* Extra bytes for enqueued node_rx metadata: rssi (always), resolving
- * index, directed adv report, and mesh channel and instant.
- */
-#define PDU_AC_SIZE_RSSI 1
-#if defined(CONFIG_BT_CTLR_PRIVACY)
-#define PDU_AC_SIZE_PRIV 1
-#else
-#define PDU_AC_SIZE_PRIV 0
-#endif /* CONFIG_BT_CTLR_PRIVACY */
-#if defined(CONFIG_BT_CTLR_EXT_SCAN_FP)
-#define PDU_AC_SIZE_SCFP 1
-#else
-#define PDU_AC_SIZE_SCFP 0
-#endif /* CONFIG_BT_CTLR_EXT_SCAN_FP */
-#if defined(CONFIG_BT_HCI_MESH_EXT)
-#define PDU_AC_SIZE_MESH 5
-#else
-#define PDU_AC_SIZE_MESH 0
-#endif /* CONFIG_BT_HCI_MESH_EXT */
+#define PDU_AC_MAX_US(octets, phy)   PDU_MAX_US((octets), 0, (phy))
 
-#define PDU_AC_LL_SIZE_EXTRA (PDU_AC_SIZE_RSSI + \
-			      PDU_AC_SIZE_PRIV + \
-			      PDU_AC_SIZE_SCFP + \
-			      PDU_AC_SIZE_MESH)
+#define PDU_AC_US(octets, phy, cs)   PDU_US((octets), 0, (phy), (cs))
+
+#define PKT_BIS_US(octets, mic, phy) PDU_MAX_US((octets), (mic), (phy))
 
 struct pdu_adv_adv_ind {
 	uint8_t addr[BDADDR_SIZE];
@@ -203,7 +228,7 @@ struct pdu_adv_connect_ind {
 		uint16_t interval;
 		uint16_t latency;
 		uint16_t timeout;
-		uint8_t  chan_map[5];
+		uint8_t  chan_map[PDU_CHANNEL_MAP_SIZE];
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 		uint8_t  hop:5;
 		uint8_t  sca:3;
@@ -221,19 +246,19 @@ struct pdu_adv_ext_hdr {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 	uint8_t adv_addr:1;
 	uint8_t tgt_addr:1;
-	uint8_t rfu0:1;
+	uint8_t cte_info:1;
 	uint8_t adi:1;
 	uint8_t aux_ptr:1;
 	uint8_t sync_info:1;
 	uint8_t tx_pwr:1;
-	uint8_t rfu1:1;
+	uint8_t rfu:1;
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-	uint8_t rfu1:1;
+	uint8_t rfu:1;
 	uint8_t tx_pwr:1;
 	uint8_t sync_info:1;
 	uint8_t aux_ptr:1;
 	uint8_t adi:1;
-	uint8_t rfu0:1;
+	uint8_t cte_info:1;
 	uint8_t tgt_addr:1;
 	uint8_t adv_addr:1;
 #else
@@ -254,7 +279,7 @@ struct pdu_adv_com_ext_adv {
 #endif
 	union {
 		struct pdu_adv_ext_hdr ext_hdr;
-		uint8_t ext_hdr_adv_data[254];
+		uint8_t ext_hdr_adv_data[0];
 	};
 } __packed;
 
@@ -263,6 +288,8 @@ enum pdu_adv_mode {
 	EXT_ADV_MODE_CONN_NON_SCAN = 0x01,
 	EXT_ADV_MODE_NON_CONN_SCAN = 0x02,
 };
+
+#define PDU_ADV_SID_COUNT 16
 
 struct pdu_adv_adi {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -305,28 +332,54 @@ enum pdu_adv_offs_units {
 };
 
 enum pdu_adv_aux_phy {
-	EXT_ADV_AUX_PHY_LE_1M  = 0x00,
-	EXT_ADV_AUX_PHY_LE_2M  = 0x01,
-	EXT_ADV_AUX_PHY_LE_COD = 0x02,
+	EXT_ADV_AUX_PHY_LE_1M    = 0x00,
+	EXT_ADV_AUX_PHY_LE_2M    = 0x01,
+	EXT_ADV_AUX_PHY_LE_CODED = 0x02,
+};
+
+struct pdu_cte_info {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+	uint8_t  time:5;
+	uint8_t  rfu:1;
+	uint8_t  type:2;
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	uint8_t  type:2;
+	uint8_t  rfu:1;
+	uint8_t  time:5;
+#else
+#error "Unsupported endianness"
+#endif
 };
 
 struct pdu_adv_sync_info {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 	uint16_t offs:13;
 	uint16_t offs_units:1;
-	uint16_t rfu:2;
+	uint16_t offs_adjust:1;
+	uint16_t rfu:1;
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-	uint16_t rfu:2;
+	uint16_t rfu:1;
+	uint16_t offs_adjust:1;
 	uint16_t offs_units:1;
 	uint16_t offs:13;
 #else
 #error "Unsupported endianness"
 #endif
 	uint16_t interval;
-	uint8_t  sca_chm[5];
+	uint8_t  sca_chm[PDU_CHANNEL_MAP_SIZE];
 	uint32_t aa;
 	uint8_t  crc_init[3];
 	uint16_t evt_cntr;
+} __packed;
+
+#define PDU_SYNC_INFO_SCA_CHM_SCA_BYTE_OFFSET 4
+#define PDU_SYNC_INFO_SCA_CHM_SCA_BIT_POS     5
+#define PDU_SYNC_INFO_SCA_CHM_SCA_BIT_MASK    \
+		(0x07 << (PDU_SYNC_INFO_SCA_CHM_SCA_BIT_POS))
+
+struct pdu_adv_sync_chm_upd_ind {
+	uint8_t  chm[PDU_CHANNEL_MAP_SIZE];
+	uint16_t instant;
 } __packed;
 
 enum pdu_adv_type {
@@ -403,7 +456,7 @@ enum pdu_data_llctrl_type {
 	PDU_DATA_LLCTRL_TYPE_PAUSE_ENC_RSP = 0x0B,
 	PDU_DATA_LLCTRL_TYPE_VERSION_IND = 0x0C,
 	PDU_DATA_LLCTRL_TYPE_REJECT_IND = 0x0D,
-	PDU_DATA_LLCTRL_TYPE_SLAVE_FEATURE_REQ = 0x0E,
+	PDU_DATA_LLCTRL_TYPE_PER_INIT_FEAT_XCHG = 0x0E,
 	PDU_DATA_LLCTRL_TYPE_CONN_PARAM_REQ = 0x0F,
 	PDU_DATA_LLCTRL_TYPE_CONN_PARAM_RSP = 0x10,
 	PDU_DATA_LLCTRL_TYPE_REJECT_EXT_IND = 0x11,
@@ -415,6 +468,10 @@ enum pdu_data_llctrl_type {
 	PDU_DATA_LLCTRL_TYPE_PHY_RSP = 0x17,
 	PDU_DATA_LLCTRL_TYPE_PHY_UPD_IND = 0x18,
 	PDU_DATA_LLCTRL_TYPE_MIN_USED_CHAN_IND = 0x19,
+	PDU_DATA_LLCTRL_TYPE_CIS_REQ = 0x1F,
+	PDU_DATA_LLCTRL_TYPE_CIS_RSP = 0x20,
+	PDU_DATA_LLCTRL_TYPE_CIS_IND = 0x21,
+	PDU_DATA_LLCTRL_TYPE_CIS_TERMINATE_IND = 0x22,
 };
 
 struct pdu_data_llctrl_conn_update_ind {
@@ -427,7 +484,7 @@ struct pdu_data_llctrl_conn_update_ind {
 } __packed;
 
 struct pdu_data_llctrl_chan_map_ind {
-	uint8_t  chm[5];
+	uint8_t  chm[PDU_CHANNEL_MAP_SIZE];
 	uint16_t instant;
 } __packed;
 
@@ -485,7 +542,7 @@ struct pdu_data_llctrl_reject_ind {
 	uint8_t error_code;
 } __packed;
 
-struct pdu_data_llctrl_slave_feature_req {
+struct pdu_data_llctrl_per_init_feat_xchg {
 	uint8_t features[8];
 } __packed;
 
@@ -557,14 +614,77 @@ struct pdu_data_llctrl_phy_rsp {
 } __packed;
 
 struct pdu_data_llctrl_phy_upd_ind {
-	uint8_t  m_to_s_phy;
-	uint8_t  s_to_m_phy;
+	uint8_t  c_to_p_phy;
+	uint8_t  p_to_c_phy;
 	uint16_t instant;
 } __packed;
 
 struct pdu_data_llctrl_min_used_chans_ind {
 	uint8_t phys;
 	uint8_t min_used_chans;
+} __packed;
+
+struct pdu_data_llctrl_cis_req {
+	uint8_t cig_id;
+	uint8_t cis_id;
+	uint8_t c_phy;
+	uint8_t p_phy;
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+	uint16_t c_max_sdu:12;
+	uint16_t rfu0:3;
+	uint16_t framed:1;
+	uint16_t p_max_sdu:12;
+	uint16_t rfu1:4;
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	uint16_t framed:1;
+	uint16_t rfu0:3;
+	uint16_t c_max_sdu:12;
+	uint16_t rfu1:4;
+	uint16_t p_max_sdu:12;
+#else
+#error "Unsupported endianness"
+#endif
+	uint8_t  c_sdu_interval[3];
+	uint8_t  p_sdu_interval[3];
+	uint16_t c_max_pdu;
+	uint16_t p_max_pdu;
+	uint8_t  nse;
+	uint8_t  sub_interval[3];
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+	uint8_t  c_bn:4;
+	uint8_t  p_bn:4;
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	uint8_t  p_bn:4;
+	uint8_t  c_bn:4;
+#else
+#error "Unsupported endianness"
+#endif
+	uint8_t  c_ft;
+	uint8_t  p_ft;
+	uint16_t iso_interval;
+	uint8_t  cis_offset_min[3];
+	uint8_t  cis_offset_max[3];
+	uint16_t conn_event_count;
+} __packed;
+
+struct pdu_data_llctrl_cis_rsp {
+	uint8_t  cis_offset_min[3];
+	uint8_t  cis_offset_max[3];
+	uint16_t conn_event_count;
+} __packed;
+
+struct pdu_data_llctrl_cis_ind {
+	uint8_t  aa[4];
+	uint8_t  cis_offset[3];
+	uint8_t  cig_sync_delay[3];
+	uint8_t  cis_sync_delay[3];
+	uint16_t conn_event_count;
+} __packed;
+
+struct pdu_data_llctrl_cis_terminate_ind {
+	uint8_t  cig_id;
+	uint8_t  cis_id;
+	uint8_t  error_code;
 } __packed;
 
 struct pdu_data_llctrl {
@@ -584,7 +704,7 @@ struct pdu_data_llctrl {
 		struct pdu_data_llctrl_pause_enc_rsp pause_enc_rsp;
 		struct pdu_data_llctrl_version_ind version_ind;
 		struct pdu_data_llctrl_reject_ind reject_ind;
-		struct pdu_data_llctrl_slave_feature_req slave_feature_req;
+		struct pdu_data_llctrl_per_init_feat_xchg per_init_feat_xchg;
 		struct pdu_data_llctrl_conn_param_req conn_param_req;
 		struct pdu_data_llctrl_conn_param_rsp conn_param_rsp;
 		struct pdu_data_llctrl_reject_ext_ind reject_ext_ind;
@@ -596,8 +716,15 @@ struct pdu_data_llctrl {
 		struct pdu_data_llctrl_phy_rsp phy_rsp;
 		struct pdu_data_llctrl_phy_upd_ind phy_upd_ind;
 		struct pdu_data_llctrl_min_used_chans_ind min_used_chans_ind;
+		struct pdu_data_llctrl_cis_req cis_req;
+		struct pdu_data_llctrl_cis_rsp cis_rsp;
+		struct pdu_data_llctrl_cis_ind cis_ind;
+		struct pdu_data_llctrl_cis_terminate_ind cis_terminate_ind;
 	} __packed;
 } __packed;
+
+#define PDU_DATA_LLCTRL_LEN(type) (offsetof(struct pdu_data_llctrl, type) + \
+				   sizeof(struct pdu_data_llctrl_ ## type))
 
 #if defined(CONFIG_BT_CTLR_PROFILE_ISR)
 struct profile {
@@ -607,6 +734,10 @@ struct profile {
 	uint8_t cur;
 	uint8_t min;
 	uint8_t max;
+	uint8_t radio;
+	uint8_t lll;
+	uint8_t ull_high;
+	uint8_t ull_low;
 } __packed;
 #endif /* CONFIG_BT_CTLR_PROFILE_ISR */
 
@@ -679,7 +810,7 @@ enum pdu_big_ctrl_type {
 };
 
 struct pdu_big_ctrl_chan_map_ind {
-	uint8_t  chm[5];
+	uint8_t  chm[PDU_CHANNEL_MAP_SIZE];
 	uint16_t instant;
 } __packed;
 
@@ -723,9 +854,65 @@ struct pdu_bis {
 #else
 #error "Unsupported endianness"
 #endif /* __BYTE_ORDER__ */
-	uint8_t length;
+	uint8_t len;
 	union {
 		uint8_t payload[0];
 		struct pdu_big_ctrl ctrl;
 	} __packed;
+} __packed;
+
+struct pdu_big_info {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+	uint32_t offs:14;
+	uint32_t offs_units:1;
+	uint32_t iso_interval:12;
+	uint32_t num_bis:5;
+
+	uint32_t nse:5;
+	uint32_t bn:3;
+	uint32_t sub_interval:20;
+	uint32_t pto:4;
+
+	uint32_t spacing:20;
+	uint32_t irc:4;
+	uint32_t max_pdu:8;
+
+	uint8_t  rfu;
+
+	uint32_t seed_access_addr;
+
+	uint32_t sdu_interval:20;
+	uint32_t max_sdu:12;
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	uint32_t num_bis:5;
+	uint32_t iso_interval:12;
+	uint32_t offs_units:1;
+	uint32_t offs:14;
+
+	uint32_t pto:4;
+	uint32_t sub_interval:20;
+	uint32_t bn:3;
+	uint32_t nse:5;
+
+	uint32_t max_pdu:8;
+	uint32_t irc:4;
+	uint32_t spacing:20;
+
+	uint8_t  rfu;
+
+	uint32_t seed_access_addr;
+
+	uint32_t max_sdu:12;
+	uint32_t sdu_interval:20;
+#else
+#error "Unsupported endianness"
+#endif /* __BYTE_ORDER__ */
+
+	uint16_t base_crc_init;
+
+	uint8_t chm_phy[PDU_CHANNEL_MAP_SIZE]; /* 37 bit chm; 3 bit phy */
+	uint8_t payload_count_framing[5]; /* 39 bit count; 1 bit framing */
+
+	uint8_t giv; /* encryption required */
+	uint16_t gskd; /* encryption required */
 } __packed;

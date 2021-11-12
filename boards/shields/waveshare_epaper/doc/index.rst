@@ -62,6 +62,9 @@ Current supported displays
 | Good Display | HINK-E0154A07   | SSD1681 /    | waveshare_epaper_gdeh0154a07 |
 | GDEH0154D67  |                 | ssd16xx      |                              |
 +--------------+-----------------+--------------+------------------------------+
+| Good Display | WFT0420CZ15     | UC8176 /     | waveshare_epaper_gdew042t2   |
+| GDEW042T2    |                 | gd7965       |                              |
++--------------+-----------------+--------------+------------------------------+
 
 
 Requirements
@@ -79,7 +82,7 @@ be entered when you invoke ``west build``.
 For example:
 
 .. zephyr-app-commands::
-   :zephyr-app: samples/gui/lvgl
+   :zephyr-app: samples/subsys/display/lvgl
    :board: nrf52840dk_nrf52840
    :shield: waveshare_epaper_gdeh0213b1
    :goals: build

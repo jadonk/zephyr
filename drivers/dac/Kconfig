@@ -28,8 +28,14 @@ source "drivers/dac/Kconfig.mcux"
 
 source "drivers/dac/Kconfig.stm32"
 
+source "drivers/dac/Kconfig.sam"
+
 source "drivers/dac/Kconfig.sam0"
 
 source "drivers/dac/Kconfig.dacx0508"
+
+source "drivers/dac/Kconfig.dacx3608"
+
+source "drivers/dac/Kconfig.mcp4725"
 
 endif # DAC

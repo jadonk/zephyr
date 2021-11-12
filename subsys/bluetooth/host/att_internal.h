@@ -11,11 +11,7 @@
 #define BT_ATT_TIMEOUT		K_SECONDS(30)
 
 /* ATT MTU must be equal for RX and TX, so select the smallest value */
-#if CONFIG_BT_L2CAP_RX_MTU < CONFIG_BT_L2CAP_TX_MTU
-#define BT_ATT_MTU CONFIG_BT_L2CAP_RX_MTU
-#else
-#define BT_ATT_MTU CONFIG_BT_L2CAP_TX_MTU
-#endif
+#define BT_ATT_MTU (MIN(BT_L2CAP_RX_MTU, BT_L2CAP_TX_MTU))
 
 struct bt_att_hdr {
 	uint8_t  code;
@@ -262,17 +258,20 @@ struct bt_att_signed_write_cmd {
 typedef void (*bt_att_func_t)(struct bt_conn *conn, uint8_t err,
 			      const void *pdu, uint16_t length,
 			      void *user_data);
-typedef void (*bt_att_destroy_t)(void *user_data);
+
+typedef int (*bt_att_encode_t)(struct net_buf *buf, size_t len,
+			       void *user_data);
 
 /* ATT request context */
 struct bt_att_req {
 	sys_snode_t node;
 	bt_att_func_t func;
-	bt_att_destroy_t destroy;
-	struct net_buf_simple_state state;
 	struct net_buf *buf;
 #if defined(CONFIG_BT_SMP)
-	bool retrying;
+	bt_att_encode_t encode;
+	uint8_t retrying : 1;
+	uint8_t att_op;
+	size_t len;
 #endif /* CONFIG_BT_SMP */
 	void *user_data;
 };

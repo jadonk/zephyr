@@ -21,24 +21,17 @@ if(CONFIG_BT_LL_SW_SPLIT)
     )
     if(CONFIG_BT_PERIPHERAL)
       zephyr_library_sources(
-        ll_sw/openisa/lll/lll_slave.c
+        ll_sw/openisa/lll/lll_peripheral.c
       )
     endif()
     if(CONFIG_BT_CENTRAL)
       zephyr_library_sources(
-        ll_sw/openisa/lll/lll_master.c
+        ll_sw/openisa/lll/lll_central.c
       )
     endif()
   endif()
-    zephyr_library_include_directories(
-      ll_sw/openisa/lll
-    )
   zephyr_library_sources_ifdef(
     CONFIG_BT_CTLR_DTM
-    ll_sw/openisa/lll/lll_test.c
-  )
-  zephyr_library_sources_ifdef(
-    CONFIG_BT_CTLR_PROFILE_ISR
     ll_sw/openisa/lll/lll_test.c
   )
 endif()

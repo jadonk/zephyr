@@ -21,7 +21,7 @@
 #ifndef ZEPHYR_INCLUDE_USB_CLASS_AUDIO_H_
 #define ZEPHYR_INCLUDE_USB_CLASS_AUDIO_H_
 
-#include <usb/usb_common.h>
+#include <usb/usb_ch9.h>
 #include <device.h>
 #include <net/buf.h>
 #include <sys/util.h>
@@ -195,6 +195,7 @@ typedef void (*usb_audio_data_completion_cb_t)(const struct device *dev,
  *
  * @warning Host may not use all of configured features.
  *
+ * @param dev USB Audio device
  * @param evt Pointer to an event to be parsed by the App.
  *	      Pointer sturct is temporary and is valid only during the
  *	      execution of this callback.

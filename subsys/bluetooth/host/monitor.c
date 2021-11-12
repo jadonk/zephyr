@@ -27,6 +27,16 @@
 
 #include "monitor.h"
 
+#ifdef CONFIG_BT_DEBUG_MONITOR_RTT
+#include <SEGGER_RTT.h>
+
+#define RTT_BUFFER_NAME CONFIG_BT_DEBUG_MONITOR_RTT_BUFFER_NAME
+#define RTT_BUF_SIZE CONFIG_BT_DEBUG_MONITOR_RTT_BUFFER_SIZE
+static uint8_t rtt_buf[RTT_BUF_SIZE];
+#elif CONFIG_BT_DEBUG_MONITOR_UART
+static const struct device *monitor_dev;
+#endif
+
 /* This is the same default priority as for other console handlers,
  * except that we're not exporting it as a Kconfig variable until a
  * clear need arises.
@@ -44,8 +54,6 @@
 
 /* Maximum (string) length of a log message */
 #define MONITOR_MSG_MAX 128
-
-static const struct device *monitor_dev;
 
 enum {
 	BT_LOG_BUSY,
@@ -68,11 +76,15 @@ static struct {
 
 static void monitor_send(const void *data, size_t len)
 {
+#ifdef CONFIG_BT_DEBUG_MONITOR_RTT
+	SEGGER_RTT_Write(CONFIG_BT_DEBUG_MONITOR_RTT_BUFFER, data, len);
+#elif CONFIG_BT_DEBUG_MONITOR_UART
 	const uint8_t *buf = data;
 
 	while (len--) {
 		uart_poll_out(monitor_dev, *buf++);
 	}
+#endif
 }
 
 static void encode_drops(struct bt_monitor_hdr *hdr, uint8_t type,
@@ -179,6 +191,18 @@ void bt_monitor_new_index(uint8_t type, uint8_t bus, bt_addr_t *addr,
 	bt_monitor_send(BT_MONITOR_NEW_INDEX, &pkt, sizeof(pkt));
 }
 
+#ifdef CONFIG_BT_DEBUG_MONITOR_RTT
+static int bt_monitor_init(const struct device *d)
+{
+	ARG_UNUSED(d);
+
+	SEGGER_RTT_ConfigUpBuffer(CONFIG_BT_DEBUG_MONITOR_RTT_BUFFER,
+							  RTT_BUFFER_NAME, rtt_buf, RTT_BUF_SIZE,
+							  SEGGER_RTT_MODE_NO_BLOCK_SKIP);
+	return 0;
+}
+#elif CONFIG_BT_DEBUG_MONITOR_UART
+
 #if !defined(CONFIG_UART_CONSOLE) && !defined(CONFIG_LOG_PRINTK)
 static int monitor_console_out(int c)
 {
@@ -208,10 +232,6 @@ static int monitor_console_out(int c)
 extern void __printk_hook_install(int (*fn)(int));
 extern void __stdout_hook_install(int (*fn)(int));
 #endif /* !CONFIG_UART_CONSOLE */
-
-#if defined(CONFIG_HAS_DTS) && !defined(CONFIG_BT_MONITOR_ON_DEV_NAME)
-#define CONFIG_BT_MONITOR_ON_DEV_NAME CONFIG_UART_CONSOLE_ON_DEV_NAME
-#endif
 
 #ifndef CONFIG_LOG_MINIMAL
 struct monitor_log_ctx {
@@ -305,7 +325,7 @@ static void monitor_log_panic(const struct log_backend *const backend)
 {
 }
 
-static void monitor_log_init(void)
+static void monitor_log_init(const struct log_backend *const backend)
 {
 	log_set_timestamp_func(monitor_ts_get, MONITOR_TS_FREQ);
 }
@@ -323,9 +343,9 @@ static int bt_monitor_init(const struct device *d)
 {
 	ARG_UNUSED(d);
 
-	monitor_dev = device_get_binding(CONFIG_BT_MONITOR_ON_DEV_NAME);
+	monitor_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_bt_mon_uart));
 
-	__ASSERT_NO_MSG(monitor_dev);
+	__ASSERT_NO_MSG(device_is_ready(monitor_dev));
 
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN)
 	uart_irq_rx_disable(monitor_dev);
@@ -339,5 +359,6 @@ static int bt_monitor_init(const struct device *d)
 
 	return 0;
 }
+#endif /* CONFIG_BT_DEBUG_MONITOR_UART */
 
 SYS_INIT(bt_monitor_init, PRE_KERNEL_1, MONITOR_INIT_PRIORITY);

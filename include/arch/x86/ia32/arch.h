@@ -28,7 +28,7 @@
 
 #include <arch/common/addr_types.h>
 #include <arch/x86/ia32/segmentation.h>
-#include <power/power.h>
+#include <pm/pm.h>
 
 #endif /* _ASMLANGUAGE */
 
@@ -173,6 +173,12 @@ typedef struct s_isrList {
  */
 #define _VECTOR_ARG(irq_p)	(-1)
 
+#ifdef CONFIG_LINKER_USE_PINNED_SECTION
+#define IRQSTUBS_TEXT_SECTION	".pinned_text.irqstubs"
+#else
+#define IRQSTUBS_TEXT_SECTION	".text.irqstubs"
+#endif
+
 /* Internally this function does a few things:
  *
  * 1. There is a declaration of the interrupt parameters in the .intList
@@ -202,7 +208,7 @@ typedef struct s_isrList {
 		".long 0\n\t"			/* ISR_LIST.dpl */ \
 		".long 0\n\t"			/* ISR_LIST.tss */ \
 		".popsection\n\t" \
-		".pushsection .text.irqstubs\n\t" \
+		".pushsection " IRQSTUBS_TEXT_SECTION "\n\t" \
 		".global %c[isr]_irq%c[irq]_stub\n\t" \
 		"%c[isr]_irq%c[irq]_stub:\n\t" \
 		"pushl %[isr_param]\n\t" \
@@ -397,37 +403,6 @@ static ALWAYS_INLINE unsigned int arch_irq_lock(void)
 struct k_thread;
 
 /**
- * @brief Enable preservation of floating point context information.
- *
- * This routine informs the kernel that the specified thread (which may be
- * the current thread) will be using the floating point registers.
- * The @a options parameter indicates which floating point register sets
- * will be used by the specified thread:
- *
- * - K_FP_REGS  indicates x87 FPU and MMX registers only
- * - K_SSE_REGS indicates SSE registers (and also x87 FPU and MMX registers)
- *
- * Invoking this routine initializes the thread's floating point context info
- * to that of an FPU that has been reset. The next time the thread is scheduled
- * by z_swap() it will either inherit an FPU that is guaranteed to be in a "sane"
- * state (if the most recent user of the FPU was cooperatively swapped out)
- * or the thread's own floating point context will be loaded (if the most
- * recent user of the FPU was preempted, or if this thread is the first user
- * of the FPU). Thereafter, the kernel will protect the thread's FP context
- * so that it is not altered during a preemptive context switch.
- *
- * @warning
- * This routine should only be used to enable floating point support for a
- * thread that does not currently have such support enabled already.
- *
- * @param thread ID of thread.
- * @param options Registers to be preserved (K_FP_REGS or K_SSE_REGS).
- *
- * @return N/A
- */
-extern void k_float_enable(struct k_thread *thread, unsigned int options);
-
-/**
  * @}
  */
 
@@ -442,8 +417,27 @@ extern struct task_state_segment _main_tss;
 		: \
 		: [vector] "i" (Z_X86_OOPS_VECTOR), \
 		  [reason] "i" (reason_p)); \
-	CODE_UNREACHABLE; \
+	CODE_UNREACHABLE; /* LCOV_EXCL_LINE */ \
 } while (false)
+
+/*
+ * Dynamic thread object memory alignment.
+ *
+ * If support for SSEx extensions is enabled a 16 byte boundary is required,
+ * since the 'fxsave' and 'fxrstor' instructions require this. In all other
+ * cases a 4 byte boundary is sufficient.
+ */
+#if defined(CONFIG_EAGER_FPU_SHARING) || defined(CONFIG_LAZY_FPU_SHARING)
+#ifdef CONFIG_SSE
+#define ARCH_DYMANIC_OBJ_K_THREAD_ALIGNMENT	16
+#else
+#define ARCH_DYMANIC_OBJ_K_THREAD_ALIGNMENT	(sizeof(void *))
+#endif
+#else
+/* No special alignment requirements, simply align on pointer size. */
+#define ARCH_DYMANIC_OBJ_K_THREAD_ALIGNMENT	(sizeof(void *))
+#endif /* CONFIG_*_FP_SHARING */
+
 
 #ifdef __cplusplus
 }

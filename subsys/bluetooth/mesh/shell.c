@@ -1,8 +1,3 @@
-/** @file
- *  @brief Bluetooth Mesh shell
- *
- */
-
 /*
  * Copyright (c) 2017 Intel Corporation
  *
@@ -138,7 +133,7 @@ BT_MESH_HEALTH_PUB_DEFINE(health_pub, CUR_FAULTS_MAX);
 static struct bt_mesh_cfg_cli cfg_cli = {
 };
 
-void show_faults(uint8_t test_id, uint16_t cid, uint8_t *faults, size_t fault_count)
+static void show_faults(uint8_t test_id, uint16_t cid, uint8_t *faults, size_t fault_count)
 {
 	size_t i;
 
@@ -543,7 +538,7 @@ static int cmd_init(const struct shell *shell, size_t argc, char *argv[])
 
 	ctx_shell = shell;
 
-	if (IS_ENABLED(CONFIG_SETTINGS)) {
+	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
 		settings_load();
 	}
 
@@ -574,79 +569,77 @@ static int cmd_ident(const struct shell *shell, size_t argc, char *argv[])
 
 static int cmd_get_comp(const struct shell *shell, size_t argc, char *argv[])
 {
-	NET_BUF_SIMPLE_DEFINE(comp, 32);
-	uint8_t status, page = 0x00;
+	NET_BUF_SIMPLE_DEFINE(buf, BT_MESH_RX_SDU_MAX);
+	struct bt_mesh_comp_p0_elem elem;
+	struct bt_mesh_comp_p0 comp;
+	uint8_t page = 0x00;
 	int err;
 
 	if (argc > 1) {
 		page = strtol(argv[1], NULL, 0);
 	}
 
-	err = bt_mesh_cfg_comp_data_get(net.net_idx, net.dst, page,
-					&status, &comp);
+	err = bt_mesh_cfg_comp_data_get(net.net_idx, net.dst, page, &page,
+					&buf);
 	if (err) {
 		shell_error(shell, "Getting composition failed (err %d)", err);
 		return 0;
 	}
 
-	if (status != 0x00) {
-		shell_print(shell, "Got non-success status 0x%02x", status);
+	if (page != 0x00) {
+		shell_print(shell, "Got page 0x%02x. No parser available.",
+			    page);
+		return 0;
+	}
+
+	err = bt_mesh_comp_p0_get(&comp, &buf);
+	if (err) {
+		shell_error(shell, "Couldn't parse Composition data (err %d)",
+			    err);
 		return 0;
 	}
 
 	shell_print(shell, "Got Composition Data for 0x%04x:", net.dst);
-	shell_print(shell, "\tCID      0x%04x",
-		    net_buf_simple_pull_le16(&comp));
-	shell_print(shell, "\tPID      0x%04x",
-		    net_buf_simple_pull_le16(&comp));
-	shell_print(shell, "\tVID      0x%04x",
-		    net_buf_simple_pull_le16(&comp));
-	shell_print(shell, "\tCRPL     0x%04x",
-		    net_buf_simple_pull_le16(&comp));
-	shell_print(shell, "\tFeatures 0x%04x",
-		    net_buf_simple_pull_le16(&comp));
+	shell_print(shell, "\tCID      0x%04x", comp.cid);
+	shell_print(shell, "\tPID      0x%04x", comp.pid);
+	shell_print(shell, "\tVID      0x%04x", comp.vid);
+	shell_print(shell, "\tCRPL     0x%04x", comp.crpl);
+	shell_print(shell, "\tFeatures 0x%04x", comp.feat);
 
-	while (comp.len > 4) {
-		uint8_t sig, vnd;
-		uint16_t loc;
+	while (bt_mesh_comp_p0_elem_pull(&comp, &elem)) {
 		int i;
 
-		loc = net_buf_simple_pull_le16(&comp);
-		sig = net_buf_simple_pull_u8(&comp);
-		vnd = net_buf_simple_pull_u8(&comp);
+		shell_print(shell, "\tElement @ 0x%04x:", elem.loc);
 
-		shell_print(shell, "\tElement @ 0x%04x:", loc);
-
-		if (comp.len < ((sig * 2U) + (vnd * 4U))) {
-			shell_print(shell, "\t\t...truncated data!");
-			break;
-		}
-
-		if (sig) {
+		if (elem.nsig) {
 			shell_print(shell, "\t\tSIG Models:");
 		} else {
 			shell_print(shell, "\t\tNo SIG Models");
 		}
 
-		for (i = 0; i < sig; i++) {
-			uint16_t mod_id = net_buf_simple_pull_le16(&comp);
+		for (i = 0; i < elem.nsig; i++) {
+			uint16_t mod_id = bt_mesh_comp_p0_elem_mod(&elem, i);
 
 			shell_print(shell, "\t\t\t0x%04x", mod_id);
 		}
 
-		if (vnd) {
+		if (elem.nvnd) {
 			shell_print(shell, "\t\tVendor Models:");
 		} else {
 			shell_print(shell, "\t\tNo Vendor Models");
 		}
 
-		for (i = 0; i < vnd; i++) {
-			uint16_t cid = net_buf_simple_pull_le16(&comp);
-			uint16_t mod_id = net_buf_simple_pull_le16(&comp);
+		for (i = 0; i < elem.nvnd; i++) {
+			struct bt_mesh_mod_id_vnd mod =
+				bt_mesh_comp_p0_elem_mod_vnd(&elem, i);
 
-			shell_print(shell, "\t\t\tCompany 0x%04x: 0x%04x", cid,
-				    mod_id);
+			shell_print(shell, "\t\t\tCompany 0x%04x: 0x%04x",
+				    mod.company, mod.id);
 		}
+	}
+
+	if (buf.len) {
+		shell_print(shell, "\t\t...truncated data!");
 	}
 
 	return 0;
@@ -1621,13 +1614,13 @@ static int mod_pub_get(const struct shell *shell, uint16_t addr, uint16_t mod_id
 		return 0;
 	}
 
-	shell_print(shell, "Model Publication for Element 0x%04x, Model 0x%04x:"
-		    "\tPublish Address:                0x%04x"
-		    "\tAppKeyIndex:                    0x%04x"
-		    "\tCredential Flag:                %u"
-		    "\tPublishTTL:                     %u"
-		    "\tPublishPeriod:                  0x%02x"
-		    "\tPublishRetransmitCount:         %u"
+	shell_print(shell, "Model Publication for Element 0x%04x, Model 0x%04x:\n"
+		    "\tPublish Address:                0x%04x\n"
+		    "\tAppKeyIndex:                    0x%04x\n"
+		    "\tCredential Flag:                %u\n"
+		    "\tPublishTTL:                     %u\n"
+		    "\tPublishPeriod:                  0x%02x\n"
+		    "\tPublishRetransmitCount:         %u\n"
 		    "\tPublishRetransmitInterval:      %ums",
 		    addr, mod_id, pub.addr, pub.app_idx, pub.cred_flag, pub.ttl,
 		    pub.period, BT_MESH_PUB_TRANSMIT_COUNT(pub.transmit),
@@ -1645,6 +1638,7 @@ static int mod_pub_set(const struct shell *shell, uint16_t addr, uint16_t mod_id
 	int err;
 
 	pub.addr = strtoul(argv[0], NULL, 0);
+	pub.uuid = NULL;
 	pub.app_idx = strtoul(argv[1], NULL, 0);
 	pub.cred_flag = str2bool(argv[2]);
 	pub.ttl = strtoul(argv[3], NULL, 0);
@@ -1724,12 +1718,12 @@ static int cmd_mod_pub(const struct shell *shell, size_t argc, char *argv[])
 static void hb_sub_print(const struct shell *shell,
 			 struct bt_mesh_cfg_hb_sub *sub)
 {
-	shell_print(shell, "Heartbeat Subscription:"
-		    "\tSource:      0x%04x"
-		    "\tDestination: 0x%04x"
-		    "\tPeriodLog:   0x%02x"
-		    "\tCountLog:    0x%02x"
-		    "\tMinHops:     %u"
+	shell_print(shell, "Heartbeat Subscription:\n"
+		    "\tSource:      0x%04x\n"
+		    "\tDestination: 0x%04x\n"
+		    "\tPeriodLog:   0x%02x\n"
+		    "\tCountLog:    0x%02x\n"
+		    "\tMinHops:     %u\n"
 		    "\tMaxHops:     %u",
 		    sub->src, sub->dst, sub->period, sub->count,
 		    sub->min, sub->max);
@@ -1973,7 +1967,7 @@ static int cmd_provision(const struct shell *shell, size_t argc, char *argv[])
 			return 0;
 		}
 
-		net_key = sub->keys[sub->kr_flag].net_key;
+		net_key = sub->keys[SUBNET_KEY_TX_IDX(sub)].net_key;
 	}
 
 	err = bt_mesh_provision(net_key, net_idx, 0, iv_index, addr,
@@ -2501,8 +2495,8 @@ static int cmd_cdb_node_add(const struct shell *shell, size_t argc,
 
 	memcpy(node->dev_key, dev_key, 16);
 
-	if (IS_ENABLED(CONFIG_SETTINGS)) {
-		bt_mesh_store_cdb_node(node);
+	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
+		bt_mesh_cdb_node_store(node);
 	}
 
 	shell_print(shell, "Added node 0x%04x", addr);
@@ -2557,8 +2551,8 @@ static int cmd_cdb_subnet_add(const struct shell *shell, size_t argc,
 
 	memcpy(sub->keys[0].net_key, net_key, 16);
 
-	if (IS_ENABLED(CONFIG_SETTINGS)) {
-		bt_mesh_store_cdb_subnet(sub);
+	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
+		bt_mesh_cdb_subnet_store(sub);
 	}
 
 	shell_print(shell, "Added Subnet 0x%03x", net_idx);
@@ -2614,8 +2608,8 @@ static int cmd_cdb_app_key_add(const struct shell *shell, size_t argc,
 
 	memcpy(key->keys[0].app_key, app_key, 16);
 
-	if (IS_ENABLED(CONFIG_SETTINGS)) {
-		bt_mesh_store_cdb_app_key(key);
+	if (IS_ENABLED(CONFIG_BT_SETTINGS)) {
+		bt_mesh_cdb_app_key_store(key);
 	}
 
 	shell_print(shell, "Added AppKey 0x%03x", app_idx);
@@ -2700,7 +2694,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(mesh_cmds,
 	/* Configuration Client Model operations */
 	SHELL_CMD_ARG(timeout, NULL, "[timeout in seconds]", cmd_timeout, 1, 1),
 	SHELL_CMD_ARG(get-comp, NULL, "[page]", cmd_get_comp, 1, 1),
-	SHELL_CMD_ARG(beacon, NULL, "[val: off, on]", cmd_beacon, 2, 1),
+	SHELL_CMD_ARG(beacon, NULL, "[val: off, on]", cmd_beacon, 1, 1),
 	SHELL_CMD_ARG(ttl, NULL, "[ttl: 0x00, 0x02-0x7f]", cmd_ttl, 1, 1),
 	SHELL_CMD_ARG(friend, NULL, "[val: off, on]", cmd_friend, 1, 1),
 	SHELL_CMD_ARG(gatt-proxy, NULL, "[val: off, on]", cmd_gatt_proxy, 1, 1),
@@ -2808,5 +2802,5 @@ static int cmd_mesh(const struct shell *shell, size_t argc, char **argv)
 	return -EINVAL;
 }
 
-SHELL_CMD_ARG_REGISTER(mesh, &mesh_cmds, "Bluetooth Mesh shell commands",
+SHELL_CMD_ARG_REGISTER(mesh, &mesh_cmds, "Bluetooth mesh shell commands",
 			cmd_mesh, 1, 1);

@@ -23,6 +23,20 @@
 #define FP_GUARD_EXTRA_SIZE	0
 #endif
 
+#ifndef EXC_RETURN_FTYPE
+/* bit [4] allocate stack for floating-point context: 0=done 1=skipped  */
+#define EXC_RETURN_FTYPE           (0x00000010UL)
+#endif
+
+/* Default last octet of EXC_RETURN, for threads that have not run yet.
+ * The full EXC_RETURN value will be e.g. 0xFFFFFFBC.
+ */
+#if defined(CONFIG_ARM_NONSECURE_FIRMWARE)
+#define DEFAULT_EXC_RETURN 0xBC;
+#else
+#define DEFAULT_EXC_RETURN 0xFD;
+#endif
+
 #if !defined(CONFIG_MULTITHREADING) && defined(CONFIG_CPU_CORTEX_M)
 extern K_THREAD_STACK_DEFINE(z_main_stack, CONFIG_MAIN_STACK_SIZE);
 #endif
@@ -101,8 +115,16 @@ void arch_new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 	thread->callee_saved.psp = (uint32_t)iframe;
 	thread->arch.basepri = 0;
 
-#if defined(CONFIG_USERSPACE) || defined(CONFIG_FPU_SHARING)
+#if defined(CONFIG_ARM_STORE_EXC_RETURN) || defined(CONFIG_USERSPACE)
 	thread->arch.mode = 0;
+#if defined(CONFIG_ARM_STORE_EXC_RETURN)
+	thread->arch.mode_exc_return = DEFAULT_EXC_RETURN;
+#endif
+#if FP_GUARD_EXTRA_SIZE > 0
+	if ((thread->base.user_options & K_FP_REGS) != 0) {
+		thread->arch.mode |= Z_ARM_MODE_MPU_GUARD_FLOAT_Msk;
+	}
+#endif
 #if defined(CONFIG_USERSPACE)
 	thread->arch.priv_stack_start = 0;
 #endif
@@ -112,6 +134,100 @@ void arch_new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 	 * irrelevant.
 	 */
 }
+
+#if defined(CONFIG_MPU_STACK_GUARD) && defined(CONFIG_FPU) \
+	&& defined(CONFIG_FPU_SHARING)
+
+static inline void z_arm_thread_stack_info_adjust(struct k_thread *thread,
+	bool use_large_guard)
+{
+	if (use_large_guard) {
+		/* Switch to use a large MPU guard if not already. */
+		if ((thread->arch.mode &
+			Z_ARM_MODE_MPU_GUARD_FLOAT_Msk) == 0) {
+			/* Default guard size is used. Update required. */
+			thread->arch.mode |= Z_ARM_MODE_MPU_GUARD_FLOAT_Msk;
+#if defined(CONFIG_USERSPACE)
+			if (thread->arch.priv_stack_start) {
+				/* User thread */
+				thread->arch.priv_stack_start +=
+					FP_GUARD_EXTRA_SIZE;
+			} else
+#endif /* CONFIG_USERSPACE */
+			{
+				/* Privileged thread */
+				thread->stack_info.start +=
+					FP_GUARD_EXTRA_SIZE;
+				thread->stack_info.size -=
+					FP_GUARD_EXTRA_SIZE;
+			}
+		}
+	} else {
+		/* Switch to use the default MPU guard size if not already. */
+		if ((thread->arch.mode &
+			Z_ARM_MODE_MPU_GUARD_FLOAT_Msk) != 0) {
+			/* Large guard size is used. Update required. */
+			thread->arch.mode &= ~Z_ARM_MODE_MPU_GUARD_FLOAT_Msk;
+#if defined(CONFIG_USERSPACE)
+			if (thread->arch.priv_stack_start) {
+				/* User thread */
+				thread->arch.priv_stack_start -=
+					FP_GUARD_EXTRA_SIZE;
+			} else
+#endif /* CONFIG_USERSPACE */
+			{
+				/* Privileged thread */
+				thread->stack_info.start -=
+					FP_GUARD_EXTRA_SIZE;
+				thread->stack_info.size +=
+					FP_GUARD_EXTRA_SIZE;
+			}
+		}
+	}
+}
+
+/*
+ * Adjust the MPU stack guard size together with the FPU
+ * policy and the stack_info values for the thread that is
+ * being switched in.
+ */
+uint32_t z_arm_mpu_stack_guard_and_fpu_adjust(struct k_thread *thread)
+{
+	if (((thread->base.user_options & K_FP_REGS) != 0) ||
+		((thread->arch.mode_exc_return & EXC_RETURN_FTYPE) == 0)) {
+		/* The thread has been pre-tagged (at creation or later) with
+		 * K_FP_REGS, i.e. it is expected to be using the FPU registers
+		 * (if not already). Activate lazy stacking and program a large
+		 * MPU guard to safely detect privilege thread stack overflows.
+		 *
+		 * OR
+		 * The thread is not pre-tagged with K_FP_REGS, but it has
+		 * generated an FP context. Activate lazy stacking and
+		 * program a large MPU guard to detect privilege thread
+		 * stack overflows.
+		 */
+		FPU->FPCCR |= FPU_FPCCR_LSPEN_Msk;
+
+		z_arm_thread_stack_info_adjust(thread, true);
+
+		/* Tag the thread with K_FP_REGS */
+		thread->base.user_options |= K_FP_REGS;
+
+		return MPU_GUARD_ALIGN_AND_SIZE_FLOAT;
+	}
+
+	/* Thread is not pre-tagged with K_FP_REGS, and it has
+	 * not been using the FPU. Since there is no active FPU
+	 * context, de-activate lazy stacking and program the
+	 * default MPU guard size.
+	 */
+	FPU->FPCCR &= (~FPU_FPCCR_LSPEN_Msk);
+
+	z_arm_thread_stack_info_adjust(thread, false);
+
+	return MPU_GUARD_ALIGN_AND_SIZE;
+}
+#endif
 
 #ifdef CONFIG_USERSPACE
 FUNC_NORETURN void arch_user_mode_enter(k_thread_entry_t user_entry,
@@ -129,7 +245,7 @@ FUNC_NORETURN void arch_user_mode_enter(k_thread_entry_t user_entry,
 	 * which accounted for memory borrowed from the thread stack.
 	 */
 #if FP_GUARD_EXTRA_SIZE > 0
-	if ((_current->base.user_options & K_FP_REGS) != 0) {
+	if ((_current->arch.mode & Z_ARM_MODE_MPU_GUARD_FLOAT_Msk) != 0) {
 		_current->stack_info.start -= FP_GUARD_EXTRA_SIZE;
 		_current->stack_info.size += FP_GUARD_EXTRA_SIZE;
 	}
@@ -144,12 +260,17 @@ FUNC_NORETURN void arch_user_mode_enter(k_thread_entry_t user_entry,
 	 */
 #if defined(CONFIG_FPU) && defined(CONFIG_FPU_SHARING)
 	_current->arch.priv_stack_start +=
-		(_current->base.user_options & K_FP_REGS) ?
+		((_current->arch.mode & Z_ARM_MODE_MPU_GUARD_FLOAT_Msk) != 0) ?
 		MPU_GUARD_ALIGN_AND_SIZE_FLOAT : MPU_GUARD_ALIGN_AND_SIZE;
 #else
 	_current->arch.priv_stack_start += MPU_GUARD_ALIGN_AND_SIZE;
 #endif /* CONFIG_FPU && CONFIG_FPU_SHARING */
 #endif /* CONFIG_MPU_STACK_GUARD */
+
+#if defined(CONFIG_CPU_CORTEX_R)
+	_current->arch.priv_stack_end =
+		_current->arch.priv_stack_start + CONFIG_PRIVILEGED_STACK_SIZE;
+#endif
 
 	z_arm_userspace_enter(user_entry, p1, p2, p3,
 			     (uint32_t)_current->stack_info.start,
@@ -259,22 +380,28 @@ uint32_t z_check_thread_stack_fail(const uint32_t fault_addr, const uint32_t psp
 #if defined(CONFIG_MULTITHREADING)
 	const struct k_thread *thread = _current;
 
-	if (!thread) {
+	if (thread == NULL) {
 		return 0;
 	}
 #endif
 
-#if defined(CONFIG_FPU) && defined(CONFIG_FPU_SHARING)
-	uint32_t guard_len = (thread->base.user_options & K_FP_REGS) ?
+#if (defined(CONFIG_FPU) && defined(CONFIG_FPU_SHARING)) && \
+	defined(CONFIG_MPU_STACK_GUARD)
+	uint32_t guard_len =
+		((_current->arch.mode & Z_ARM_MODE_MPU_GUARD_FLOAT_Msk) != 0) ?
 		MPU_GUARD_ALIGN_AND_SIZE_FLOAT : MPU_GUARD_ALIGN_AND_SIZE;
 #else
+	/* If MPU_STACK_GUARD is not enabled, the guard length is
+	 * effectively zero. Stack overflows may be detected only
+	 * for user threads in nPRIV mode.
+	 */
 	uint32_t guard_len = MPU_GUARD_ALIGN_AND_SIZE;
 #endif /* CONFIG_FPU && CONFIG_FPU_SHARING */
 
 #if defined(CONFIG_USERSPACE)
 	if (thread->arch.priv_stack_start) {
 		/* User thread */
-		if ((__get_CONTROL() & CONTROL_nPRIV_Msk) == 0U) {
+		if (z_arm_thread_is_in_user_mode() == false) {
 			/* User thread in privilege mode */
 			if (IS_MPU_GUARD_VIOLATION(
 				thread->arch.priv_stack_start - guard_len,
@@ -353,6 +480,12 @@ int arch_float_disable(struct k_thread *thread)
 
 	return 0;
 }
+
+int arch_float_enable(struct k_thread *thread, unsigned int options)
+{
+	/* This is not supported in Cortex-M and Cortex-R does not have FPU */
+	return -ENOTSUP;
+}
 #endif /* CONFIG_FPU && CONFIG_FPU_SHARING */
 
 /* Internal function for Cortex-M initialization,
@@ -373,16 +506,6 @@ static void z_arm_prepare_switch_to_main(void)
 	__ISB();
 #endif /* CONFIG_FPU_SHARING */
 #endif /* CONFIG_FPU */
-
-#ifdef CONFIG_ARM_MPU
-	/* Configure static memory map. This will program MPU regions,
-	 * to set up access permissions for fixed memory sections, such
-	 * as Application Memory or No-Cacheable SRAM area.
-	 *
-	 * This function is invoked once, upon system initialization.
-	 */
-	z_arm_configure_static_mpu_regions();
-#endif
 }
 
 void arch_switch_to_main_thread(struct k_thread *main_thread, char *stack_ptr,
@@ -391,6 +514,19 @@ void arch_switch_to_main_thread(struct k_thread *main_thread, char *stack_ptr,
 	z_arm_prepare_switch_to_main();
 
 	_current = main_thread;
+
+#if defined(CONFIG_THREAD_LOCAL_STORAGE) && defined(CONFIG_CPU_CORTEX_M)
+	/* On Cortex-M, TLS uses a global variable as pointer to
+	 * the thread local storage area. So this needs to point
+	 * to the main thread's TLS area before switching to any
+	 * thread for the first time, as the pointer is only set
+	 * during context switching.
+	 */
+	extern uintptr_t z_arm_tls_ptr;
+
+	z_arm_tls_ptr = main_thread->tls;
+#endif
+
 #ifdef CONFIG_INSTRUMENT_THREAD_SWITCHING
 	z_thread_mark_switched_in();
 #endif

@@ -17,10 +17,15 @@
 		pwm-led0 = &green_pwm_led;
 		sw0 = &user_button;
 		kscan0 = &touch_controller;
+		watchdog0 = &wdog0;
 	};
 
 	chosen {
+		zephyr,flash-controller = &flexspi2;
+		zephyr,flash = &w25q32jvwj0;
+		zephyr,code-partition = &slot0_partition;
 		zephyr,sram = &sdram0;
+		zephyr,itcm = &itcm;
 		zephyr,dtcm = &dtcm;
 		zephyr,console = &lpuart1;
 		zephyr,shell-uart = &lpuart1;
@@ -131,8 +136,69 @@ arduino_i2c: &lpi2c1 {};
 	};
 };
 
+&flexspi {
+	status = "okay";
+	ahb-prefetch;
+	ahb-read-addr-opt;
+	rx-clock-source = <1>;
+	reg = <0x402a8000 0x4000>, <0x60000000 DT_SIZE_M(8)>;
+	is25wp064: is25wp064@0 {
+		compatible = "nxp,imx-flexspi-nor";
+		size = <67108864>;
+		label = "IS25WP064";
+		reg = <0>;
+		spi-max-frequency = <133000000>;
+		status = "okay";
+		jedec-id = [9d 70 17];
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			storage_partition: partition@0 {
+				label = "storage";
+				reg = <0x00000000 DT_SIZE_M(8)>;
+			};
+		};
+	};
+};
+
+&flexspi2 {
+	status = "okay";
+};
+
+&w25q32jvwj0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(64)>;
+		};
+		slot0_partition: partition@10000 {
+			label = "image-0";
+			reg = <0x00010000 DT_SIZE_K(1984)>;
+		};
+		slot1_partition: partition@200000 {
+			label = "image-1";
+			reg = <0x00200000 DT_SIZE_K(1984)>;
+		};
+		scratch_partition: partition@3f0000 {
+			label = "image-scratch";
+			reg = <0x003f0000 DT_SIZE_K(64)>;
+		};
+	};
+};
+
 &lpuart1 {
 	status = "okay";
+	current-speed = <115200>;
+};
+
+arduino_serial: &lpuart3 {
 	current-speed = <115200>;
 };
 
@@ -143,7 +209,7 @@ arduino_i2c: &lpi2c1 {};
 	};
 };
 
-&usb1 {
+zephyr_udc0: &usb1 {
 	status = "okay";
 };
 
@@ -168,7 +234,15 @@ arduino_i2c: &lpi2c1 {};
 	cd-gpios = <&gpio2 28 GPIO_ACTIVE_LOW>;
 };
 
+&edma0 {
+	status = "okay";
+};
+
 &flexcan2 {
 	status = "okay";
 	bus-speed = <125000>;
+};
+
+&wdog0 {
+	status = "okay";
 };

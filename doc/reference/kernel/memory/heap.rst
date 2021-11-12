@@ -92,7 +92,7 @@ complete within 1-200 cycles.  One complexity is that the search of
 the minimum bucket size for an allocation (the set of free blocks that
 "might fit") has a compile-time upper bound of iterations to prevent
 unbounded list searches, at the expense of some fragmentation
-resistance.  This :c:option:`CONFIG_SYS_HEAP_ALLOC_LOOPS` value may be
+resistance.  This :c:kconfig:`CONFIG_SYS_HEAP_ALLOC_LOOPS` value may be
 chosen by the user at build time, and defaults to a value of 3.
 
 System Heap
@@ -102,7 +102,7 @@ The :dfn:`system heap` is a predefined memory allocator that allows
 threads to dynamically allocate memory from a common memory region in
 a :c:func:`malloc`-like manner.
 
-Only a single system heap is be defined. Unlike other heaps or memory
+Only a single system heap is defined. Unlike other heaps or memory
 pools, the system heap cannot be directly referenced using its
 memory address.
 
@@ -121,7 +121,7 @@ Defining the Heap Memory Pool
 =============================
 
 The size of the heap memory pool is specified using the
-:option:`CONFIG_HEAP_MEM_POOL_SIZE` configuration option.
+:kconfig:`CONFIG_HEAP_MEM_POOL_SIZE` configuration option.
 
 By default, the heap memory pool size is zero bytes. This value instructs
 the kernel not to define the heap memory pool object. The maximum size is limited
@@ -135,9 +135,6 @@ A chunk of heap memory is allocated by calling :c:func:`k_malloc`.
 
 The following code allocates a 200 byte chunk of heap memory, then fills it
 with zeros. A warning is issued if a suitable chunk is not obtained.
-
-Note that the application will actually allocate a 256 byte memory block,
-since that is the closest matching size supported by the heap memory pool.
 
 .. code-block:: c
 
@@ -157,8 +154,7 @@ Releasing Memory
 A chunk of heap memory is released by calling :c:func:`k_free`.
 
 The following code allocates a 75 byte chunk of memory, then releases it
-once it is no longer needed. (A 256 byte memory block from the heap memory
-pool is actually used to satisfy the request.)
+once it is no longer needed.
 
 .. code-block:: c
 
@@ -179,10 +175,9 @@ Configuration Options
 
 Related configuration options:
 
-* :option:`CONFIG_HEAP_MEM_POOL_SIZE`
+* :kconfig:`CONFIG_HEAP_MEM_POOL_SIZE`
 
 API Reference
 =============
 
 .. doxygengroup:: heap_apis
-   :project: Zephyr

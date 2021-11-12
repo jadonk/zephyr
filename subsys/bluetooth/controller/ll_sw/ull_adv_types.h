@@ -4,10 +4,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#if defined(CONFIG_BT_CTLR_DF_ADV_CTE_TX)
+struct lll_df_adv_cfg;
+#endif /* CONFIG_BT_CTLR_DF_ADV_CTE_TX */
+
 struct ll_adv_set {
-	struct evt_hdr evt;
 	struct ull_hdr ull;
 	struct lll_adv lll;
+
+#if defined(CONFIG_BT_CTLR_AD_DATA_BACKUP)
+	/* Legacy AD Data backup when switching to legacy directed advertising
+	 * or to Extended Advertising.
+	 */
+	struct {
+		uint8_t len;
+		uint8_t data[PDU_AC_DATA_SIZE_MAX];
+	} ad_data_backup;
+#endif /* CONFIG_BT_CTLR_AD_DATA_BACKUP */
 
 #if defined(CONFIG_BT_PERIPHERAL)
 	memq_link_t        *link_cc_free;
@@ -33,14 +46,26 @@ struct ll_adv_set {
 
 #if defined(CONFIG_BT_CTLR_PRIVACY)
 	uint8_t  own_addr_type:2;
-	uint8_t  id_addr_type:1;
-	uint8_t  id_addr[BDADDR_SIZE];
+	uint8_t  peer_addr_type:1;
+	uint8_t  peer_addr[BDADDR_SIZE];
 #endif /* CONFIG_BT_CTLR_PRIVACY */
+
+#if defined(CONFIG_BT_CTLR_CHECK_SAME_PEER_CONN)
+	uint8_t  own_id_addr[BDADDR_SIZE];
+#endif /* CONFIG_BT_CTLR_CHECK_SAME_PEER_CONN */
+
+#if defined(CONFIG_BT_CTLR_DF_ADV_CTE_TX)
+	struct lll_df_adv_cfg *df_cfg;
+#endif /* CONFIG_BT_CTLR_DF_ADV_CTE_TX */
+#if defined(CONFIG_BT_CTLR_JIT_SCHEDULING)
+	uint32_t delay;
+	uint32_t delay_remain;
+	uint32_t ticks_at_expire;
+#endif /* CONFIG_BT_CTLR_JIT_SCHEDULING */
 };
 
 #if defined(CONFIG_BT_CTLR_ADV_EXT)
 struct ll_adv_aux_set {
-	struct evt_hdr     evt;
 	struct ull_hdr     ull;
 	struct lll_adv_aux lll;
 
@@ -50,7 +75,6 @@ struct ll_adv_aux_set {
 };
 
 struct ll_adv_sync_set {
-	struct evt_hdr      evt;
 	struct ull_hdr      ull;
 	struct lll_adv_sync lll;
 
@@ -61,26 +85,27 @@ struct ll_adv_sync_set {
 };
 
 struct ll_adv_iso {
-	struct evt_hdr        evt;
 	struct ull_hdr        ull;
 	struct lll_adv_iso    lll;
 
+#if defined(CONFIG_BT_CTLR_HCI_ADV_HANDLE_MAPPING)
 	uint8_t  hci_handle;
+#endif /* CONFIG_BT_CTLR_HCI_ADV_HANDLE_MAPPING */
+
 	uint16_t bis_handle; /* TODO: Support multiple BIS per BIG */
 
-	uint8_t  is_created:1;
-	uint8_t  encryption:1;
-	uint8_t  framing:1;
 	uint8_t  num_bis:5;
+	uint8_t  packing:1;
+	uint8_t  framing:1;
+	uint8_t  encryption:1;
 
 	uint32_t sdu_interval:20;
-	uint16_t max_sdu:12;
+	uint32_t max_sdu:12;
 
 	uint16_t max_latency:12;
+	uint16_t rtn:4;
 
-	uint8_t  rtn:4;
 	uint8_t  phy:3;
-	uint8_t  packing:1;
 
 	uint8_t  bcode[16];
 

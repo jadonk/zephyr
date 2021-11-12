@@ -7,6 +7,8 @@
 #include <arch/cpu.h>
 #include <errno.h>
 #include <stdio.h>
+#include <malloc.h>
+#include <sys/__assert.h>
 #include <sys/stat.h>
 #include <linker/linker-defs.h>
 #include <sys/util.h>
@@ -16,91 +18,139 @@
 #include <app_memory/app_memdomain.h>
 #include <init.h>
 #include <sys/sem.h>
+#include <sys/mutex.h>
+#include <sys/mem_manage.h>
+#include <sys/time.h>
 
 #define LIBC_BSS	K_APP_BMEM(z_libc_partition)
 #define LIBC_DATA	K_APP_DMEM(z_libc_partition)
 
-#if CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE
-K_APPMEM_PARTITION_DEFINE(z_malloc_partition);
-#define MALLOC_BSS	K_APP_BMEM(z_malloc_partition)
-
-/* Compiler will throw an error if the provided value isn't a power of two */
-MALLOC_BSS static unsigned char __aligned(CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE)
-	heap_base[CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE];
-#define MAX_HEAP_SIZE CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE
-
-#else /* CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE */
-/* Heap base and size are determined based on the available unused SRAM,
- * in the interval from a properly aligned address after the linker symbol
- * `_end`, to the end of SRAM
- */
-#define USED_RAM_END_ADDR   POINTER_TO_UINT(&_end)
-
-#ifdef Z_MALLOC_PARTITION_EXISTS
-/* Need to be able to program a memory protection region from HEAP_BASE
- * to the end of RAM so that user threads can get at it.
- * Implies that the base address needs to be suitably aligned since the
- * bounds have to go in a k_mem_partition.
- */
-#ifdef CONFIG_MMU
-/* Linker script may already have done this, but just to be safe */
-#define HEAP_BASE	ROUND_UP(USED_RAM_END_ADDR, CONFIG_MMU_PAGE_SIZE)
-#else /* MPU-based systems */
-/* TODO: Need a generic Kconfig for the MPU region granularity */
-#if defined(CONFIG_ARM)
-#define HEAP_BASE	ROUND_UP(USED_RAM_END_ADDR, \
-				 CONFIG_ARM_MPU_REGION_MIN_ALIGN_AND_SIZE)
-#elif defined(CONFIG_ARC)
-#define HEAP_BASE	ROUND_UP(USED_RAM_END_ADDR, Z_ARC_MPU_ALIGN)
-#else
-#error "Unsupported platform"
-#endif /* CONFIG_<arch> */
-#endif /* !CONFIG_MMU */
-#else /* !Z_MALLOC_PARTITION_EXISTS */
-/* No partition, heap can just start wherever _end is */
-#define HEAP_BASE	USED_RAM_END_ADDR
-#endif /* Z_MALLOC_PARTITION_EXISTS */
-
-#ifdef CONFIG_MMU
-/* Currently a placeholder, we're just setting up all unused RAM pages
- * past the end of the kernel as the heap arena. SRAM_BASE_ADDRESS is
- * a physical address so we can't use that.
+/*
+ * End result of this thorny set of ifdefs is to define:
  *
- * Later, we should do this much more like other VM-enabled operating systems:
- * - Set up a core kernel ontology of free physical pages
- * - Allow anonymous memoory mappings drawing from the pool of free physical
- *   pages
- * - Have _sbrk() map anonymous pages into the heap arena as needed
- * - See: https://github.com/zephyrproject-rtos/zephyr/issues/29526
+ * - HEAP_BASE base address of the heap arena
+ * - MAX_HEAP_SIZE size of the heap arena
  */
-#define MAX_HEAP_SIZE	(CONFIG_KERNEL_RAM_SIZE - (HEAP_BASE - \
-						   CONFIG_KERNEL_VM_BASE))
-#elif defined(CONFIG_XTENSA)
-extern void *_heap_sentry;
-#define MAX_HEAP_SIZE	(POINTER_TO_UINT(&_heap_sentry) - HEAP_BASE)
-#else
-#define MAX_HEAP_SIZE	(KB(CONFIG_SRAM_SIZE) - (HEAP_BASE - \
-						 CONFIG_SRAM_BASE_ADDRESS))
-#endif /* CONFIG_MMU */
 
-#if Z_MALLOC_PARTITION_EXISTS
-struct k_mem_partition z_malloc_partition;
+#ifdef CONFIG_MMU
+	#ifdef CONFIG_USERSPACE
+		struct k_mem_partition z_malloc_partition;
+	#endif
+
+	LIBC_BSS static unsigned char *heap_base;
+	LIBC_BSS static size_t max_heap_size;
+
+	#define HEAP_BASE		heap_base
+	#define MAX_HEAP_SIZE		max_heap_size
+	#define USE_MALLOC_PREPARE	1
+#elif CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE
+	/* Arena size expressed in Kconfig, due to power-of-two size/align
+	 * requirements of certain MPUs.
+	 *
+	 * We use an automatic memory partition instead of setting this up
+	 * in malloc_prepare().
+	 */
+	K_APPMEM_PARTITION_DEFINE(z_malloc_partition);
+	#define MALLOC_BSS	K_APP_BMEM(z_malloc_partition)
+
+	/* Compiler will throw an error if the provided value isn't a
+	 * power of two
+	 */
+	MALLOC_BSS static unsigned char
+		__aligned(CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE)
+		heap_base[CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE];
+	#define MAX_HEAP_SIZE CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE
+	#define HEAP_BASE heap_base
+#else /* Not MMU or CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE */
+	#define USED_RAM_END_ADDR   POINTER_TO_UINT(&_end)
+
+	#ifdef Z_MALLOC_PARTITION_EXISTS
+		/* Start of malloc arena needs to be aligned per MPU
+		 * requirements
+		 */
+		struct k_mem_partition z_malloc_partition;
+
+		#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
+			#define HEAP_BASE	ROUND_UP(USED_RAM_END_ADDR, \
+				 CONFIG_ARM_MPU_REGION_MIN_ALIGN_AND_SIZE)
+		#elif defined(CONFIG_ARC)
+			#define HEAP_BASE	ROUND_UP(USED_RAM_END_ADDR, \
+							  Z_ARC_MPU_ALIGN)
+		#else
+			#error "Unsupported platform"
+		#endif /* CONFIG_<arch> */
+		#define USE_MALLOC_PREPARE	1
+	#else
+		/* End of kernel image */
+		#define HEAP_BASE		USED_RAM_END_ADDR
+	#endif
+
+	/* End of the malloc arena is the end of physical memory */
+	#if defined(CONFIG_XTENSA)
+		/* TODO: Why is xtensa a special case? */
+		extern void *_heap_sentry;
+		#define MAX_HEAP_SIZE	(POINTER_TO_UINT(&_heap_sentry) - \
+					 HEAP_BASE)
+	#else
+		#define MAX_HEAP_SIZE	(KB(CONFIG_SRAM_SIZE) - (HEAP_BASE - \
+					 CONFIG_SRAM_BASE_ADDRESS))
+	#endif /* CONFIG_XTENSA */
+#endif
 
 static int malloc_prepare(const struct device *unused)
 {
 	ARG_UNUSED(unused);
 
-	z_malloc_partition.start = HEAP_BASE;
-	z_malloc_partition.size = MAX_HEAP_SIZE;
+#ifdef USE_MALLOC_PREPARE
+#ifdef CONFIG_MMU
+	max_heap_size = MIN(CONFIG_NEWLIB_LIBC_MAX_MAPPED_REGION_SIZE,
+			    k_mem_free_get());
+
+	if (max_heap_size != 0) {
+		heap_base = k_mem_map(max_heap_size, K_MEM_PERM_RW);
+		__ASSERT(heap_base != NULL,
+			 "failed to allocate heap of size %zu", max_heap_size);
+
+	}
+#endif /* CONFIG_MMU */
+
+#ifdef Z_MALLOC_PARTITION_EXISTS
+	z_malloc_partition.start = (uintptr_t)HEAP_BASE;
+	z_malloc_partition.size = (size_t)MAX_HEAP_SIZE;
 	z_malloc_partition.attr = K_MEM_PARTITION_P_RW_U_RW;
+#endif /* Z_MALLOC_PARTITION_EXISTS */
+#endif /* USE_MALLOC_PREPARE */
+
+	/*
+	 * Validate that the memory space available for the newlib heap is
+	 * greater than the minimum required size.
+	 */
+	__ASSERT(MAX_HEAP_SIZE >= CONFIG_NEWLIB_LIBC_MIN_REQUIRED_HEAP_SIZE,
+		 "memory space available for newlib heap is less than the "
+		 "minimum required size specified by "
+		 "CONFIG_NEWLIB_LIBC_MIN_REQUIRED_HEAP_SIZE");
+
+#ifdef CONFIG_XTENSA
+	/*
+	 * FIXME: For Xtensa, the first `malloc` call may fail if the HEAP_BASE
+	 *        is such that the first `sbrk` call returns a 4096-byte
+	 *        aligned address.
+	 *
+	 *        This is a very ugly workaround for the issue #38258 and must
+	 *        be removed once it is fixed.
+	 */
+	void *ptr = malloc(16);
+
+	free(ptr);
+#endif /* CONFIG_XTENSA */
+
 	return 0;
 }
 
 SYS_INIT(malloc_prepare, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
-#endif /* CONFIG_USERSPACE */
-#endif /* CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE */
 
-LIBC_BSS static unsigned int heap_sz;
+/* Current offset from HEAP_BASE of unused memory */
+LIBC_BSS static size_t heap_sz;
 
 static int _stdout_hook_default(int c)
 {
@@ -143,12 +193,12 @@ int z_impl_zephyr_read_stdin(char *buf, int nbytes)
 }
 
 #ifdef CONFIG_USERSPACE
-static inline int z_vrfy_z_zephyr_read_stdin(char *buf, int nbytes)
+static inline int z_vrfy_zephyr_read_stdin(char *buf, int nbytes)
 {
 	Z_OOPS(Z_SYSCALL_MEMORY_WRITE(buf, nbytes));
 	return z_impl_zephyr_read_stdin((char *)buf, nbytes);
 }
-#include <syscalls/z_zephyr_read_stdin_mrsh.c>
+#include <syscalls/zephyr_read_stdin_mrsh.c>
 #endif
 
 int z_impl_zephyr_write_stdout(const void *buffer, int nbytes)
@@ -166,12 +216,12 @@ int z_impl_zephyr_write_stdout(const void *buffer, int nbytes)
 }
 
 #ifdef CONFIG_USERSPACE
-static inline int z_vrfy_z_zephyr_write_stdout(const void *buf, int nbytes)
+static inline int z_vrfy_zephyr_write_stdout(const void *buf, int nbytes)
 {
 	Z_OOPS(Z_SYSCALL_MEMORY_READ(buf, nbytes));
 	return z_impl_zephyr_write_stdout((const void *)buf, nbytes);
 }
-#include <syscalls/z_zephyr_write_stdout_mrsh.c>
+#include <syscalls/zephyr_write_stdout_mrsh.c>
 #endif
 
 #ifndef CONFIG_POSIX_API
@@ -179,7 +229,7 @@ int _read(int fd, char *buf, int nbytes)
 {
 	ARG_UNUSED(fd);
 
-	return z_impl_zephyr_read_stdin(buf, nbytes);
+	return zephyr_read_stdin(buf, nbytes);
 }
 __weak FUNC_ALIAS(_read, read, int);
 
@@ -187,7 +237,7 @@ int _write(int fd, const void *buf, int nbytes)
 {
 	ARG_UNUSED(fd);
 
-	return z_impl_zephyr_write_stdout(buf, nbytes);
+	return zephyr_write_stdout(buf, nbytes);
 }
 __weak FUNC_ALIAS(_write, write, int);
 
@@ -246,20 +296,11 @@ __weak void _exit(int status)
 	}
 }
 
-static LIBC_DATA SYS_SEM_DEFINE(heap_sem, 1, 1);
-
-void *_sbrk(int count)
+void *_sbrk(intptr_t count)
 {
 	void *ret, *ptr;
 
-	/* coverity[CHECKED_RETURN] */
-	sys_sem_take(&heap_sem, K_FOREVER);
-
-#if CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE
-	ptr = heap_base + heap_sz;
-#else
 	ptr = ((char *)HEAP_BASE) + heap_sz;
-#endif
 
 	if ((heap_sz + count) < MAX_HEAP_SIZE) {
 		heap_sz += count;
@@ -268,12 +309,155 @@ void *_sbrk(int count)
 		ret = (void *)-1;
 	}
 
-	/* coverity[CHECKED_RETURN] */
-	sys_sem_give(&heap_sem);
-
 	return ret;
 }
 __weak FUNC_ALIAS(_sbrk, sbrk, void *);
+
+#ifdef CONFIG_MULTITHREADING
+/*
+ * Newlib Retargetable Locking Interface Implementation
+ *
+ * When multithreading is enabled, the newlib retargetable locking interface is
+ * defined below to override the default void implementation and provide the
+ * Zephyr-side locks.
+ *
+ * NOTE: `k_mutex` and `k_sem` are used instead of `sys_mutex` and `sys_sem`
+ *	 because the latter do not support dynamic allocation for now.
+ */
+
+/* Static locks */
+K_MUTEX_DEFINE(__lock___sinit_recursive_mutex);
+K_MUTEX_DEFINE(__lock___sfp_recursive_mutex);
+K_MUTEX_DEFINE(__lock___atexit_recursive_mutex);
+K_MUTEX_DEFINE(__lock___malloc_recursive_mutex);
+K_MUTEX_DEFINE(__lock___env_recursive_mutex);
+K_SEM_DEFINE(__lock___at_quick_exit_mutex, 1, 1);
+K_SEM_DEFINE(__lock___tz_mutex, 1, 1);
+K_SEM_DEFINE(__lock___dd_hash_mutex, 1, 1);
+K_SEM_DEFINE(__lock___arc4random_mutex, 1, 1);
+
+#ifdef CONFIG_USERSPACE
+/* Grant public access to all static locks after boot */
+static int newlib_locks_prepare(const struct device *unused)
+{
+	ARG_UNUSED(unused);
+
+	/* Initialise recursive locks */
+	k_object_access_all_grant(&__lock___sinit_recursive_mutex);
+	k_object_access_all_grant(&__lock___sfp_recursive_mutex);
+	k_object_access_all_grant(&__lock___atexit_recursive_mutex);
+	k_object_access_all_grant(&__lock___malloc_recursive_mutex);
+	k_object_access_all_grant(&__lock___env_recursive_mutex);
+
+	/* Initialise non-recursive locks */
+	k_object_access_all_grant(&__lock___at_quick_exit_mutex);
+	k_object_access_all_grant(&__lock___tz_mutex);
+	k_object_access_all_grant(&__lock___dd_hash_mutex);
+	k_object_access_all_grant(&__lock___arc4random_mutex);
+
+	return 0;
+}
+
+SYS_INIT(newlib_locks_prepare, POST_KERNEL,
+	 CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+#endif /* CONFIG_USERSPACE */
+
+/* Create a new dynamic non-recursive lock */
+void __retarget_lock_init(_LOCK_T *lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+
+	/* Allocate semaphore object */
+#ifndef CONFIG_USERSPACE
+	*lock = malloc(sizeof(struct k_sem));
+#else
+	*lock = k_object_alloc(K_OBJ_SEM);
+#endif /* !CONFIG_USERSPACE */
+	__ASSERT(*lock != NULL, "non-recursive lock allocation failed");
+
+	k_sem_init((struct k_sem *)*lock, 1, 1);
+}
+
+/* Create a new dynamic recursive lock */
+void __retarget_lock_init_recursive(_LOCK_T *lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+
+	/* Allocate mutex object */
+#ifndef CONFIG_USERSPACE
+	*lock = malloc(sizeof(struct k_mutex));
+#else
+	*lock = k_object_alloc(K_OBJ_MUTEX);
+#endif /* !CONFIG_USERSPACE */
+	__ASSERT(*lock != NULL, "recursive lock allocation failed");
+
+	k_mutex_init((struct k_mutex *)*lock);
+}
+
+/* Close dynamic non-recursive lock */
+void __retarget_lock_close(_LOCK_T lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+#ifndef CONFIG_USERSPACE
+	free(lock);
+#else
+	k_object_release(lock);
+#endif /* !CONFIG_USERSPACE */
+}
+
+/* Close dynamic recursive lock */
+void __retarget_lock_close_recursive(_LOCK_T lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+#ifndef CONFIG_USERSPACE
+	free(lock);
+#else
+	k_object_release(lock);
+#endif /* !CONFIG_USERSPACE */
+}
+
+/* Acquiure non-recursive lock */
+void __retarget_lock_acquire(_LOCK_T lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+	k_sem_take((struct k_sem *)lock, K_FOREVER);
+}
+
+/* Acquiure recursive lock */
+void __retarget_lock_acquire_recursive(_LOCK_T lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+	k_mutex_lock((struct k_mutex *)lock, K_FOREVER);
+}
+
+/* Try acquiring non-recursive lock */
+int __retarget_lock_try_acquire(_LOCK_T lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+	return !k_sem_take((struct k_sem *)lock, K_NO_WAIT);
+}
+
+/* Try acquiring recursive lock */
+int __retarget_lock_try_acquire_recursive(_LOCK_T lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+	return !k_mutex_lock((struct k_mutex *)lock, K_NO_WAIT);
+}
+
+/* Release non-recursive lock */
+void __retarget_lock_release(_LOCK_T lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+	k_sem_give((struct k_sem *)lock);
+}
+
+/* Release recursive lock */
+void __retarget_lock_release_recursive(_LOCK_T lock)
+{
+	__ASSERT_NO_MSG(lock != NULL);
+	k_mutex_unlock((struct k_mutex *)lock);
+}
+#endif /* CONFIG_MULTITHREADING */
 
 __weak int *__errno(void)
 {
@@ -380,12 +564,7 @@ void *_sbrk_r(struct _reent *r, int count)
 }
 #endif /* CONFIG_XTENSA */
 
-struct timeval;
-
 int _gettimeofday(struct timeval *__tp, void *__tzp)
 {
-	ARG_UNUSED(__tp);
-	ARG_UNUSED(__tzp);
-
-	return -1;
+	return gettimeofday(__tp, __tzp);
 }

@@ -15,6 +15,7 @@
 #include <soc/shim.h>
 #include <adsp/io.h>
 #include <soc.h>
+#include <arch/xtensa/cache.h>
 #include "manifest.h"
 
 #if CONFIG_SOC_INTEL_S1000
@@ -27,6 +28,7 @@ extern void __start(void);
 
 #if !defined(CONFIG_SOC_INTEL_S1000)
 #define MANIFEST_SEGMENT_COUNT 3
+#undef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 
 static inline void idelay(int n)
 {
@@ -69,7 +71,7 @@ static inline void bmemcpy(void *dest, void *src, size_t bytes)
 	for (i = 0; i < (bytes >> 2); i++)
 		d[i] = s[i];
 
-	SOC_DCACHE_FLUSH(dest, bytes);
+	z_xtensa_cache_flush(dest, bytes);
 }
 
 /* bzero used by bootloader */
@@ -81,7 +83,7 @@ static inline void bbzero(void *dest, size_t bytes)
 	for (i = 0; i < (bytes >> 2); i++)
 		d[i] = 0;
 
-	SOC_DCACHE_FLUSH(dest, bytes);
+	z_xtensa_cache_flush(dest, bytes);
 }
 
 static void parse_module(struct sof_man_fw_header *hdr,
@@ -125,6 +127,7 @@ static void parse_module(struct sof_man_fw_header *hdr,
 #define MAN_SKIP_ENTRIES 1
 #endif
 
+#ifdef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 static uint32_t get_fw_size_in_use(void)
 {
 	struct sof_man_fw_desc *desc =
@@ -153,6 +156,7 @@ static uint32_t get_fw_size_in_use(void)
 
 	return fw_size_in_use;
 }
+#endif
 
 /* parse FW manifest and copy modules */
 static void parse_manifest(void)
@@ -249,18 +253,18 @@ static uint32_t hp_sram_power_on_memory(uint32_t memory_size)
 	/* calculate total number of used SRAM banks (EBB)
 	 * to power up only necessary banks
 	 */
-	ebb_in_use = (!(memory_size % SRAM_BANK_SIZE)) ?
-	(memory_size / SRAM_BANK_SIZE) :
-	(memory_size / SRAM_BANK_SIZE) + 1;
+	ebb_in_use = ceiling_fraction(memory_size, SRAM_BANK_SIZE);
 
 	return hp_sram_pm_banks(ebb_in_use);
 }
 
+#ifdef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 static int32_t hp_sram_power_off_unused_banks(uint32_t memory_size)
 {
 	/* keep enabled only memory banks used by FW */
 	return hp_sram_power_on_memory(memory_size);
 }
+#endif
 
 static int32_t hp_sram_init(void)
 {
@@ -269,10 +273,12 @@ static int32_t hp_sram_init(void)
 
 #else
 
+#ifdef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 static int32_t hp_sram_power_off_unused_banks(uint32_t memory_size)
 {
 	return 0;
 }
+#endif
 
 static uint32_t hp_sram_init(void)
 {
@@ -294,8 +300,8 @@ static int32_t lp_sram_init(void)
 	/* add some delay before writing power registers */
 	idelay(delay_count);
 
-	lspgctl_value = shim_read(SHIM_LSPGISTS);
-	shim_write(SHIM_LSPGCTL, lspgctl_value & ~LPSRAM_MASK(0));
+	lspgctl_value = io_reg_read(LSPGISTS);
+	io_reg_write(LSPGCTL, lspgctl_value & ~LPSRAM_MASK(0));
 
 	/* add some delay before checking the status */
 	idelay(delay_count);
@@ -340,7 +346,9 @@ void boot_master_core(void)
 	/* parse manifest and copy modules */
 	parse_manifest();
 
+#ifdef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 	hp_sram_power_off_unused_banks(get_fw_size_in_use());
+#endif
 #endif
 	/* now call SOF entry */
 	__start();

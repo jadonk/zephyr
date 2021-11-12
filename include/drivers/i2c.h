@@ -58,12 +58,44 @@ extern "C" {
 /** Controller to act as Master. */
 #define I2C_MODE_MASTER			BIT(4)
 
-/*
- * The following #defines are used to configure the I2C slave device
+/**
+ * @brief Complete I2C DT information
+ *
+ * @param bus is the I2C bus
+ * @param addr is the slave address
  */
+struct i2c_dt_spec {
+	const struct device *bus;
+	uint16_t addr;
+};
 
-/** Slave device responds to 10-bit addressing. */
-#define I2C_SLAVE_FLAGS_ADDR_10_BITS	BIT(0)
+/**
+ * @brief Structure initializer for i2c_dt_spec from devicetree
+ *
+ * This helper macro expands to a static initializer for a <tt>struct
+ * i2c_dt_spec</tt> by reading the relevant bus and address data from
+ * the devicetree.
+ *
+ * @param node_id Devicetree node identifier for the I2C device whose
+ *                struct i2c_dt_spec to create an initializer for
+ */
+#define I2C_DT_SPEC_GET(node_id)		     \
+	{							     \
+		.bus = DEVICE_DT_GET(DT_BUS(node_id)),		     \
+		.addr = DT_REG_ADDR(node_id) \
+	}
+
+/**
+ * @brief Structure initializer for i2c_dt_spec from devicetree instance
+ *
+ * This is equivalent to
+ * <tt>I2C_DT_SPEC_GET(DT_DRV_INST(inst))</tt>.
+ *
+ * @param inst Devicetree instance number
+ */
+#define I2C_DT_SPEC_INST_GET(inst) \
+	I2C_DT_SPEC_GET(DT_DRV_INST(inst))
+
 
 /*
  * I2C_MSG_* are I2C Message flags.
@@ -129,40 +161,6 @@ struct i2c_msg {
  */
 struct i2c_slave_config;
 
-typedef int (*i2c_slave_write_requested_cb_t)(
-		struct i2c_slave_config *config);
-typedef int (*i2c_slave_read_requested_cb_t)(
-		struct i2c_slave_config *config, uint8_t *val);
-typedef int (*i2c_slave_write_received_cb_t)(
-		struct i2c_slave_config *config, uint8_t val);
-typedef int (*i2c_slave_read_processed_cb_t)(
-		struct i2c_slave_config *config, uint8_t *val);
-typedef int (*i2c_slave_stop_cb_t)(struct i2c_slave_config *config);
-
-struct i2c_slave_callbacks {
-	/** callback function being called when write is requested */
-	i2c_slave_write_requested_cb_t write_requested;
-	/** callback function being called when read is requested */
-	i2c_slave_read_requested_cb_t read_requested;
-	/** callback function being called when byte has been received */
-	i2c_slave_write_received_cb_t write_received;
-	/** callback function being called when byte has been sent */
-	i2c_slave_read_processed_cb_t read_processed;
-	/** callback function being called when stop occurs on the bus */
-	i2c_slave_stop_cb_t stop;
-};
-
-struct i2c_slave_config {
-	/** Private, do not modify */
-	sys_snode_t node;
-	/** Flags for the slave device defined by I2C_SLAVE_FLAGS_* constants */
-	uint8_t flags;
-	/** Address for this slave device */
-	uint16_t address;
-	/** Callback functions */
-	const struct i2c_slave_callbacks *callbacks;
-};
-
 typedef int (*i2c_api_configure_t)(const struct device *dev,
 				   uint32_t dev_config);
 typedef int (*i2c_api_full_io_t)(const struct device *dev,
@@ -195,6 +193,147 @@ struct i2c_slave_driver_api {
  * @endcond
  */
 
+/** Slave device responds to 10-bit addressing. */
+#define I2C_SLAVE_FLAGS_ADDR_10_BITS	BIT(0)
+
+/** @brief Function called when a write to the device is initiated.
+ *
+ * This function is invoked by the controller when the bus completes a
+ * start condition for a write operation to the address associated
+ * with a particular device.
+ *
+ * A success return shall cause the controller to ACK the next byte
+ * received.  An error return shall cause the controller to NACK the
+ * next byte received.
+ *
+ * @param config the configuration structure associated with the
+ * device to which the operation is addressed.
+ *
+ * @return 0 if the write is accepted, or a negative error code.
+ */
+typedef int (*i2c_slave_write_requested_cb_t)(
+		struct i2c_slave_config *config);
+
+/** @brief Function called when a write to the device is continued.
+ *
+ * This function is invoked by the controller when it completes
+ * reception of a byte of data in an ongoing write operation to the
+ * device.
+ *
+ * A success return shall cause the controller to ACK the next byte
+ * received.  An error return shall cause the controller to NACK the
+ * next byte received.
+ *
+ * @param config the configuration structure associated with the
+ * device to which the operation is addressed.
+ *
+ * @param val the byte received by the controller.
+ *
+ * @return 0 if more data can be accepted, or a negative error
+ * code.
+ */
+typedef int (*i2c_slave_write_received_cb_t)(
+		struct i2c_slave_config *config, uint8_t val);
+
+/** @brief Function called when a read from the device is initiated.
+ *
+ * This function is invoked by the controller when the bus completes a
+ * start condition for a read operation from the address associated
+ * with a particular device.
+ *
+ * The value returned in @p *val will be transmitted.  A success
+ * return shall cause the controller to react to additional read
+ * operations.  An error return shall cause the controller to ignore
+ * bus operations until a new start condition is received.
+ *
+ * @param config the configuration structure associated with the
+ * device to which the operation is addressed.
+ *
+ * @param val pointer to storage for the first byte of data to return
+ * for the read request.
+ *
+ * @return 0 if more data can be requested, or a negative error code.
+ */
+typedef int (*i2c_slave_read_requested_cb_t)(
+		struct i2c_slave_config *config, uint8_t *val);
+
+/** @brief Function called when a read from the device is continued.
+ *
+ * This function is invoked by the controller when the bus is ready to
+ * provide additional data for a read operation from the address
+ * associated with the device device.
+ *
+ * The value returned in @p *val will be transmitted.  A success
+ * return shall cause the controller to react to additional read
+ * operations.  An error return shall cause the controller to ignore
+ * bus operations until a new start condition is received.
+ *
+ * @param config the configuration structure associated with the
+ * device to which the operation is addressed.
+ *
+ * @param val pointer to storage for the next byte of data to return
+ * for the read request.
+ *
+ * @return 0 if data has been provided, or a negative error code.
+ */
+typedef int (*i2c_slave_read_processed_cb_t)(
+		struct i2c_slave_config *config, uint8_t *val);
+
+/** @brief Function called when a stop condition is observed after a
+ * start condition addressed to a particular device.
+ *
+ * This function is invoked by the controller when the bus is ready to
+ * provide additional data for a read operation from the address
+ * associated with the device device.  After the function returns the
+ * controller shall enter a state where it is ready to react to new
+ * start conditions.
+ *
+ * @param config the configuration structure associated with the
+ * device to which the operation is addressed.
+ *
+ * @return Ignored.
+ */
+typedef int (*i2c_slave_stop_cb_t)(struct i2c_slave_config *config);
+
+/** @brief Structure providing callbacks to be implemented for devices
+ * that supports the I2C slave API.
+ *
+ * This structure may be shared by multiple devices that implement the
+ * same API at different addresses on the bus.
+ */
+struct i2c_slave_callbacks {
+	i2c_slave_write_requested_cb_t write_requested;
+	i2c_slave_read_requested_cb_t read_requested;
+	i2c_slave_write_received_cb_t write_received;
+	i2c_slave_read_processed_cb_t read_processed;
+	i2c_slave_stop_cb_t stop;
+};
+
+/** @brief Structure describing a device that supports the I2C
+ * slave API.
+ *
+ * Instances of this are passed to the i2c_slave_register() and
+ * i2c_slave_unregister() functions to indicate addition and removal
+ * of a slave device, respective.
+ *
+ * Fields other than @c node must be initialized by the module that
+ * implements the device behavior prior to passing the object
+ * reference to i2c_slave_register().
+ */
+struct i2c_slave_config {
+	/** Private, do not modify */
+	sys_snode_t node;
+
+	/** Flags for the slave device defined by I2C_SLAVE_FLAGS_* constants */
+	uint8_t flags;
+
+	/** Address for this slave device */
+	uint16_t address;
+
+	/** Callback functions */
+	const struct i2c_slave_callbacks *callbacks;
+};
+
 /**
  * @brief Configure operation of a host controller.
  *
@@ -217,7 +356,7 @@ static inline int z_impl_i2c_configure(const struct device *dev,
 }
 
 /**
- * @brief Perform data transfer to another I2C device.
+ * @brief Perform data transfer to another I2C device in master mode.
  *
  * This routine provides a generic interface to perform data transfer
  * to another I2C device synchronously. Use i2c_read()/i2c_write()
@@ -234,7 +373,8 @@ static inline int z_impl_i2c_configure(const struct device *dev,
  * the same behavior.  See the documentation of `struct i2c_msg` for
  * limitations on support for multi-message bus transactions.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @param msgs Array of messages to transfer.
  * @param num_msgs Number of messages to transfer.
  * @param addr Address of the I2C target device.
@@ -257,15 +397,35 @@ static inline int z_impl_i2c_transfer(const struct device *dev,
 }
 
 /**
+ * @brief Perform data transfer to another I2C device in master mode.
+ *
+ * This is equivalent to:
+ *
+ *     i2c_transfer(spec->bus, msgs, num_msgs, spec->addr);
+ *
+ * @param spec I2C specification from devicetree.
+ * @param msgs Array of messages to transfer.
+ * @param num_msgs Number of messages to transfer.
+ *
+ * @return a value from i2c_transfer()
+ */
+static inline int i2c_transfer_dt(const struct i2c_dt_spec *spec,
+				  struct i2c_msg *msgs, uint8_t num_msgs)
+{
+	return i2c_transfer(spec->bus, msgs, num_msgs, spec->addr);
+}
+
+/**
  * @brief Recover the I2C bus
  *
  * Attempt to recover the I2C bus.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @retval 0 If successful
  * @retval -EBUSY If bus is not clear after recovery attempt.
  * @retval -EIO General input / output error.
- * @retval -ENOTSUP If bus recovery is not supported
+ * @retval -ENOSYS If bus recovery is not implemented
  */
 __syscall int i2c_recover_bus(const struct device *dev);
 
@@ -275,14 +435,14 @@ static inline int z_impl_i2c_recover_bus(const struct device *dev)
 		(const struct i2c_driver_api *)dev->api;
 
 	if (api->recover_bus == NULL) {
-		return -ENOTSUP;
+		return -ENOSYS;
 	}
 
 	return api->recover_bus(dev);
 }
 
 /**
- * @brief Registers the provided config as Slave device
+ * @brief Registers the provided config as Slave device of a controller.
  *
  * Enable I2C slave mode for the 'dev' I2C bus driver using the provided
  * 'config' struct containing the functions and parameters to send bus
@@ -295,14 +455,15 @@ static inline int z_impl_i2c_recover_bus(const struct device *dev)
  * Most of the existing hardware allows simultaneous support for master
  * and slave mode. This is however not guaranteed.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in slave mode.
  * @param cfg Config struct with functions and parameters used by the I2C driver
  * to send bus events
  *
  * @retval 0 Is successful
  * @retval -EINVAL If parameters are invalid
  * @retval -EIO General input / output error.
- * @retval -ENOTSUP If slave mode is not supported
+ * @retval -ENOSYS If slave mode is not implemented
  */
 static inline int i2c_slave_register(const struct device *dev,
 				     struct i2c_slave_config *cfg)
@@ -311,7 +472,7 @@ static inline int i2c_slave_register(const struct device *dev,
 		(const struct i2c_driver_api *)dev->api;
 
 	if (api->slave_register == NULL) {
-		return -ENOTSUP;
+		return -ENOSYS;
 	}
 
 	return api->slave_register(dev, cfg);
@@ -324,13 +485,14 @@ static inline int i2c_slave_register(const struct device *dev,
  * the provided 'config' struct containing the functions and parameters
  * to send bus events.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in slave mode.
  * @param cfg Config struct with functions and parameters used by the I2C driver
  * to send bus events
  *
  * @retval 0 Is successful
  * @retval -EINVAL If parameters are invalid
- * @retval -ENOTSUP If slave mode is not supported
+ * @retval -ENOSYS If slave mode is not implemented
  */
 static inline int i2c_slave_unregister(const struct device *dev,
 				       struct i2c_slave_config *cfg)
@@ -339,7 +501,7 @@ static inline int i2c_slave_unregister(const struct device *dev,
 		(const struct i2c_driver_api *)dev->api;
 
 	if (api->slave_unregister == NULL) {
-		return -ENOTSUP;
+		return -ENOSYS;
 	}
 
 	return api->slave_unregister(dev, cfg);
@@ -349,9 +511,10 @@ static inline int i2c_slave_unregister(const struct device *dev,
  * @brief Instructs the I2C Slave device to register itself to the I2C Controller
  *
  * This routine instructs the I2C Slave device to register itself to the I2C
- * Controller.
+ * Controller via its parent controller's i2c_slave_register() API.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for the I2C slave
+ * device (not itself an I2C controller).
  *
  * @retval 0 Is successful
  * @retval -EINVAL If parameters are invalid
@@ -372,9 +535,10 @@ static inline int z_impl_i2c_slave_driver_register(const struct device *dev)
  * Controller
  *
  * This routine instructs the I2C Slave device to unregister itself from the I2C
- * Controller.
+ * Controller via its parent controller's i2c_slave_register() API.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for the I2C slave
+ * device (not itself an I2C controller).
  *
  * @retval 0 Is successful
  * @retval -EINVAL If parameters are invalid
@@ -398,7 +562,8 @@ static inline int z_impl_i2c_slave_driver_unregister(const struct device *dev)
  *
  * This routine writes a set amount of data synchronously.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @param buf Memory pool from which the data is transferred.
  * @param num_bytes Number of bytes to write.
  * @param addr Address to the target I2C device for writing.
@@ -419,11 +584,31 @@ static inline int i2c_write(const struct device *dev, const uint8_t *buf,
 }
 
 /**
+ * @brief Write a set amount of data to an I2C device.
+ *
+ * This is equivalent to:
+ *
+ *     i2c_write(spec->bus, buf, num_bytes, spec->addr);
+ *
+ * @param spec I2C specification from devicetree.
+ * @param buf Memory pool from which the data is transferred.
+ * @param num_bytes Number of bytes to write.
+ *
+ * @return a value from i2c_write()
+ */
+static inline int i2c_write_dt(const struct i2c_dt_spec *spec,
+			       const uint8_t *buf, uint32_t num_bytes)
+{
+	return i2c_write(spec->bus, buf, num_bytes, spec->addr);
+}
+
+/**
  * @brief Read a set amount of data from an I2C device.
  *
  * This routine reads a set amount of data synchronously.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @param buf Memory pool that stores the retrieved data.
  * @param num_bytes Number of bytes to read.
  * @param addr Address of the I2C device being read.
@@ -444,13 +629,33 @@ static inline int i2c_read(const struct device *dev, uint8_t *buf,
 }
 
 /**
+ * @brief Read a set amount of data from an I2C device.
+ *
+ * This is equivalent to:
+ *
+ *     i2c_read(spec->bus, buf, num_bytes, spec->addr);
+ *
+ * @param spec I2C specification from devicetree.
+ * @param buf Memory pool that stores the retrieved data.
+ * @param num_bytes Number of bytes to read.
+ *
+ * @return a value from i2c_read()
+ */
+static inline int i2c_read_dt(const struct i2c_dt_spec *spec,
+			      uint8_t *buf, uint32_t num_bytes)
+{
+	return i2c_read(spec->bus, buf, num_bytes, spec->addr);
+}
+
+/**
  * @brief Write then read data from an I2C device.
  *
  * This supports the common operation "this is what I want", "now give
  * it to me" transaction pair through a combined write-then-read bus
  * transaction.
  *
- * @param dev Pointer to the device structure for the driver instance
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @param addr Address of the I2C device
  * @param write_buf Pointer to the data to be written
  * @param num_write Number of bytes to write
@@ -478,14 +683,41 @@ static inline int i2c_write_read(const struct device *dev, uint16_t addr,
 }
 
 /**
+ * @brief Write then read data from an I2C device.
+ *
+ * This is equivalent to:
+ *
+ *     i2c_write_read(spec->bus, spec->addr,
+ *                    write_buf, num_write,
+ *                    read_buf, num_read);
+ *
+ * @param spec I2C specification from devicetree.
+ * @param write_buf Pointer to the data to be written
+ * @param num_write Number of bytes to write
+ * @param read_buf Pointer to storage for read data
+ * @param num_read Number of bytes to read
+ *
+ * @return a value from i2c_write_read()
+ */
+static inline int i2c_write_read_dt(const struct i2c_dt_spec *spec,
+				    const void *write_buf, size_t num_write,
+				    void *read_buf, size_t num_read)
+{
+	return i2c_write_read(spec->bus, spec->addr,
+			      write_buf, num_write,
+			      read_buf, num_read);
+}
+
+/**
  * @brief Read multiple bytes from an internal address of an I2C device.
  *
  * This routine reads multiple bytes from an internal address of an
  * I2C device synchronously.
  *
  * Instances of this may be replaced by i2c_write_read().
-
- * @param dev Pointer to the device structure for the driver instance.
+ *
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @param dev_addr Address of the I2C device for reading.
  * @param start_addr Internal address from which the data is being read.
  * @param buf Memory pool that stores the retrieved data.
@@ -506,6 +738,29 @@ static inline int i2c_burst_read(const struct device *dev,
 }
 
 /**
+ * @brief Read multiple bytes from an internal address of an I2C device.
+ *
+ * This is equivalent to:
+ *
+ *     i2c_burst_read(spec->bus, spec->addr, start_addr, buf, num_bytes);
+ *
+ * @param spec I2C specification from devicetree.
+ * @param start_addr Internal address from which the data is being read.
+ * @param buf Memory pool that stores the retrieved data.
+ * @param num_bytes Number of bytes to read.
+ *
+ * @return a value from i2c_burst_read()
+ */
+static inline int i2c_burst_read_dt(const struct i2c_dt_spec *spec,
+				    uint8_t start_addr,
+				    uint8_t *buf,
+				    uint32_t num_bytes)
+{
+	return i2c_burst_read(spec->bus, spec->addr,
+			      start_addr, buf, num_bytes);
+}
+
+/**
  * @brief Write multiple bytes to an internal address of an I2C device.
  *
  * This routine writes multiple bytes to an internal address of an
@@ -516,7 +771,8 @@ static inline int i2c_burst_read(const struct device *dev,
  * portable by replacing them with calls to i2c_write() passing a
  * buffer containing the combined address and data.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @param dev_addr Address of the I2C device for writing.
  * @param start_addr Internal address to which the data is being written.
  * @param buf Memory pool from which the data is transferred.
@@ -545,12 +801,36 @@ static inline int i2c_burst_write(const struct device *dev,
 }
 
 /**
+ * @brief Write multiple bytes to an internal address of an I2C device.
+ *
+ * This is equivalent to:
+ *
+ *     i2c_burst_write(spec->bus, spec->addr, start_addr, buf, num_bytes);
+ *
+ * @param spec I2C specification from devicetree.
+ * @param start_addr Internal address to which the data is being written.
+ * @param buf Memory pool from which the data is transferred.
+ * @param num_bytes Number of bytes being written.
+ *
+ * @return a value from i2c_burst_write()
+ */
+static inline int i2c_burst_write_dt(const struct i2c_dt_spec *spec,
+				     uint8_t start_addr,
+				     const uint8_t *buf,
+				     uint32_t num_bytes)
+{
+	return i2c_burst_write(spec->bus, spec->addr,
+			       start_addr, buf, num_bytes);
+}
+
+/**
  * @brief Read internal register of an I2C device.
  *
  * This routine reads the value of an 8-bit internal register of an I2C
  * device synchronously.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @param dev_addr Address of the I2C device for reading.
  * @param reg_addr Address of the internal register being read.
  * @param value Memory pool that stores the retrieved register value.
@@ -568,6 +848,25 @@ static inline int i2c_reg_read_byte(const struct device *dev,
 }
 
 /**
+ * @brief Read internal register of an I2C device.
+ *
+ * This is equivalent to:
+ *
+ *     i2c_reg_read_byte(spec->bus, spec->addr, reg_addr, value);
+ *
+ * @param spec I2C specification from devicetree.
+ * @param reg_addr Address of the internal register being read.
+ * @param value Memory pool that stores the retrieved register value.
+ *
+ * @return a value from i2c_reg_read_byte()
+ */
+static inline int i2c_reg_read_byte_dt(const struct i2c_dt_spec *spec,
+				       uint8_t reg_addr, uint8_t *value)
+{
+	return i2c_reg_read_byte(spec->bus, spec->addr, reg_addr, value);
+}
+
+/**
  * @brief Write internal register of an I2C device.
  *
  * This routine writes a value to an 8-bit internal register of an I2C
@@ -576,7 +875,8 @@ static inline int i2c_reg_read_byte(const struct device *dev,
  * @note This function internally combines the register and value into
  * a single bus transaction.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @param dev_addr Address of the I2C device for writing.
  * @param reg_addr Address of the internal register being written.
  * @param value Value to be written to internal register.
@@ -594,6 +894,25 @@ static inline int i2c_reg_write_byte(const struct device *dev,
 }
 
 /**
+ * @brief Write internal register of an I2C device.
+ *
+ * This is equivalent to:
+ *
+ *     i2c_reg_write_byte(spec->bus, spec->addr, reg_addr, value);
+ *
+ * @param spec I2C specification from devicetree.
+ * @param reg_addr Address of the internal register being written.
+ * @param value Value to be written to internal register.
+ *
+ * @return a value from i2c_reg_write_byte()
+ */
+static inline int i2c_reg_write_byte_dt(const struct i2c_dt_spec *spec,
+					uint8_t reg_addr, uint8_t value)
+{
+	return i2c_reg_write_byte(spec->bus, spec->addr, reg_addr, value);
+}
+
+/**
  * @brief Update internal register of an I2C device.
  *
  * This routine updates the value of a set of bits from an 8-bit internal
@@ -602,7 +921,8 @@ static inline int i2c_reg_write_byte(const struct device *dev,
  * @note If the calculated new register value matches the value that
  * was read this function will not generate a write operation.
  *
- * @param dev Pointer to the device structure for the driver instance.
+ * @param dev Pointer to the device structure for an I2C controller
+ * driver configured in master mode.
  * @param dev_addr Address of the I2C device for updating.
  * @param reg_addr Address of the internal register being updated.
  * @param mask Bitmask for updating internal register.
@@ -630,6 +950,28 @@ static inline int i2c_reg_update_byte(const struct device *dev,
 	}
 
 	return i2c_reg_write_byte(dev, dev_addr, reg_addr, new_value);
+}
+
+/**
+ * @brief Update internal register of an I2C device.
+ *
+ * This is equivalent to:
+ *
+ *     i2c_reg_update_byte(spec->bus, spec->addr, reg_addr, mask, value);
+ *
+ * @param spec I2C specification from devicetree.
+ * @param reg_addr Address of the internal register being updated.
+ * @param mask Bitmask for updating internal register.
+ * @param value Value for updating internal register.
+ *
+ * @return a value from i2c_reg_update_byte()
+ */
+static inline int i2c_reg_update_byte_dt(const struct i2c_dt_spec *spec,
+					 uint8_t reg_addr, uint8_t mask,
+					 uint8_t value)
+{
+	return i2c_reg_update_byte(spec->bus, spec->addr,
+				   reg_addr, mask, value);
 }
 
 /**

@@ -21,6 +21,7 @@
 #include <sys/libc-hooks.h>
 #include <sys/mutex.h>
 #include <inttypes.h>
+#include <linker/linker-defs.h>
 
 #ifdef Z_LIBC_PARTITION_EXISTS
 K_APPMEM_PARTITION_DEFINE(z_libc_partition);
@@ -81,7 +82,7 @@ const char *otype_to_str(enum k_objects otype)
 	}
 #else
 	ARG_UNUSED(otype);
-	return NULL;
+	ret = NULL;
 #endif
 	return ret;
 }
@@ -110,11 +111,35 @@ uint8_t *z_priv_stack_find(k_thread_stack_t *stack)
 #endif /* CONFIG_GEN_PRIV_STACKS */
 
 #ifdef CONFIG_DYNAMIC_OBJECTS
+
+/*
+ * Note that dyn_obj->data is where the kernel object resides
+ * so it is the one that actually needs to be aligned.
+ * Due to the need to get the the fields inside struct dyn_obj
+ * from kernel object pointers (i.e. from data[]), the offset
+ * from data[] needs to be fixed at build time. Therefore,
+ * data[] is declared with __aligned(), such that when dyn_obj
+ * is allocated with alignment, data[] is also aligned.
+ * Due to this requirement, data[] needs to be aligned with
+ * the maximum alignment needed for all kernel objects
+ * (hence the following DYN_OBJ_DATA_ALIGN).
+ */
+#ifdef ARCH_DYMANIC_OBJ_K_THREAD_ALIGNMENT
+#define DYN_OBJ_DATA_ALIGN_K_THREAD	(ARCH_DYMANIC_OBJ_K_THREAD_ALIGNMENT)
+#else
+#define DYN_OBJ_DATA_ALIGN_K_THREAD	(sizeof(void *))
+#endif
+
+#define DYN_OBJ_DATA_ALIGN		\
+	MAX(DYN_OBJ_DATA_ALIGN_K_THREAD, (sizeof(void *)))
+
 struct dyn_obj {
 	struct z_object kobj;
-	sys_dnode_t obj_list;
+	sys_dnode_t dobj_list;
 	struct rbnode node; /* must be immediately before data member */
-	uint8_t data[]; /* The object itself */
+
+	/* The object itself */
+	uint8_t data[] __aligned(DYN_OBJ_DATA_ALIGN_K_THREAD);
 };
 
 extern struct z_object *z_object_gperf_find(const void *obj);
@@ -156,6 +181,26 @@ static size_t obj_size_get(enum k_objects otype)
 	return ret;
 }
 
+static size_t obj_align_get(enum k_objects otype)
+{
+	size_t ret;
+
+	switch (otype) {
+	case K_OBJ_THREAD:
+#ifdef ARCH_DYMANIC_OBJ_K_THREAD_ALIGNMENT
+		ret = ARCH_DYMANIC_OBJ_K_THREAD_ALIGNMENT;
+#else
+		ret = sizeof(void *);
+#endif
+		break;
+	default:
+		ret = sizeof(void *);
+		break;
+	}
+
+	return ret;
+}
+
 static bool node_lessthan(struct rbnode *a, struct rbnode *b)
 {
 	return a < b;
@@ -166,17 +211,24 @@ static inline struct dyn_obj *node_to_dyn_obj(struct rbnode *node)
 	return CONTAINER_OF(node, struct dyn_obj, node);
 }
 
+static inline struct rbnode *dyn_obj_to_node(void *obj)
+{
+	struct dyn_obj *dobj = CONTAINER_OF(obj, struct dyn_obj, data);
+
+	return &dobj->node;
+}
+
 static struct dyn_obj *dyn_object_find(void *obj)
 {
 	struct rbnode *node;
 	struct dyn_obj *ret;
 
 	/* For any dynamically allocated kernel object, the object
-	 * pointer is just a member of the conatining struct dyn_obj,
+	 * pointer is just a member of the containing struct dyn_obj,
 	 * so just a little arithmetic is necessary to locate the
 	 * corresponding struct rbnode
 	 */
-	node = (struct rbnode *)((char *)obj - sizeof(struct rbnode));
+	node = dyn_obj_to_node(obj);
 
 	k_spinlock_key_t key = k_spin_lock(&lists_lock);
 	if (rb_contains(&obj_rb_tree, node)) {
@@ -252,11 +304,11 @@ static void thread_idx_free(uintptr_t tidx)
 	sys_bitfield_set_bit((mem_addr_t)_thread_idx_map, tidx);
 }
 
-struct z_object *z_dynamic_object_create(size_t size)
+struct z_object *z_dynamic_object_aligned_create(size_t align, size_t size)
 {
 	struct dyn_obj *dyn;
 
-	dyn = z_thread_malloc(sizeof(*dyn) + size);
+	dyn = z_thread_aligned_alloc(align, sizeof(*dyn) + size);
 	if (dyn == NULL) {
 		LOG_ERR("could not allocate kernel object, out of memory");
 		return NULL;
@@ -270,7 +322,7 @@ struct z_object *z_dynamic_object_create(size_t size)
 	k_spinlock_key_t key = k_spin_lock(&lists_lock);
 
 	rb_insert(&obj_rb_tree, &dyn->node);
-	sys_dlist_append(&obj_list, &dyn->obj_list);
+	sys_dlist_append(&obj_list, &dyn->dobj_list);
 	k_spin_unlock(&lists_lock, key);
 
 	return &dyn->kobj;
@@ -288,13 +340,6 @@ void *z_impl_k_object_alloc(enum k_objects otype)
 
 	switch (otype) {
 	case K_OBJ_THREAD:
-		/* aligned allocator required for X86 and X86_64 */
-		if (IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_X86_64)) {
-			LOG_ERR("object type '%s' forbidden on x86 and x86_64",
-				otype_to_str(otype));
-			return NULL;
-		}
-
 		if (!thread_idx_alloc(&tidx)) {
 			LOG_ERR("out of free thread indexes");
 			return NULL;
@@ -313,7 +358,8 @@ void *z_impl_k_object_alloc(enum k_objects otype)
 		break;
 	}
 
-	zo = z_dynamic_object_create(obj_size_get(otype));
+	zo = z_dynamic_object_aligned_create(obj_align_get(otype),
+					     obj_size_get(otype));
 	if (zo == NULL) {
 		return NULL;
 	}
@@ -350,7 +396,7 @@ void k_object_free(void *obj)
 	dyn = dyn_object_find(obj);
 	if (dyn != NULL) {
 		rb_remove(&obj_rb_tree, &dyn->node);
-		sys_dlist_remove(&dyn->obj_list);
+		sys_dlist_remove(&dyn->dobj_list);
 
 		if (dyn->kobj.type == K_OBJ_THREAD) {
 			thread_idx_free(dyn->kobj.data.thread_id);
@@ -393,7 +439,7 @@ void z_object_wordlist_foreach(_wordlist_cb_func_t func, void *context)
 
 	k_spinlock_key_t key = k_spin_lock(&lists_lock);
 
-	SYS_DLIST_FOR_EACH_CONTAINER_SAFE(&obj_list, obj, next, obj_list) {
+	SYS_DLIST_FOR_EACH_CONTAINER_SAFE(&obj_list, obj, next, dobj_list) {
 		func(&obj->kobj, context);
 	}
 	k_spin_unlock(&lists_lock, key);
@@ -454,7 +500,7 @@ static void unref_check(struct z_object *ko, uintptr_t index)
 	}
 
 	rb_remove(&obj_rb_tree, &dyn->node);
-	sys_dlist_remove(&dyn->obj_list);
+	sys_dlist_remove(&dyn->dobj_list);
 	k_free(dyn);
 out:
 #endif
@@ -620,11 +666,11 @@ int z_object_validate(struct z_object *ko, enum k_objects otype,
 
 	/* Initialization state checks. _OBJ_INIT_ANY, we don't care */
 	if (likely(init == _OBJ_INIT_TRUE)) {
-		/* Object MUST be intialized */
+		/* Object MUST be initialized */
 		if (unlikely((ko->flags & K_OBJ_FLAG_INITIALIZED) == 0U)) {
 			return -EINVAL;
 		}
-	} else if (init < _OBJ_INIT_TRUE) { /* _OBJ_INIT_FALSE case */
+	} else if (init == _OBJ_INIT_FALSE) { /* _OBJ_INIT_FALSE case */
 		/* Object MUST NOT be initialized */
 		if (unlikely((ko->flags & K_OBJ_FLAG_INITIALIZED) != 0U)) {
 			return -EADDRINUSE;
@@ -761,7 +807,7 @@ char *z_user_string_alloc_copy(const char *src, size_t maxlen)
 	 * properly.
 	 */
 	if (ret != NULL) {
-		ret[actual_len - 1] = '\0';
+		ret[actual_len - 1U] = '\0';
 	}
 out:
 	return ret;
@@ -814,13 +860,42 @@ static int app_shmem_bss_zero(const struct device *unused)
 	region = (struct z_app_region *)&__app_shmem_regions_start;
 
 	for ( ; region < end; region++) {
-		(void)memset(region->bss_start, 0, region->bss_size);
+#if defined(CONFIG_DEMAND_PAGING) && !defined(CONFIG_LINKER_GENERIC_SECTIONS_PRESENT_AT_BOOT)
+		/* When BSS sections are not present at boot, we need to wait for
+		 * paging mechanism to be initialized before we can zero out BSS.
+		 */
+		extern bool z_sys_post_kernel;
+		bool do_clear = z_sys_post_kernel;
+
+		/* During pre-kernel init, z_sys_post_kernel == false, but
+		 * with pinned rodata region, so clear. Otherwise skip.
+		 * In post-kernel init, z_sys_post_kernel == true,
+		 * skip those in pinned rodata region as they have already
+		 * been cleared and possibly already in use. Otherwise clear.
+		 */
+		if (((uint8_t *)region->bss_start >= (uint8_t *)_app_smem_pinned_start) &&
+		    ((uint8_t *)region->bss_start < (uint8_t *)_app_smem_pinned_end)) {
+			do_clear = !do_clear;
+		}
+
+		if (do_clear)
+#endif /* CONFIG_DEMAND_PAGING && !CONFIG_LINKER_GENERIC_SECTIONS_PRESENT_AT_BOOT */
+		{
+			(void)memset(region->bss_start, 0, region->bss_size);
+		}
 	}
 
 	return 0;
 }
 
 SYS_INIT(app_shmem_bss_zero, PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+
+#if defined(CONFIG_DEMAND_PAGING) && !defined(CONFIG_LINKER_GENERIC_SECTIONS_PRESENT_AT_BOOT)
+/* When BSS sections are not present at boot, we need to wait for
+ * paging mechanism to be initialized before we can zero out BSS.
+ */
+SYS_INIT(app_shmem_bss_zero, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+#endif /* CONFIG_DEMAND_PAGING && !CONFIG_LINKER_GENERIC_SECTIONS_PRESENT_AT_BOOT */
 
 /*
  * Default handlers if otherwise unimplemented

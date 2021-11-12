@@ -18,10 +18,12 @@
 #include <stm32_ll_system.h>
 #include <drivers/gpio.h>
 #include <drivers/clock_control/stm32_clock_control.h>
-#include <pinmux/stm32/pinmux_stm32.h>
+#include <pinmux/pinmux_stm32.h>
 #include <drivers/pinmux.h>
 #include <sys/util.h>
 #include <drivers/interrupt_controller/exti_stm32.h>
+#include <pm/device.h>
+#include <pm/device_runtime.h>
 
 #include "stm32_hsem.h"
 #include "gpio_stm32.h"
@@ -112,9 +114,10 @@ static inline uint32_t stm32_pinval_get(int pin)
 /**
  * @brief Configure the hardware.
  */
-int gpio_stm32_configure(uint32_t *base_addr, int pin, int conf, int altf)
+void gpio_stm32_configure(const struct device *dev, int pin, int conf, int altf)
 {
-	GPIO_TypeDef *gpio = (GPIO_TypeDef *)base_addr;
+	const struct gpio_stm32_config *cfg = dev->config;
+	GPIO_TypeDef *gpio = (GPIO_TypeDef *)cfg->base;
 
 	int pin_ll = stm32_pinval_get(pin);
 
@@ -218,7 +221,34 @@ int gpio_stm32_configure(uint32_t *base_addr, int pin, int conf, int altf)
 	z_stm32_hsem_unlock(CFG_HW_GPIO_SEMID);
 #endif  /* CONFIG_SOC_SERIES_STM32F1X */
 
-	return 0;
+}
+
+/**
+ * @brief GPIO port clock handling
+ */
+int gpio_stm32_clock_request(const struct device *dev, bool on)
+{
+	const struct gpio_stm32_config *cfg = dev->config;
+	int ret = 0;
+
+	__ASSERT_NO_MSG(dev != NULL);
+
+	/* enable clock for subsystem */
+	const struct device *clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
+
+	if (on) {
+		ret = clock_control_on(clk,
+					(clock_control_subsys_t *)&cfg->pclken);
+	} else {
+		ret = clock_control_off(clk,
+					(clock_control_subsys_t *)&cfg->pclken);
+	}
+
+	if (ret != 0) {
+		return ret;
+	}
+
+	return ret;
 }
 
 static inline uint32_t gpio_stm32_pin_to_exti_line(int pin)
@@ -229,7 +259,8 @@ static inline uint32_t gpio_stm32_pin_to_exti_line(int pin)
 #elif defined(CONFIG_SOC_SERIES_STM32MP1X)
 	return (((pin * 8) % 32) << 16) | (pin / 4);
 #elif defined(CONFIG_SOC_SERIES_STM32G0X) || \
-	defined(CONFIG_SOC_SERIES_STM32L5X)
+	defined(CONFIG_SOC_SERIES_STM32L5X) || \
+	defined(CONFIG_SOC_SERIES_STM32U5X)
 	return ((pin & 0x3) << (16 + 3)) | (pin >> 2);
 #else
 	return (0xF << ((pin % 4 * 4) + 16)) | (pin / 4);
@@ -258,7 +289,8 @@ static void gpio_stm32_set_exti_source(int port, int pin)
 #elif CONFIG_SOC_SERIES_STM32MP1X
 	LL_EXTI_SetEXTISource(port, line);
 #elif defined(CONFIG_SOC_SERIES_STM32G0X) || \
-	defined(CONFIG_SOC_SERIES_STM32L5X)
+	defined(CONFIG_SOC_SERIES_STM32L5X) || \
+	defined(CONFIG_SOC_SERIES_STM32U5X)
 	LL_EXTI_SetEXTISource(port, line);
 #else
 	LL_SYSCFG_SetEXTISource(port, line);
@@ -276,7 +308,8 @@ static int gpio_stm32_get_exti_source(int pin)
 #elif CONFIG_SOC_SERIES_STM32MP1X
 	port = LL_EXTI_GetEXTISource(line);
 #elif defined(CONFIG_SOC_SERIES_STM32G0X) || \
-	defined(CONFIG_SOC_SERIES_STM32L5X)
+	defined(CONFIG_SOC_SERIES_STM32L5X) || \
+	defined(CONFIG_SOC_SERIES_STM32U5X)
 	port = LL_EXTI_GetEXTISource(line);
 #else
 	port = LL_SYSCFG_GetEXTISource(line);
@@ -309,7 +342,7 @@ static int gpio_stm32_enable_int(int port, int pin)
 	defined(CONFIG_SOC_SERIES_STM32L1X) || \
 	defined(CONFIG_SOC_SERIES_STM32L4X) || \
 	defined(CONFIG_SOC_SERIES_STM32G4X)
-	const struct device *clk = device_get_binding(STM32_CLOCK_CONTROL_NAME);
+	const struct device *clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 	struct stm32_pclken pclken = {
 #ifdef CONFIG_SOC_SERIES_STM32H7X
 		.bus = STM32_CLOCK_BUS_APB4,
@@ -319,8 +352,13 @@ static int gpio_stm32_enable_int(int port, int pin)
 		.enr = LL_APB2_GRP1_PERIPH_SYSCFG
 #endif /* CONFIG_SOC_SERIES_STM32H7X */
 	};
+	int ret;
+
 	/* Enable SYSCFG clock */
-	clock_control_on(clk, (clock_control_subsys_t *) &pclken);
+	ret = clock_control_on(clk, (clock_control_subsys_t *) &pclken);
+	if (ret != 0) {
+		return ret;
+	}
 #endif
 
 	gpio_stm32_set_exti_source(port, pin);
@@ -414,7 +452,6 @@ static int gpio_stm32_port_toggle_bits(const struct device *dev,
 static int gpio_stm32_config(const struct device *dev,
 			     gpio_pin_t pin, gpio_flags_t flags)
 {
-	const struct gpio_stm32_config *cfg = dev->config;
 	int err = 0;
 	int pincfg;
 
@@ -426,6 +463,19 @@ static int gpio_stm32_config(const struct device *dev,
 		goto exit;
 	}
 
+#ifdef CONFIG_PM_DEVICE_RUNTIME
+	enum pm_device_state state;
+
+	(void)pm_device_state_get(dev, &state);
+	/* Enable device clock before configuration (requires bank writes) */
+	if (state != PM_DEVICE_STATE_ACTIVE) {
+		err = pm_device_get(dev);
+		if (err < 0) {
+			return err;
+		}
+	}
+#endif /* CONFIG_PM_DEVICE_RUNTIME */
+
 	if ((flags & GPIO_OUTPUT) != 0) {
 		if ((flags & GPIO_OUTPUT_INIT_HIGH) != 0) {
 			gpio_stm32_port_set_bits_raw(dev, BIT(pin));
@@ -434,7 +484,18 @@ static int gpio_stm32_config(const struct device *dev,
 		}
 	}
 
-	gpio_stm32_configure(cfg->base, pin, pincfg, 0);
+	gpio_stm32_configure(dev, pin, pincfg, 0);
+
+	/* Device released */
+#ifdef CONFIG_PM_DEVICE_RUNTIME
+	/* Release clock only if configuration doesn't require bank writes */
+	if ((flags & GPIO_OUTPUT) == 0) {
+		err = pm_device_put_async(dev);
+		if (err < 0) {
+			return err;
+		}
+	}
+#endif /* CONFIG_PM_DEVICE_RUNTIME */
 
 exit:
 	return err;
@@ -513,6 +574,24 @@ static const struct gpio_driver_api gpio_stm32_driver = {
 	.manage_callback = gpio_stm32_manage_callback,
 };
 
+#ifdef CONFIG_PM_DEVICE
+static int gpio_stm32_pm_device_ctrl(const struct device *dev,
+				     enum pm_device_action action)
+{
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+		return gpio_stm32_clock_request(dev, true);
+	case PM_DEVICE_ACTION_SUSPEND:
+		return gpio_stm32_clock_request(dev, false);
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
+
 /**
  * @brief Initialize GPIO port
  *
@@ -523,39 +602,27 @@ static const struct gpio_driver_api gpio_stm32_driver = {
  *
  * @return 0
  */
-static int gpio_stm32_init(const struct device *device)
+static int gpio_stm32_init(const struct device *dev)
 {
-	const struct gpio_stm32_config *cfg = device->config;
-	struct gpio_stm32_data *data = device->data;
+	struct gpio_stm32_data *data = dev->data;
 
-	data->dev = device;
+	data->dev = dev;
 
-	/* enable clock for subsystem */
-	const struct device *clk =
-		device_get_binding(STM32_CLOCK_CONTROL_NAME);
+#if defined(PWR_CR2_IOSV) && DT_NODE_HAS_STATUS(DT_NODELABEL(gpiog), okay)
+	z_stm32_hsem_lock(CFG_HW_RCC_SEMID, HSEM_LOCK_DEFAULT_RETRY);
+	/* Port G[15:2] requires external power supply */
+	/* Cf: L4/L5 RM, Chapter "Independent I/O supply rail" */
+	LL_PWR_EnableVddIO2();
+	z_stm32_hsem_unlock(CFG_HW_RCC_SEMID);
+#endif
 
-	if (clock_control_on(clk,
-			     (clock_control_subsys_t *)&cfg->pclken) != 0) {
-		return -EIO;
-	}
-
-#ifdef PWR_CR2_IOSV
-	if (cfg->port == STM32_PORTG) {
-		/* Port G[15:2] requires external power supply */
-		/* Cf: L4XX RM, §5.1 Power supplies */
-		z_stm32_hsem_lock(CFG_HW_RCC_SEMID, HSEM_LOCK_DEFAULT_RETRY);
-		if (LL_APB1_GRP1_IsEnabledClock(LL_APB1_GRP1_PERIPH_PWR)) {
-			LL_PWR_EnableVddIO2();
-		} else {
-			LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
-			LL_PWR_EnableVddIO2();
-			LL_APB1_GRP1_DisableClock(LL_APB1_GRP1_PERIPH_PWR);
-		}
-		z_stm32_hsem_unlock(CFG_HW_RCC_SEMID);
-	}
-#endif  /* PWR_CR2_IOSV */
+#ifdef CONFIG_PM_DEVICE_RUNTIME
+	pm_device_enable(dev);
 
 	return 0;
+#else
+	return gpio_stm32_clock_request(dev, true);
+#endif
 }
 
 #define GPIO_DEVICE_INIT(__node, __suffix, __base_addr, __port, __cenr, __bus) \
@@ -570,10 +637,10 @@ static int gpio_stm32_init(const struct device *device)
 	static struct gpio_stm32_data gpio_stm32_data_## __suffix;	       \
 	DEVICE_DT_DEFINE(__node,					       \
 			    gpio_stm32_init,				       \
-			    device_pm_control_nop,			       \
+			    gpio_stm32_pm_device_ctrl,			       \
 			    &gpio_stm32_data_## __suffix,		       \
 			    &gpio_stm32_cfg_## __suffix,		       \
-			    POST_KERNEL,				       \
+			    PRE_KERNEL_1,				       \
 			    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,	       \
 			    &gpio_stm32_driver)
 
@@ -632,9 +699,9 @@ GPIO_DEVICE_INIT_STM32(k, K);
 
 #if defined(CONFIG_SOC_SERIES_STM32F1X)
 
-static int gpio_stm32_afio_init(const struct device *device)
+static int gpio_stm32_afio_init(const struct device *dev)
 {
-	UNUSED(device);
+	UNUSED(dev);
 
 	LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_AFIO);
 

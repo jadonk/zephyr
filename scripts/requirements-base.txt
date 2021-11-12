@@ -7,14 +7,18 @@
 pyelftools>=0.26
 
 # used by dts generation to parse binding YAMLs, also used by
-# sanitycheck to parse YAMLs
+# twister to parse YAMLs, by west, zephyr_module,...
 PyYAML>=5.1
+
+# YAML validation. Used by zephyr_module.
+pykwalify
 
 # used by west_commands
 canopen
 packaging
 progress
 psutil
+pylink-square
 
 # for ram/rom reports
 anytree
@@ -23,7 +27,7 @@ anytree
 intelhex
 
 # it's west
-west>=0.7.2
+west>=0.10.1
 
 # used for windows based 'menuconfig'
 # "win32" is used for 64-bit Windows as well

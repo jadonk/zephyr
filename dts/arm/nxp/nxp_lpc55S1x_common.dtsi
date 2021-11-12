@@ -93,9 +93,30 @@
 			status = "disabled";
 		};
 
+		uuid: flash@9fc70 {
+			compatible = "nxp,lpc-uid";
+			reg = <0x9fc70 0x10>;
+		};
+
 		boot_rom: flash@3000000 {
 			compatible = "soc-nv-flash";
 			reg = <0x3000000 DT_SIZE_K(128)>;
+		};
+	};
+
+	iocon: iocon@1000 {
+		compatible = "nxp,lpc-iocon";
+		reg = <0x1000 0x100>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x1000 0x100>;
+		pio0: pio0@0 {
+			compatible = "nxp,lpc-iocon-pio";
+			reg = <0x0 0x80>;
+		};
+		pio1: pio0@80 {
+			compatible = "nxp,lpc-iocon-pio";
+			reg = <0x80 0x80>;
 		};
 	};
 
@@ -106,6 +127,7 @@
 		label = "GPIO_0";
 		gpio-controller;
 		#gpio-cells = <2>;
+		port = <0>;
 	};
 
 	gpio1: gpio@1 {
@@ -115,6 +137,7 @@
 		label = "GPIO_1";
 		gpio-controller;
 		#gpio-cells = <2>;
+		port = <1>;
 	};
 
 	flexcomm0: flexcomm@86000 {

@@ -38,8 +38,6 @@ struct wdt_sam0_dev_data {
 	bool timeout_valid;
 };
 
-DEVICE_DT_INST_DECLARE(0);
-
 static struct wdt_sam0_dev_data wdt_sam0_data = { 0 };
 
 static void wdt_sam0_wait_synchronization(void)
@@ -280,6 +278,6 @@ static int wdt_sam0_init(const struct device *dev)
 
 static struct wdt_sam0_dev_data wdt_sam0_data;
 
-DEVICE_DT_INST_DEFINE(0, wdt_sam0_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, wdt_sam0_init, NULL,
 		    &wdt_sam0_data, NULL, PRE_KERNEL_1,
 		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &wdt_sam0_api);

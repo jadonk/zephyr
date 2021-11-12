@@ -68,37 +68,25 @@ config FS_LITTLEFS_BLOCK_CYCLES
 	  is moved to another block.  Set to a non-positive value to
 	  disable leveling.
 
-menuconfig FS_LITTLEFS_FC_MEM_POOL
-	bool "Enable flexible file cache sizes for littlefs"
-	help
-	  littlefs requires a per-file buffer to cache data.  For
-	  applications that use the default configuration parameters a
-	  memory slab is reserved to support up to
-	  FS_LITTLE_FS_NUM_FILES blocks of FS_LITTLEFS_CACHE_SIZE bytes.
-
-	  When applications customize littlefs configurations and
-	  support different cache sizes for different partitions this
-	  preallocation is inadequate.
-
-	  Select this feature to enable a memory pool allocator for
-	  littlefs file caches.
-
-if FS_LITTLEFS_FC_MEM_POOL
-
-config FS_LITTLEFS_FC_MEM_POOL_MIN_SIZE
-	int "Minimum block size for littlefs file cache memory pool"
-	default 16
-
-config FS_LITTLEFS_FC_MEM_POOL_MAX_SIZE
-	int "Maximum block size for littlefs file cache memory pool"
-	default 1024
-
-config FS_LITTLEFS_FC_MEM_POOL_NUM_BLOCKS
-	int "Number of maximum sized blocks in littlefs file cache memory pool"
-	default 2
-
-endif # FS_LITTLEFS_FC_MEM_POOL
-
 endmenu
+
+config FS_LITTLEFS_FC_HEAP_SIZE
+	int "Enable flexible file cache sizes for littlefs"
+	default 0
+	help
+	  littlefs requires a per-file buffer to cache data.
+
+	  When applications customize littlefs configurations and support
+	  different cache sizes for different partitions this preallocation is
+	  inadequate as an application might require a small number of files
+	  using a large cache size and a larger number of files using a
+	  smaller cache size.  In that case application should provide a
+	  positive value for the heap size.  Be aware that there is a
+	  per-allocation overhead that affects how much usable space is
+	  present in the heap.
+
+	  If this option is set to a non-positive value the heap is sized to
+	  support up to FS_LITTLE_FS_NUM_FILES blocks of
+	  FS_LITTLEFS_CACHE_SIZE bytes.
 
 endif # FILE_SYSTEM_LITTLEFS

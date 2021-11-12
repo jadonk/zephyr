@@ -19,9 +19,6 @@ struct spi_nrfx_data {
 	const struct device *dev;
 	size_t chunk_len;
 	bool   busy;
-#ifdef CONFIG_PM_DEVICE
-	uint32_t pm_state;
-#endif
 };
 
 struct spi_nrfx_config {
@@ -276,55 +273,30 @@ static int init_spi(const struct device *dev)
 		return -EBUSY;
 	}
 
-#ifdef CONFIG_PM_DEVICE
-	dev_data->pm_state = DEVICE_PM_ACTIVE_STATE;
-#endif
-
 	return 0;
 }
 
 #ifdef CONFIG_PM_DEVICE
 static int spi_nrfx_pm_control(const struct device *dev,
-				uint32_t ctrl_command,
-				void *context, device_pm_cb cb, void *arg)
+			       enum pm_device_action action)
 {
 	int ret = 0;
 	struct spi_nrfx_data *data = get_dev_data(dev);
 	const struct spi_nrfx_config *config = get_dev_config(dev);
 
-	if (ctrl_command == DEVICE_PM_SET_POWER_STATE) {
-		uint32_t new_state = *((const uint32_t *)context);
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+		ret = init_spi(dev);
+		/* Force reconfiguration before next transfer */
+		data->ctx.config = NULL;
+		break;
 
-		if (new_state != data->pm_state) {
-			switch (new_state) {
-			case DEVICE_PM_ACTIVE_STATE:
-				ret = init_spi(dev);
-				/* Force reconfiguration before next transfer */
-				data->ctx.config = NULL;
-				break;
+	case PM_DEVICE_ACTION_SUSPEND:
+		nrfx_spi_uninit(&config->spi);
+		break;
 
-			case DEVICE_PM_LOW_POWER_STATE:
-			case DEVICE_PM_SUSPEND_STATE:
-			case DEVICE_PM_OFF_STATE:
-				if (data->pm_state == DEVICE_PM_ACTIVE_STATE) {
-					nrfx_spi_uninit(&config->spi);
-				}
-				break;
-
-			default:
-				ret = -ENOTSUP;
-			}
-			if (!ret) {
-				data->pm_state = new_state;
-			}
-		}
-	} else {
-		__ASSERT_NO_MSG(ctrl_command == DEVICE_PM_GET_POWER_STATE);
-		*((uint32_t *)context) = data->pm_state;
-	}
-
-	if (cb) {
-		cb(dev, ret, context, arg);
+	default:
+		ret = -ENOTSUP;
 	}
 
 	return ret;

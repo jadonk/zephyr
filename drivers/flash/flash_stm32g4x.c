@@ -46,11 +46,37 @@ bool flash_stm32_valid_range(const struct device *dev, off_t offset,
 		flash_stm32_range_exists(dev, offset, len);
 }
 
+static inline void flush_cache(FLASH_TypeDef *regs)
+{
+	if (regs->ACR & FLASH_ACR_DCEN) {
+		regs->ACR &= ~FLASH_ACR_DCEN;
+		/* Datasheet: DCRST: Data cache reset
+		 * This bit can be written only when thes data cache is disabled
+		 */
+		regs->ACR |= FLASH_ACR_DCRST;
+		regs->ACR &= ~FLASH_ACR_DCRST;
+		regs->ACR |= FLASH_ACR_DCEN;
+	}
+
+	if (regs->ACR & FLASH_ACR_ICEN) {
+		regs->ACR &= ~FLASH_ACR_ICEN;
+		/* Datasheet: ICRST: Instruction cache reset :
+		 * This bit can be written only when the instruction cache
+		 * is disabled
+		 */
+		regs->ACR |= FLASH_ACR_ICRST;
+		regs->ACR &= ~FLASH_ACR_ICRST;
+		regs->ACR |= FLASH_ACR_ICEN;
+	}
+}
 
 static int write_dword(const struct device *dev, off_t offset, uint64_t val)
 {
 	volatile uint32_t *flash = (uint32_t *)(offset + CONFIG_FLASH_BASE_ADDRESS);
 	FLASH_TypeDef *regs = FLASH_STM32_REGS(dev);
+#if defined(FLASH_OPTR_DBANK)
+	bool dcache_enabled = false;
+#endif /* FLASH_OPTR_DBANK */
 	uint32_t tmp;
 	int rc;
 
@@ -69,9 +95,20 @@ static int write_dword(const struct device *dev, off_t offset, uint64_t val)
 	/* Check if this double word is erased */
 	if (flash[0] != 0xFFFFFFFFUL ||
 	    flash[1] != 0xFFFFFFFFUL) {
-		LOG_ERR("Word at offs %d not erased", offset);
+		LOG_ERR("Word at offs %ld not erased", (long)offset);
 		return -EIO;
 	}
+
+#if defined(FLASH_OPTR_DBANK)
+	/*
+	 * Disable the data cache to avoid the silicon errata ES0430 Rev 7 2.2.2:
+	 * "Data cache might be corrupted during Flash memory read-while-write operation"
+	 */
+	if (regs->ACR & FLASH_ACR_DCEN) {
+		dcache_enabled = true;
+		regs->ACR &= (~FLASH_ACR_DCEN);
+	}
+#endif /* FLASH_OPTR_DBANK */
 
 	/* Set the PG bit */
 	regs->CR |= FLASH_CR_PG;
@@ -88,6 +125,15 @@ static int write_dword(const struct device *dev, off_t offset, uint64_t val)
 
 	/* Clear the PG bit */
 	regs->CR &= (~FLASH_CR_PG);
+
+#if defined(FLASH_OPTR_DBANK)
+	/* Reset/enable the data cache if previously enabled */
+	if (dcache_enabled) {
+		regs->ACR |= FLASH_ACR_DCRST;
+		regs->ACR &= (~FLASH_ACR_DCRST);
+		regs->ACR |= FLASH_ACR_DCEN;
+	}
+#endif /* FLASH_OPTR_DBANK */
 
 	return rc;
 }
@@ -159,6 +205,8 @@ static int erase_page(const struct device *dev, unsigned int offset)
 	/* Wait for the BSY bit */
 	rc = flash_stm32_wait_flash_idle(dev);
 
+	flush_cache(regs);
+
 #ifdef FLASH_OPTR_DBANK
 	regs->CR &= ~(FLASH_CR_PER | FLASH_CR_BKER);
 #else
@@ -172,7 +220,8 @@ int flash_stm32_block_erase_loop(const struct device *dev,
 				 unsigned int offset,
 				 unsigned int len)
 {
-	unsigned int address = offset, rc = 0;
+	unsigned int address = offset;
+	int rc = 0;
 
 	for (; address <= offset + len - 1 ; address += FLASH_PAGE_SIZE) {
 		rc = erase_page(dev, address);

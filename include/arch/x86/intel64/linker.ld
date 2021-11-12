@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Intel Corp.
+ * Copyright (c) 2019-2021 Intel Corp.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,14 +9,16 @@
 #define ROMABLE_REGION RAM
 #define RAMABLE_REGION RAM
 
+#define MMU_PAGE_ALIGN		. = ALIGN(CONFIG_MMU_PAGE_SIZE);
+
 /* Used to align areas with separate memory permission characteristics
  * so that the page permissions can be set in the MMU. Without this,
  * the kernel is just one blob with the same RWX permissions on all RAM
  */
 #ifdef CONFIG_SRAM_REGION_PERMISSIONS
-	#define MMU_PAGE_ALIGN	. = ALIGN(CONFIG_MMU_PAGE_SIZE);
+	#define MMU_PAGE_ALIGN_PERM	MMU_PAGE_ALIGN
 #else
-	#define MMU_PAGE_ALIGN
+	#define MMU_PAGE_ALIGN_PERM
 #endif
 
 ENTRY(CONFIG_KERNEL_ENTRY)
@@ -29,17 +31,17 @@ SECTIONS
 	 * ... there is no 16-bit code yet, but there will be when we add SMP.
 	 */
 
-	.locore : ALIGN(16)
+	SECTION_PROLOGUE(.locore,,)
 	{
 	_locore_start = .;
 	*(.locore)
 	*(.locore.*)
-	MMU_PAGE_ALIGN
+	MMU_PAGE_ALIGN_PERM
 	_locore_end = .;
 
 	_lorodata_start = .;
 	*(.lorodata)
-	MMU_PAGE_ALIGN
+	MMU_PAGE_ALIGN_PERM
 	_lodata_start = .;
 
 	*(.lodata)
@@ -54,7 +56,7 @@ SECTIONS
 	 * On x86-64 the IDT is in rodata and doesn't need to be in the
 	 * trampoline page.
 	 */
-	MMU_PAGE_ALIGN
+	MMU_PAGE_ALIGN_PERM
 	z_shared_kernel_page_start = .;
 #endif /* CONFIG_X86_KPTI */
 
@@ -63,14 +65,14 @@ SECTIONS
 
 #ifdef CONFIG_X86_KPTI
 	*(.trampolines)
-	MMU_PAGE_ALIGN
+	MMU_PAGE_ALIGN_PERM
 	z_shared_kernel_page_end = .;
 
 	ASSERT(z_shared_kernel_page_end - z_shared_kernel_page_start == 4096,
 	       "shared kernel area is not one memory page");
 #endif /* CONFIG_X86_KPTI */
 
-	MMU_PAGE_ALIGN
+	. = ALIGN(CONFIG_MMU_PAGE_SIZE);
 	_lodata_end = .;
 	} > LOCORE
 
@@ -83,30 +85,34 @@ SECTIONS
 	 * placed above 1MB to avoid the by memory hole at 0x90000-0xFFFFF).
 	 */
 
-	SECTION_PROLOGUE(_TEXT_SECTION_NAME,,ALIGN(16))
+	SECTION_PROLOGUE(_TEXT_SECTION_NAME,,)
 	{
-	_image_rom_start = .;
-	_image_text_start = .;
+	. = ALIGN(16);
+	__rom_region_start = .;
+	__text_region_start = .;
+	z_mapped_start = .;
 	*(.text)
 	*(.text.*)
 
 	#include <linker/kobject-text.ld>
 
-	MMU_PAGE_ALIGN
-	} GROUP_LINK_IN(ROMABLE_REGION)
+	MMU_PAGE_ALIGN_PERM
+	} GROUP_ROM_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
-	_image_text_end = .;
-	_image_text_size = _image_text_end - _image_text_start;
-	_image_rodata_start = .;
+	__text_region_end = .;
+	__text_region_size = __text_region_end - __text_region_start;
+	__rodata_region_start = .;
 
 	#include <linker/common-rom.ld>
 	#include <linker/thread-local-storage.ld>
 
-	SECTION_PROLOGUE(_RODATA_SECTION_NAME,,ALIGN(16))
+	SECTION_PROLOGUE(_RODATA_SECTION_NAME,,)
 	{
+	. = ALIGN(16);
 	*(.rodata)
 	*(.rodata.*)
 
+	MMU_PAGE_ALIGN
 	#include <snippets-rodata.ld>
 
 #ifdef CONFIG_X86_MMU
@@ -117,19 +123,19 @@ SECTIONS
 #endif /* CONFIG_X86_MMU */
 
 	#include <linker/kobject-rom.ld>
-	} GROUP_LINK_IN(ROMABLE_REGION)
+	} GROUP_ROM_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
 #include <linker/cplusplus-rom.ld>
 
-	MMU_PAGE_ALIGN
-	_image_rodata_end = .;
-	_image_rodata_size = _image_rodata_end - _image_rodata_start;
-	_image_rom_end = .;
+	MMU_PAGE_ALIGN_PERM
+	__rodata_region_end = .;
+	__rodata_region_size = __rodata_region_end - __rodata_region_start;
+	__rom_region_end = .;
 
 #ifdef CONFIG_USERSPACE
 	/* APP SHARED MEMORY REGION */
-#define SMEM_PARTITION_ALIGN(size) MMU_PAGE_ALIGN
-#define APP_SHARED_ALIGN  MMU_PAGE_ALIGN
+#define SMEM_PARTITION_ALIGN(size) MMU_PAGE_ALIGN_PERM
+#define APP_SHARED_ALIGN  MMU_PAGE_ALIGN_PERM
 
 #include <app_smem.ld>
 
@@ -140,9 +146,14 @@ SECTIONS
 	_app_smem_num_words = _app_smem_size >> 2;
 #endif /* CONFIG_USERSPACE */
 
-	SECTION_PROLOGUE(_BSS_SECTION_NAME, (NOLOAD), ALIGN(16))
+/* This should be put here before BSS section, otherwise the .bss.__gcov will
+ * be put in BSS section. That causes gcov not work properly */
+#include <snippets-ram-sections.ld>
+
+	SECTION_PROLOGUE(_BSS_SECTION_NAME, (NOLOAD),)
 	{
-	MMU_PAGE_ALIGN
+	. = ALIGN(16);
+	MMU_PAGE_ALIGN_PERM
 #ifndef CONFIG_USERSPACE
 	_image_ram_start = .;
 #endif
@@ -153,7 +164,7 @@ SECTIONS
 	*(COMMON)
 	. = ALIGN(4);	/* so __bss_num_dwords is exact */
 	__bss_end = .;
-	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
+	} GROUP_NOLOAD_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
 	__bss_num_dwords = (__bss_end - __bss_start) >> 2;
 
@@ -161,27 +172,35 @@ SECTIONS
 
 #include <snippets-sections.ld>
 
-	SECTION_PROLOGUE(_DATA_SECTION_NAME,,ALIGN(16))
+	SECTION_PROLOGUE(_DATA_SECTION_NAME,,)
 	{
+	. = ALIGN(16);
 	*(.data)
 	*(.data.*)
 	#include <snippets-rwdata.ld>
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
-#include <snippets-ram-sections.ld>
 #include <linker/common-ram.ld>
 #include <linker/cplusplus-ram.ld>
 #include <arch/x86/pagetables.ld>
 
-/* Must be last in RAM */
-#include <linker/kobject.ld>
+/* Located in generated directory. This file is populated by the
+ * zephyr_linker_sources() Cmake function.
+ */
+#include <snippets-data-sections.ld>
 
+/* Must be last in RAM */
+#include <linker/kobject-data.ld>
+	MMU_PAGE_ALIGN
 	_image_ram_end = .;
+	z_mapped_end = .;
 	_end = .;
 
 	/* All unused memory also owned by the kernel for heaps */
 	__kernel_ram_end = KERNEL_BASE_ADDR + KERNEL_RAM_SIZE;
 	__kernel_ram_size = __kernel_ram_end - __kernel_ram_start;
+
+	z_mapped_size = z_mapped_end - z_mapped_start;
 
 #include <linker/debug-sections.ld>
 

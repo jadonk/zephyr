@@ -36,18 +36,26 @@
 #if CONFIG_LOG_BACKEND_SWO_FREQ_HZ == 0
 #define SWO_FREQ_DIV  1
 #else
-#if DT_NODE_HAS_PROP(DT_PATH(cpus, cpu_0), clock_frequency)
-#define CPU_FREQ DT_PROP(DT_PATH(cpus, cpu_0), clock_frequency)
+
+/* Set reference frequency which can be custom or cpu frequency. */
+#if DT_NODE_HAS_PROP(DT_PATH(cpus, cpu_0), swo_ref_frequency)
+#define SWO_REF_FREQ DT_PROP(DT_PATH(cpus, cpu_0), swo_ref_frequency)
+#elif DT_NODE_HAS_PROP(DT_PATH(cpus, cpu_0), clock_frequency)
+#define SWO_REF_FREQ DT_PROP(DT_PATH(cpus, cpu_0), clock_frequency)
 #else
 #error "Missing DT 'clock-frequency' property on cpu@0 node"
 #endif
-#define SWO_FREQ (CPU_FREQ + (CONFIG_LOG_BACKEND_SWO_FREQ_HZ / 2))
-#define SWO_FREQ_DIV  (SWO_FREQ / CONFIG_LOG_BACKEND_SWO_FREQ_HZ)
+
+#define SWO_FREQ_DIV \
+	((SWO_REF_FREQ + (CONFIG_LOG_BACKEND_SWO_FREQ_HZ / 2)) / \
+		CONFIG_LOG_BACKEND_SWO_FREQ_HZ)
+
 #if SWO_FREQ_DIV > 0xFFFF
 #error CONFIG_LOG_BACKEND_SWO_FREQ_HZ is too low. SWO clock divider is 16-bit. \
 	Minimum supported SWO clock frequency is \
-	[CPU Clock Frequency]/2^16.
+	[Reference Clock Frequency]/2^16.
 #endif
+
 #endif
 
 static uint8_t buf[1];
@@ -74,7 +82,15 @@ static void log_backend_swo_put(const struct log_backend *const backend,
 	log_backend_std_put(&log_output_swo, flag, msg);
 }
 
-static void log_backend_swo_init(void)
+static void log_backend_swo_process(const struct log_backend *const backend,
+				    union log_msg2_generic *msg)
+{
+	uint32_t flags = log_backend_std_get_flags();
+
+	log_output_msg2_process(&log_output_swo, &msg->log, flags);
+}
+
+static void log_backend_swo_init(struct log_backend const *const backend)
 {
 	/* Enable DWT and ITM units */
 	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -91,7 +107,8 @@ static void log_backend_swo_init(void)
 	/* Enable unprivileged access to ITM stimulus ports */
 	ITM->TPR  = 0x0;
 	/* Configure Debug Watchpoint and Trace */
-	DWT->CTRL = 0x400003FE;
+	DWT->CTRL &= (DWT_CTRL_POSTPRESET_Msk | DWT_CTRL_POSTINIT_Msk | DWT_CTRL_CYCCNTENA_Msk);
+	DWT->CTRL |= (DWT_CTRL_POSTPRESET_Msk | DWT_CTRL_POSTINIT_Msk);
 	/* Configure Formatter and Flush Control Register */
 	TPI->FFCR = 0x00000100;
 	/* Enable ITM, set TraceBusID=1, no local timestamp generation */
@@ -135,10 +152,11 @@ static void log_backend_swo_sync_hexdump(
 }
 
 const struct log_backend_api log_backend_swo_api = {
-	.put = IS_ENABLED(CONFIG_LOG_IMMEDIATE) ? NULL : log_backend_swo_put,
-	.put_sync_string = IS_ENABLED(CONFIG_LOG_IMMEDIATE) ?
+	.process = IS_ENABLED(CONFIG_LOG2) ? log_backend_swo_process : NULL,
+	.put = IS_ENABLED(CONFIG_LOG_MODE_DEFERRED) ? log_backend_swo_put : NULL,
+	.put_sync_string = IS_ENABLED(CONFIG_LOG_MODE_IMMEDIATE) ?
 			log_backend_swo_sync_string : NULL,
-	.put_sync_hexdump = IS_ENABLED(CONFIG_LOG_IMMEDIATE) ?
+	.put_sync_hexdump = IS_ENABLED(CONFIG_LOG_MODE_IMMEDIATE) ?
 			log_backend_swo_sync_hexdump : NULL,
 	.panic = log_backend_swo_panic,
 	.init = log_backend_swo_init,

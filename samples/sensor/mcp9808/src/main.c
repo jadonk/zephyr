@@ -84,10 +84,19 @@ static void trigger_handler(const struct device *dev,
 {
 	struct sensor_value temp;
 	static size_t cnt;
+	int rc;
 
 	++cnt;
-	sensor_sample_fetch(dev);
-	sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &temp);
+	rc = sensor_sample_fetch(dev);
+	if (rc != 0) {
+		printf("sensor_sample_fetch error: %d\n", rc);
+		return;
+	}
+	rc = sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &temp);
+	if (rc != 0) {
+		printf("sensor_channel_get error: %d\n", rc);
+		return;
+	}
 
 	printf("trigger fired %u, temp %g deg C\n", cnt,
 	       sensor_value_to_double(&temp));
@@ -97,12 +106,15 @@ static void trigger_handler(const struct device *dev,
 
 void main(void)
 {
-	const char *const devname = DT_LABEL(DT_INST(0, microchip_mcp9808));
-	const struct device *dev = device_get_binding(devname);
+	const struct device *dev = DEVICE_DT_GET_ANY(microchip_mcp9808);
 	int rc;
 
 	if (dev == NULL) {
-		printf("Device %s not found.\n", devname);
+		printf("Device not found.\n");
+		return;
+	}
+	if (!device_is_ready(dev)) {
+		printf("Device %s is not ready.\n", dev->name);
 		return;
 	}
 

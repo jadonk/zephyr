@@ -12,7 +12,18 @@
 #include "intc_gicv3_priv.h"
 
 /* Redistributor base addresses for each core */
-mem_addr_t gic_rdists[GIC_NUM_CPU_IF];
+mem_addr_t gic_rdists[CONFIG_MP_NUM_CPUS];
+
+#if defined(CONFIG_ARMV8_A_NS) || defined(CONFIG_GIC_SINGLE_SECURITY_STATE)
+#define IGROUPR_VAL	0xFFFFFFFFU
+#else
+#define IGROUPR_VAL	0x0U
+#endif
+
+static inline mem_addr_t gic_get_rdist(void)
+{
+	return gic_rdists[arch_curr_cpu()->id];
+}
 
 /*
  * Wait for register write pending
@@ -24,7 +35,7 @@ static int gic_wait_rwp(uint32_t intid)
 	mem_addr_t base;
 
 	if (intid < GIC_SPI_INT_BASE) {
-		base = (GIC_GET_RDIST(GET_CPUID) + GICR_CTLR);
+		base = (gic_get_rdist() + GICR_CTLR);
 		rwp_mask = BIT(GICR_CTLR_RWP);
 	} else {
 		base = GICD_CTLR;
@@ -73,6 +84,17 @@ void arm_gic_irq_enable(unsigned int intid)
 	uint32_t idx = intid / GIC_NUM_INTR_PER_REG;
 
 	sys_write32(mask, ISENABLER(GET_DIST_BASE(intid), idx));
+
+#ifdef CONFIG_ARMV8_A_NS
+	/*
+	 * Affinity routing is enabled for Non-secure state (GICD_CTLR.ARE_NS
+	 * is set to '1' when GIC distributor is initialized) ,so need to set
+	 * SPI's affinity, now set it to be the PE on which it is enabled.
+	 */
+	if (GIC_IS_SPI(intid))
+		sys_write64(MPIDR_TO_CORE(GET_MPIDR()),
+				IROUTER(GET_DIST_BASE(intid), intid));
+#endif
 }
 
 void arm_gic_irq_disable(unsigned int intid)
@@ -170,7 +192,7 @@ static void gicv3_cpuif_init(void)
 	uint32_t icc_sre;
 	uint32_t intid;
 
-	mem_addr_t base = gic_rdists[GET_CPUID] + GICR_SGI_BASE_OFF;
+	mem_addr_t base = gic_get_rdist() + GICR_SGI_BASE_OFF;
 
 	/* Disable all sgi ppi */
 	sys_write32(BIT_MASK(GIC_NUM_INTR_PER_REG), ICENABLER(base, 0));
@@ -180,12 +202,11 @@ static void gicv3_cpuif_init(void)
 	/* Clear pending */
 	sys_write32(BIT_MASK(GIC_NUM_INTR_PER_REG), ICPENDR(base, 0));
 
-	/* Configure all SGIs/PPIs as G1S.
-	 * TODO: G1S or G1NS dependending on Zephyr is run in EL1S
-	 * or EL1NS respectively.
+	/* Configure all SGIs/PPIs as G1S or G1NS depending on Zephyr
+	 * is run in EL1S or EL1NS respectively.
 	 * All interrupts will be delivered as irq
 	 */
-	sys_write32(0, IGROUPR(base, 0));
+	sys_write32(IGROUPR_VAL, IGROUPR(base, 0));
 	sys_write32(BIT_MASK(GIC_NUM_INTR_PER_REG), IGROUPMODR(base, 0));
 
 	/*
@@ -207,13 +228,13 @@ static void gicv3_cpuif_init(void)
 	 */
 	icc_sre = read_sysreg(ICC_SRE_EL1);
 
-	if (!(icc_sre & ICC_SRE_ELx_SRE)) {
-		icc_sre = (icc_sre | ICC_SRE_ELx_SRE |
-			   ICC_SRE_ELx_DIB | ICC_SRE_ELx_DFB);
+	if (!(icc_sre & ICC_SRE_ELx_SRE_BIT)) {
+		icc_sre = (icc_sre | ICC_SRE_ELx_SRE_BIT |
+			   ICC_SRE_ELx_DIB_BIT | ICC_SRE_ELx_DFB_BIT);
 		write_sysreg(icc_sre, ICC_SRE_EL1);
 		icc_sre = read_sysreg(ICC_SRE_EL1);
 
-		__ASSERT_NO_MSG(icc_sre & ICC_SRE_ELx_SRE);
+		__ASSERT_NO_MSG(icc_sre & ICC_SRE_ELx_SRE_BIT);
 	}
 
 	write_sysreg(GIC_IDLE_PRIO, ICC_PMR_EL1);
@@ -236,6 +257,20 @@ static void gicv3_dist_init(void)
 	num_ints &= GICD_TYPER_ITLINESNUM_MASK;
 	num_ints = (num_ints + 1) << 5;
 
+	/* Disable the distributor */
+	sys_write32(0, GICD_CTLR);
+	gic_wait_rwp(GIC_SPI_INT_BASE);
+#ifdef CONFIG_GIC_SINGLE_SECURITY_STATE
+	/*
+	 * Before configuration, we need to check whether
+	 * the GIC single security state mode is supported.
+	 * Make sure GICD_CTRL_NS is 1.
+	 */
+	sys_set_bit(GICD_CTLR, GICD_CTRL_NS);
+	__ASSERT(sys_test_bit(GICD_CTLR, GICD_CTRL_NS),
+		"Current GIC does not support single security state");
+#endif
+
 	/*
 	 * Default configuration of all SPIs
 	 */
@@ -248,8 +283,7 @@ static void gicv3_dist_init(void)
 		/* Clear pending */
 		sys_write32(BIT_MASK(GIC_NUM_INTR_PER_REG),
 			    ICPENDR(base, idx));
-		/* All SPIs are G1S and owned by Zephyr */
-		sys_write32(0, IGROUPR(base, idx));
+		sys_write32(IGROUPR_VAL, IGROUPR(base, idx));
 		sys_write32(BIT_MASK(GIC_NUM_INTR_PER_REG),
 			    IGROUPMODR(base, idx));
 
@@ -270,25 +304,56 @@ static void gicv3_dist_init(void)
 		sys_write32(0, ICFGR(base, idx));
 	}
 
+#ifdef CONFIG_ARMV8_A_NS
+	/* Enable distributor with ARE */
+	sys_write32(BIT(GICD_CTRL_ARE_NS) | BIT(GICD_CTLR_ENABLE_G1NS),
+		    GICD_CTLR);
+#elif defined(CONFIG_GIC_SINGLE_SECURITY_STATE)
+	/*
+	 * For GIC single security state, the config GIC_SINGLE_SECURITY_STATE
+	 * means the GIC is under single security state which has only two
+	 * groups: group 0 and group 1.
+	 * Then set GICD_CTLR_ARE and GICD_CTLR_ENABLE_G1 to enable Group 1
+	 * interrupt.
+	 * Since the GICD_CTLR_ARE and GICD_CTRL_ARE_S share BIT(4), and
+	 * similarly the GICD_CTLR_ENABLE_G1 and GICD_CTLR_ENABLE_G1NS share
+	 * BIT(1), we can reuse them.
+	 */
+	sys_write32(BIT(GICD_CTRL_ARE_S) | BIT(GICD_CTLR_ENABLE_G1NS),
+		    GICD_CTLR);
+#else
 	/* enable Group 1 secure interrupts */
 	sys_set_bit(GICD_CTLR, GICD_CTLR_ENABLE_G1S);
+#endif
 }
 
-/* TODO: add arm_gic_secondary_init() for multicore support */
+static void __arm_gic_init(void)
+{
+	uint8_t cpu;
+
+	cpu = arch_curr_cpu()->id;
+	gic_rdists[cpu] = GIC_RDIST_BASE + MPIDR_TO_CORE(GET_MPIDR()) * 0x20000;
+
+	gicv3_rdist_enable(gic_get_rdist());
+
+	gicv3_cpuif_init();
+}
+
 int arm_gic_init(const struct device *unused)
 {
 	ARG_UNUSED(unused);
 
 	gicv3_dist_init();
 
-	/* Fixme: populate each redistributor */
-	gic_rdists[0] = GIC_RDIST_BASE;
-
-	gicv3_rdist_enable(GIC_GET_RDIST(GET_CPUID));
-
-	gicv3_cpuif_init();
+	__arm_gic_init();
 
 	return 0;
 }
-
 SYS_INIT(arm_gic_init, PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+
+#ifdef CONFIG_SMP
+void arm_gic_secondary_init(void)
+{
+	__arm_gic_init();
+}
+#endif

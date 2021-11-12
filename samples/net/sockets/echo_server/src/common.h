@@ -11,7 +11,7 @@
 	defined(CONFIG_COVERAGE)
 #define STACK_SIZE 4096
 #else
-#define STACK_SIZE 1024
+#define STACK_SIZE 2048
 #endif
 
 #if IS_ENABLED(CONFIG_NET_TC_THREAD_COOPERATIVE)
@@ -42,13 +42,13 @@ struct data {
 		char recv_buffer[RECV_BUFFER_SIZE];
 		uint32_t counter;
 		atomic_t bytes_received;
-		struct k_delayed_work stats_print;
+		struct k_work_delayable stats_print;
 	} udp;
 
 	struct {
 		int sock;
 		atomic_t bytes_received;
-		struct k_delayed_work stats_print;
+		struct k_work_delayable stats_print;
 
 		struct {
 			int sock;
@@ -81,3 +81,19 @@ static inline int init_vlan(void)
 	return 0;
 }
 #endif /* CONFIG_NET_VLAN */
+
+#if defined(CONFIG_NET_L2_IPIP)
+int init_tunnel(void);
+bool is_tunnel(struct net_if *iface);
+#else
+static inline int init_tunnel(void)
+{
+	return 0;
+}
+
+static inline bool is_tunnel(struct net_if *iface)
+{
+	ARG_UNUSED(iface);
+	return false;
+}
+#endif /* CONFIG_NET_L2_IPIP */

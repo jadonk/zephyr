@@ -5,7 +5,6 @@
  */
 
 struct ll_scan_set {
-	struct evt_hdr  evt;
 	struct ull_hdr  ull;
 	struct lll_scan lll;
 
@@ -39,9 +38,11 @@ struct ll_scan_set {
 };
 
 struct ll_scan_aux_set {
-	struct evt_hdr      evt;
 	struct ull_hdr      ull;
 	struct lll_scan_aux lll;
+
+	/* lll_scan or lll_sync */
+	void *parent;
 
 	struct node_rx_hdr *rx_head;
 	struct node_rx_hdr *rx_last;

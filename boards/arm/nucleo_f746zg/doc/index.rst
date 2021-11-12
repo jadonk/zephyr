@@ -93,33 +93,35 @@ Supported Features
 The Zephyr nucleo_f746zg board configuration supports the following hardware
 features:
 
-+-----------+------------+-------------------------------------+
-| Interface | Controller | Driver/Component                    |
-+===========+============+=====================================+
-| NVIC      | on-chip    | nested vector interrupt controller  |
-+-----------+------------+-------------------------------------+
-| UART      | on-chip    | serial port                         |
-+-----------+------------+-------------------------------------+
-| PINMUX    | on-chip    | pinmux                              |
-+-----------+------------+-------------------------------------+
-| GPIO      | on-chip    | gpio                                |
-+-----------+------------+-------------------------------------+
-| ETHERNET  | on-chip    | ethernet                            |
-+-----------+------------+-------------------------------------+
-| USB       | on-chip    | usb_device                          |
-+-----------+------------+-------------------------------------+
-| COUNTER   | on-chip    | rtc                                 |
-+-----------+------------+-------------------------------------+
-| I2C       | on-chip    | i2c                                 |
-+-----------+------------+-------------------------------------+
-| PWM       | on-chip    | pwm                                 |
-+-----------+------------+-------------------------------------+
-| SPI       | on-chip    | spi                                 |
-+-----------+------------+-------------------------------------+
-| WATCHDOG  | on-chip    | independent watchdog                |
-+-----------+------------+-------------------------------------+
-| ADC       | on-chip    | ADC Controller                      |
-+-----------+------------+-------------------------------------+
++-------------+------------+-------------------------------------+
+| Interface   | Controller | Driver/Component                    |
++=============+============+=====================================+
+| NVIC        | on-chip    | nested vector interrupt controller  |
++-------------+------------+-------------------------------------+
+| UART        | on-chip    | serial port                         |
++-------------+------------+-------------------------------------+
+| PINMUX      | on-chip    | pinmux                              |
++-------------+------------+-------------------------------------+
+| GPIO        | on-chip    | gpio                                |
++-------------+------------+-------------------------------------+
+| ETHERNET    | on-chip    | ethernet                            |
++-------------+------------+-------------------------------------+
+| USB         | on-chip    | usb_device                          |
++-------------+------------+-------------------------------------+
+| COUNTER     | on-chip    | rtc                                 |
++-------------+------------+-------------------------------------+
+| I2C         | on-chip    | i2c                                 |
++-------------+------------+-------------------------------------+
+| PWM         | on-chip    | pwm                                 |
++-------------+------------+-------------------------------------+
+| SPI         | on-chip    | spi                                 |
++-------------+------------+-------------------------------------+
+| WATCHDOG    | on-chip    | independent watchdog                |
++-------------+------------+-------------------------------------+
+| ADC         | on-chip    | ADC Controller                      |
++-------------+------------+-------------------------------------+
+| Backup SRAM | on-chip    | Backup SRAM                         |
++-------------+------------+-------------------------------------+
 
 Other hardware features are not yet supported on this Zephyr port.
 
@@ -146,7 +148,7 @@ and a ST morpho connector. Board is configured as follows:
 - USB DP : PA12
 - I2C : PB8, PB9
 - PWM : PE13
-- SPI : PA4, PA5, PA6, PA7
+- SPI : PD14, PA5, PA6, PA7
 
 Note. The Arduino Uno v3 specified SPI device conflicts with the on-board ETH
 device on pin PA7.
@@ -164,6 +166,11 @@ Serial Port
 Nucleo F746ZG board has 4 UARTs and 4 USARTs. The Zephyr console output is
 assigned to UART3. Default settings are 115200 8N1.
 
+Backup SRAM
+-----------
+
+In order to test backup SRAM you may want to disconnect VBAT from VDD. You can
+do it by removing ``SB156`` jumper on the back side of the board.
 
 Programming and Debugging
 *************************

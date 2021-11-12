@@ -82,14 +82,14 @@ static int mcux_ccm_get_subsys_rate(const struct device *dev,
 		break;
 #endif
 
-#ifdef CONFIG_DISK_ACCESS_USDHC1
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(usdhc1), okay) && CONFIG_DISK_DRIVER_SDMMC
 	case IMX_CCM_USDHC1_CLK:
 		*rate = CLOCK_GetSysPfdFreq(kCLOCK_Pfd0) /
 				(CLOCK_GetDiv(kCLOCK_Usdhc1Div) + 1U);
 		break;
 #endif
 
-#ifdef CONFIG_DISK_ACCESS_USDHC2
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(usdhc2), okay) && CONFIG_DISK_DRIVER_SDMMC
 	case IMX_CCM_USDHC2_CLK:
 		*rate = CLOCK_GetSysPfdFreq(kCLOCK_Pfd0) /
 				(CLOCK_GetDiv(kCLOCK_Usdhc2Div) + 1U);
@@ -128,6 +128,13 @@ static int mcux_ccm_get_subsys_rate(const struct device *dev,
 		}
 	} break;
 #endif
+
+#ifdef CONFIG_COUNTER_MCUX_GPT
+	case IMX_CCM_GPT_CLK:
+		*rate = CLOCK_GetFreq(kCLOCK_PerClk);
+		break;
+#endif
+
 	}
 
 	return 0;
@@ -144,8 +151,9 @@ static const struct clock_control_driver_api mcux_ccm_driver_api = {
 	.get_rate = mcux_ccm_get_subsys_rate,
 };
 
-DEVICE_AND_API_INIT(mcux_ccm, DT_INST_LABEL(0),
+DEVICE_DT_INST_DEFINE(0,
 		    &mcux_ccm_init,
+		    NULL,
 		    NULL, NULL,
 		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		    &mcux_ccm_driver_api);

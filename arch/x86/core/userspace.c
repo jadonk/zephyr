@@ -27,6 +27,7 @@
  * code has to manually transition off of it to the appropriate stack after
  * switching page tables.
  */
+__pinned_func
 void z_x86_swap_update_page_tables(struct k_thread *incoming)
 {
 #ifndef CONFIG_X86_64
@@ -87,7 +88,7 @@ void *z_x86_userspace_prepare_thread(struct k_thread *thread)
 FUNC_NORETURN void arch_user_mode_enter(k_thread_entry_t user_entry,
 					void *p1, void *p2, void *p3)
 {
-	uint32_t stack_end;
+	size_t stack_end;
 
 	/* Transition will reset stack pointer to initial, discarding
 	 * any old context since this is a one-way operation
@@ -95,6 +96,51 @@ FUNC_NORETURN void arch_user_mode_enter(k_thread_entry_t user_entry,
 	stack_end = Z_STACK_PTR_ALIGN(_current->stack_info.start +
 				      _current->stack_info.size -
 				      _current->stack_info.delta);
+
+#ifdef CONFIG_X86_64
+	/* x86_64 SysV ABI requires 16 byte stack alignment, which
+	 * means that on entry to a C function (which follows a CALL
+	 * that pushes 8 bytes) the stack must be MISALIGNED by
+	 * exactly 8 bytes.
+	 */
+	stack_end -= 8;
+#endif
+
+#if defined(CONFIG_DEMAND_PAGING) && \
+	!defined(CONFIG_LINKER_GENERIC_SECTIONS_PRESENT_AT_BOOT)
+	/* If generic section is not present at boot,
+	 * the thread stack may not be in physical memory.
+	 * Unconditionally page in the stack instead of
+	 * relying on page fault to speed up a little bit
+	 * on starting the thread.
+	 *
+	 * Note that this also needs to page in the reserved
+	 * portion of the stack (which is usually the page just
+	 * before the beginning of stack in
+	 * _current->stack_info.start.
+	 */
+	uintptr_t stack_start;
+	size_t stack_size;
+	uintptr_t stack_aligned_start;
+	size_t stack_aligned_size;
+
+	stack_start = POINTER_TO_UINT(_current->stack_obj);
+	stack_size = Z_THREAD_STACK_SIZE_ADJUST(_current->stack_info.size);
+
+#if defined(CONFIG_HW_STACK_PROTECTION)
+	/* With hardware stack protection, the first page of stack
+	 * is a guard page. So need to skip it.
+	 */
+	stack_start += CONFIG_MMU_PAGE_SIZE;
+	stack_size -= CONFIG_MMU_PAGE_SIZE;
+#endif
+
+	(void)k_mem_region_align(&stack_aligned_start, &stack_aligned_size,
+				 stack_start, stack_size,
+				 CONFIG_MMU_PAGE_SIZE);
+	k_mem_page_in(UINT_TO_POINTER(stack_aligned_start),
+		      stack_aligned_size);
+#endif
 
 	z_x86_userspace_enter(user_entry, p1, p2, p3, stack_end,
 			      _current->stack_info.start);

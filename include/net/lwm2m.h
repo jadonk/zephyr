@@ -65,6 +65,7 @@
 /* clang-format on */
 
 typedef void (*lwm2m_socket_fault_cb_t)(int error);
+typedef void (*lwm2m_notify_timeout_cb_t)(void);
 
 /**
  * @brief LwM2M context structure to maintain information for a single
@@ -77,8 +78,8 @@ struct lwm2m_ctx {
 	/** Private CoAP and networking structures */
 	struct coap_pending pendings[CONFIG_LWM2M_ENGINE_MAX_PENDING];
 	struct coap_reply replies[CONFIG_LWM2M_ENGINE_MAX_REPLIES];
-	struct k_delayed_work retransmit_work;
-	struct sys_mutex send_lock;
+	sys_slist_t pending_sends;
+	sys_slist_t observer;
 
 	/** A pointer to currently processed request, for internal LwM2M engine
 	 *  use. The underlying type is ``struct lwm2m_message``, but since it's
@@ -124,6 +125,17 @@ struct lwm2m_ctx {
 	 *  callback in case of socket errors on receive.
 	 */
 	lwm2m_socket_fault_cb_t fault_cb;
+
+	/** Notify Timeout Callback. LwM2M processing thread will call this
+	 *  callback in case of notify timeout.
+	 */
+	lwm2m_notify_timeout_cb_t notify_timeout_cb;
+
+	/** Validation buffer. Used as a temporary buffer to decode the resource
+	 *  value before validation. On successful validation, its content is
+	 *  copied into the actual resource buffer.
+	 */
+	uint8_t validate_buf[CONFIG_LWM2M_ENGINE_VALIDATION_BUFFER_SIZE];
 };
 
 
@@ -159,6 +171,7 @@ typedef void *(*lwm2m_engine_get_data_cb_t)(uint16_t obj_inst_id,
  * objects.
  *
  * A function of this type can be registered via:
+ * lwm2m_engine_register_validate_callback()
  * lwm2m_engine_register_post_write_callback()
  *
  * @param[in] obj_inst_id Object instance ID generating the callback.
@@ -366,19 +379,6 @@ typedef struct float32_value {
 } float32_value_t;
 
 /**
- * @brief Maximum precision value for 64-bit LwM2M float val2
- */
-#define LWM2M_FLOAT64_DEC_MAX 1000000000LL
-
-/**
- * @brief 32-bit variant of the LwM2M float structure
- */
-typedef struct float64_value {
-	int64_t val1;
-	int64_t val2;
-} float64_value_t;
-
-/**
  * @brief Maximum value for ObjLnk resource fields
  */
 #define LWM2M_OBJLNK_MAX_ID USHRT_MAX
@@ -392,6 +392,36 @@ struct lwm2m_objlnk {
 };
 
 /**
+ * @brief Change an observer's pmin value.
+ *
+ * LwM2M clients use this function to modify the pmin attribute
+ * for an observation being made.
+ * Example to update the pmin of a temperature sensor value being observed:
+ * lwm2m_engine_update_observer_min_period("3303/0/5700",5);
+ *
+ * @param[in] pathstr LwM2M path string "obj/obj-inst/res"
+ * @param[in] period_s Value of pmin to be given (in seconds).
+ *
+ * @return 0 for success or negative in case of error.
+ */
+int lwm2m_engine_update_observer_min_period(char *pathstr, uint32_t period_s);
+
+/**
+ * @brief Change an observer's pmax value.
+ *
+ * LwM2M clients use this function to modify the pmax attribute
+ * for an observation being made.
+ * Example to update the pmax of a temperature sensor value being observed:
+ * lwm2m_engine_update_observer_max_period("3303/0/5700",5);
+ *
+ * @param[in] pathstr LwM2M path string "obj/obj-inst/res"
+ * @param[in] period_s Value of pmax to be given (in seconds).
+ *
+ * @return 0 for success or negative in case of error.
+ */
+int lwm2m_engine_update_observer_max_period(char *pathstr, uint32_t period_s);
+
+/**
  * @brief Create an LwM2M object instance.
  *
  * LwM2M clients use this function to create non-default LwM2M objects:
@@ -403,6 +433,17 @@ struct lwm2m_objlnk {
  * @return 0 for success or negative in case of error.
  */
 int lwm2m_engine_create_obj_inst(char *pathstr);
+
+/**
+ * @brief Delete an LwM2M object instance.
+ *
+ * LwM2M clients use this function to delete LwM2M objects.
+ *
+ * @param[in] pathstr LwM2M path string "obj/obj-inst"
+ *
+ * @return 0 for success or negative in case of error.
+ */
+int lwm2m_engine_delete_obj_inst(char *pathstr);
 
 /**
  * @brief Set resource (instance) value (opaque buffer)
@@ -524,16 +565,6 @@ int lwm2m_engine_set_bool(char *pathstr, bool value);
  * @return 0 for success or negative in case of error.
  */
 int lwm2m_engine_set_float32(char *pathstr, float32_value_t *value);
-
-/**
- * @brief Set resource (instance) value (64-bit float structure)
- *
- * @param[in] pathstr LwM2M path string "obj/obj-inst/res(/res-inst)"
- * @param[in] value 64-bit float value
- *
- * @return 0 for success or negative in case of error.
- */
-int lwm2m_engine_set_float64(char *pathstr, float64_value_t *value);
 
 /**
  * @brief Set resource (instance) value (ObjLnk)
@@ -668,16 +699,6 @@ int lwm2m_engine_get_bool(char *pathstr, bool *value);
 int lwm2m_engine_get_float32(char *pathstr, float32_value_t *buf);
 
 /**
- * @brief Get resource (instance) value (64-bit float structure)
- *
- * @param[in] pathstr LwM2M path string "obj/obj-inst/res(/res-inst)"
- * @param[out] buf 64-bit float buffer to copy data into
- *
- * @return 0 for success or negative in case of error.
- */
-int lwm2m_engine_get_float64(char *pathstr, float64_value_t *buf);
-
-/**
  * @brief Get resource (instance) value (ObjLnk)
  *
  * @param[in] pathstr LwM2M path string "obj/obj-inst/res(/res-inst)"
@@ -715,6 +736,29 @@ int lwm2m_engine_register_read_callback(char *pathstr,
  */
 int lwm2m_engine_register_pre_write_callback(char *pathstr,
 					     lwm2m_engine_get_data_cb_t cb);
+
+/**
+ * @brief Set resource (instance) validation callback
+ *
+ * This callback is triggered before setting the value of a resource to the
+ * resource data buffer.
+ *
+ * The callback allows an LwM2M client or object to validate the data before
+ * writing and notify an error if the data should be discarded for any reason
+ * (by returning a negative error code).
+ *
+ * @note All resources that have a validation callback registered are initially
+ *       decoded into a temporary validation buffer. Make sure that
+ *       ``CONFIG_LWM2M_ENGINE_VALIDATION_BUFFER_SIZE`` is large enough to
+ *       store each of the validated resources (individually).
+ *
+ * @param[in] pathstr LwM2M path string "obj/obj-inst/res(/res-inst)"
+ * @param[in] cb Validate resource data callback
+ *
+ * @return 0 for success or negative in case of error.
+ */
+int lwm2m_engine_register_validate_callback(char *pathstr,
+					    lwm2m_engine_set_data_cb_t cb);
 
 /**
  * @brief Set resource (instance) post-write callback
@@ -844,6 +888,21 @@ int lwm2m_engine_create_res_inst(char *pathstr);
 int lwm2m_engine_delete_res_inst(char *pathstr);
 
 /**
+ * @brief Update the period of a given service.
+ *
+ * Allow the period modification on an existing service created with
+ * lwm2m_engine_add_service().
+ * Example to frequency at which a periodic_service changes it's values :
+ * lwm2m_engine_update_service(device_periodic_service,5*MSEC_PER_SEC);
+ *
+ * @param[in] service Handler of the periodic_service
+ * @param[in] period_ms New period for the periodic_service (in milliseconds)
+ *
+ * @return 0 for success or negative in case of error.
+ */
+int lwm2m_engine_update_service_period(k_work_handler_t service, uint32_t period_ms);
+
+/**
  * @brief Start the LwM2M engine
  *
  * LwM2M clients normally do not need to call this function as it is called
@@ -939,6 +998,11 @@ void lwm2m_rd_client_start(struct lwm2m_ctx *client_ctx, const char *ep_name,
  */
 void lwm2m_rd_client_stop(struct lwm2m_ctx *client_ctx,
 			  lwm2m_ctx_event_cb_t event_cb);
+
+/**
+ * @brief Trigger a Registration Update of the LwM2M RD Client
+ */
+void lwm2m_rd_client_update(void);
 
 #endif	/* ZEPHYR_INCLUDE_NET_LWM2M_H_ */
 /**@}  */

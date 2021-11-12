@@ -213,11 +213,7 @@ class CheckPatch(ComplianceTest):
 
         except subprocess.CalledProcessError as ex:
             output = ex.output.decode("utf-8")
-            if re.search("[1-9][0-9]* errors,", output):
-                self.add_failure(output)
-            else:
-                # No errors found, but warnings. Show them.
-                self.add_info(output)
+            self.add_failure(output)
 
 
 class KconfigCheck(ComplianceTest):
@@ -229,13 +225,14 @@ class KconfigCheck(ComplianceTest):
     doc = "See https://docs.zephyrproject.org/latest/guides/kconfig/index.html for more details."
     path_hint = ZEPHYR_BASE
 
-    def run(self):
+    def run(self, full=True):
         kconf = self.parse_kconfig()
 
         self.check_top_menu_not_too_long(kconf)
         self.check_no_pointless_menuconfigs(kconf)
         self.check_no_undef_within_kconfig(kconf)
-        self.check_no_undef_outside_kconfig(kconf)
+        if full:
+            self.check_no_undef_outside_kconfig(kconf)
 
     def get_modules(self, modules_file):
         """
@@ -255,6 +252,21 @@ class KconfigCheck(ComplianceTest):
             _ = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as ex:
             self.error(ex.output)
+
+        modules_dir = ZEPHYR_BASE + '/modules'
+        modules = [name for name in os.listdir(modules_dir) if
+                   os.path.exists(os.path.join(modules_dir, name, 'Kconfig'))]
+
+        with open(modules_file, 'r') as fp_module_file:
+            content = fp_module_file.read()
+
+        with open(modules_file, 'w') as fp_module_file:
+            for module in modules:
+                fp_module_file.write("ZEPHYR_{}_KCONFIG = {}\n".format(
+                    re.sub('[^a-zA-Z0-9]', '_', module).upper(),
+                    modules_dir + '/' + module + '/Kconfig'
+                ))
+            fp_module_file.write(content)
 
     def write_kconfig_soc(self):
         """
@@ -316,6 +328,7 @@ osource "{ZEPHYR_BASE}/soc/$(ARCH)/*/Kconfig"\n')
         os.environ["ARCH"] = "*"
         os.environ["KCONFIG_BINARY_DIR"] = tempfile.gettempdir()
         os.environ['DEVICETREE_CONF'] = "dummy"
+        os.environ['TOOLCHAIN_HAS_NEWLIB'] = "y"
 
         # Older name for DEVICETREE_CONF, for compatibility with older Zephyr
         # versions that don't have the renaming
@@ -442,7 +455,7 @@ https://docs.zephyrproject.org/latest/guides/kconfig/tips.html#menuconfig-symbol
         # Skip doc/releases, which often references removed symbols
         grep_stdout = git("grep", "--line-number", "-I", "--null",
                           "--perl-regexp", regex, "--", ":!/doc/releases",
-                          cwd=ZEPHYR_BASE)
+                          cwd=Path(GIT_TOP))
 
         # splitlines() supports various line terminators
         for grep_line in grep_stdout.splitlines():
@@ -510,6 +523,9 @@ def get_defined_syms(kconf):
 UNDEF_KCONFIG_WHITELIST = {
     "ALSO_MISSING",
     "APP_LINK_WITH_",
+    "ARMCLANG_STD_LIBC",  # The ARMCLANG_STD_LIBC is defined in the toolchain
+                          # Kconfig which is sourced based on Zephyr toolchain
+			  # variant and therefore not visible to compliance.
     "CDC_ACM_PORT_NAME_",
     "CLOCK_STM32_SYSCLK_SRC_",
     "CMU",
@@ -527,7 +543,6 @@ UNDEF_KCONFIG_WHITELIST = {
     "FOO_LOG_LEVEL",
     "FOO_SETTING_1",
     "FOO_SETTING_2",
-    "LIS2DW12_INT_PIN",
     "LSM6DSO_INT_PIN",
     "MISSING",
     "MODULES",
@@ -540,6 +555,7 @@ UNDEF_KCONFIG_WHITELIST = {
     "REG1",
     "REG2",
     "SAMPLE_MODULE_LOG_LEVEL",  # Used as an example in samples/subsys/logging
+    "SAMPLE_MODULE_LOG_LEVEL_DBG",  # Used in tests/subsys/logging/log_api
     "SEL",
     "SHIFT",
     "SOC_WATCH",  # Issue 13749
@@ -556,7 +572,25 @@ UNDEF_KCONFIG_WHITELIST = {
     "USB_CONSOLE",
     "USE_STDC_",
     "WHATEVER",
+    "EXTRA_FIRMWARE_DIR", # Linux, in boards/xtensa/intel_adsp_cavs25/doc
+    "HUGETLBFS",          # Linux, in boards/xtensa/intel_adsp_cavs25/doc
+    "MODVERSIONS",        # Linux, in boards/xtensa/intel_adsp_cavs25/doc
+    "SECURITY_LOADPIN",   # Linux, in boards/xtensa/intel_adsp_cavs25/doc
 }
+
+class KconfigBasicCheck(KconfigCheck, ComplianceTest):
+    """
+    Checks is we are introducing any new warnings/errors with Kconfig,
+    for example using undefiend Kconfig variables.
+    This runs the basic Kconfig test, which is checking only for undefined
+    references inside the Kconfig tree.
+    """
+    name = "KconfigBasic"
+    doc = "See https://docs.zephyrproject.org/latest/guides/kconfig/index.html for more details."
+    path_hint = ZEPHYR_BASE
+
+    def run(self):
+        super().run(full=False)
 
 
 class Codeowners(ComplianceTest):
@@ -861,15 +895,20 @@ class PyLint(ComplianceTest):
 
 def filter_py(root, fnames):
     # PyLint check helper. Returns all Python script filenames among the
-    # filenames in 'fnames', relative to directory 'root'. Uses the
-    # python-magic library, so that we can detect Python files that
-    # don't end in .py as well. python-magic is a frontend to libmagic,
-    # which is also used by 'file'.
+    # filenames in 'fnames', relative to directory 'root'.
+    #
+    # Uses the python-magic library, so that we can detect Python
+    # files that don't end in .py as well. python-magic is a frontend
+    # to libmagic, which is also used by 'file'.
+    #
+    # The extra os.path.isfile() is necessary because git includes
+    # submodule directories in its output.
 
     return [fname for fname in fnames
-            if fname.endswith(".py") or
-               magic.from_file(os.path.join(root, fname),
-                               mime=True) == "text/x-python"]
+            if os.path.isfile(os.path.join(root, fname)) and
+            (fname.endswith(".py") or
+             magic.from_file(os.path.join(root, fname),
+                             mime=True) == "text/x-python")]
 
 
 class Identity(ComplianceTest):
@@ -1086,7 +1125,8 @@ def main():
     except BaseException:
         # Catch BaseException instead of Exception to include stuff like
         # SystemExit (raised by sys.exit())
-        print(format(__file__, traceback.format_exc()))
+        print("Python exception in `{}`:\n\n"
+              "```\n{}\n```".format(__file__, traceback.format_exc()))
 
         raise
 

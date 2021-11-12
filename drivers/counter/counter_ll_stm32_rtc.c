@@ -36,6 +36,8 @@ LOG_MODULE_REGISTER(counter_rtc_stm32, CONFIG_COUNTER_LOG_LEVEL);
 
 #if defined(CONFIG_SOC_SERIES_STM32L4X)
 #define RTC_EXTI_LINE	LL_EXTI_LINE_18
+#elif defined(CONFIG_SOC_SERIES_STM32G0X)
+#define RTC_EXTI_LINE	LL_EXTI_LINE_19
 #elif defined(CONFIG_SOC_SERIES_STM32F4X) \
 	|| defined(CONFIG_SOC_SERIES_STM32F0X) \
 	|| defined(CONFIG_SOC_SERIES_STM32F2X) \
@@ -45,7 +47,8 @@ LOG_MODULE_REGISTER(counter_rtc_stm32, CONFIG_COUNTER_LOG_LEVEL);
 	|| defined(CONFIG_SOC_SERIES_STM32G4X) \
 	|| defined(CONFIG_SOC_SERIES_STM32L0X) \
 	|| defined(CONFIG_SOC_SERIES_STM32L1X) \
-	|| defined(CONFIG_SOC_SERIES_STM32H7X)
+	|| defined(CONFIG_SOC_SERIES_STM32H7X) \
+	|| defined(CONFIG_SOC_SERIES_STM32WLX)
 #define RTC_EXTI_LINE	LL_EXTI_LINE_17
 #endif
 
@@ -163,11 +166,13 @@ static int rtc_stm32_set_alarm(const struct device *dev, uint8_t chan_id,
 		 * that tick+1 event occurs before alarm setting is finished.
 		 */
 		ticks += now + 1;
+		alarm_val = (time_t)(counter_ticks_to_us(dev, ticks) / USEC_PER_SEC)
+			+ T_TIME_OFFSET;
+	} else {
+		alarm_val = (time_t)(counter_ticks_to_us(dev, ticks) / USEC_PER_SEC);
 	}
 
 	LOG_DBG("Set Alarm: %d\n", ticks);
-
-	alarm_val = (time_t)(counter_ticks_to_us(dev, ticks) / USEC_PER_SEC);
 
 	gmtime_r(&alarm_val, &alarm_tm);
 
@@ -242,15 +247,6 @@ static int rtc_stm32_set_top_value(const struct device *dev,
 
 }
 
-
-static uint32_t rtc_stm32_get_max_relative_alarm(const struct device *dev)
-{
-	const struct counter_config_info *info = dev->config;
-
-	return info->max_top_value;
-}
-
-
 void rtc_stm32_isr(const struct device *dev)
 {
 	struct rtc_stm32_data *data = DEV_DATA(dev);
@@ -274,6 +270,8 @@ void rtc_stm32_isr(const struct device *dev)
 
 #if defined(CONFIG_SOC_SERIES_STM32H7X) && defined(CONFIG_CPU_CORTEX_M4)
 	LL_C2_EXTI_ClearFlag_0_31(RTC_EXTI_LINE);
+#elif defined(CONFIG_SOC_SERIES_STM32G0X)
+	LL_EXTI_ClearRisingFlag_0_31(RTC_EXTI_LINE);
 #else
 	LL_EXTI_ClearFlag_0_31(RTC_EXTI_LINE);
 #endif
@@ -282,14 +280,15 @@ void rtc_stm32_isr(const struct device *dev)
 
 static int rtc_stm32_init(const struct device *dev)
 {
-	const struct device *clk = device_get_binding(STM32_CLOCK_CONTROL_NAME);
+	const struct device *clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 	const struct rtc_stm32_config *cfg = DEV_CFG(dev);
-
-	__ASSERT_NO_MSG(clk);
 
 	DEV_DATA(dev)->callback = NULL;
 
-	clock_control_on(clk, (clock_control_subsys_t *) &cfg->pclken);
+	if (clock_control_on(clk, (clock_control_subsys_t *) &cfg->pclken) != 0) {
+		LOG_ERR("clock op failed\n");
+		return -EIO;
+	}
 
 	z_stm32_hsem_lock(CFG_HW_RCC_SEMID, HSEM_LOCK_DEFAULT_RETRY);
 
@@ -339,7 +338,7 @@ static int rtc_stm32_init(const struct device *dev)
 	while (LL_RCC_LSE_IsReady() != 1) {
 	}
 
-#if defined(CONFIG_CLOCK_STM32_MSI_PLL_MODE)
+#if STM32_MSI_PLL_MODE
 	/* Enable MSI hardware auto calibration */
 	LL_RCC_MSI_EnablePLLMode();
 #endif
@@ -352,9 +351,11 @@ static int rtc_stm32_init(const struct device *dev)
 
 	z_stm32_hsem_unlock(CFG_HW_RCC_SEMID);
 
+#if !defined(CONFIG_COUNTER_RTC_STM32_SAVE_VALUE_BETWEEN_RESETS)
 	if (LL_RTC_DeInit(RTC) != SUCCESS) {
 		return -EIO;
 	}
+#endif
 
 	if (LL_RTC_Init(RTC, ((LL_RTC_InitTypeDef *)
 			      &cfg->ll_rtc_config)) != SUCCESS) {
@@ -416,10 +417,9 @@ static const struct counter_driver_api rtc_stm32_driver_api = {
 		.set_top_value = rtc_stm32_set_top_value,
 		.get_pending_int = rtc_stm32_get_pending_int,
 		.get_top_value = rtc_stm32_get_top_value,
-		.get_max_relative_alarm = rtc_stm32_get_max_relative_alarm,
 };
 
-DEVICE_AND_API_INIT(rtc_stm32, DT_INST_LABEL(0), &rtc_stm32_init,
+DEVICE_DT_INST_DEFINE(0, &rtc_stm32_init, NULL,
 		    &rtc_data, &rtc_config, PRE_KERNEL_1,
 		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &rtc_stm32_driver_api);
 
@@ -427,6 +427,6 @@ static void rtc_stm32_irq_config(const struct device *dev)
 {
 	IRQ_CONNECT(DT_INST_IRQN(0),
 		    DT_INST_IRQ(0, priority),
-		    rtc_stm32_isr, DEVICE_GET(rtc_stm32), 0);
+		    rtc_stm32_isr, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQN(0));
 }

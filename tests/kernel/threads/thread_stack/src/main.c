@@ -29,7 +29,7 @@ struct foo {
 	int baz;
 };
 
-struct foo stest_member_stack;
+__kstackmem struct foo stest_member_stack;
 
 void z_impl_stack_info_get(char **start_addr, size_t *size)
 {
@@ -92,7 +92,7 @@ void stack_buffer_scenarios(void)
 	k_thread_stack_t *stack_obj = scenario_data.stack;
 	size_t obj_size = scenario_data.object_size;
 	size_t stack_size, unused, carveout, reserved, alignment, adjusted;
-	uint8_t val;
+	uint8_t val = 0;
 	char *stack_start, *stack_ptr, *stack_end, *obj_start, *obj_end;
 	char *stack_buf;
 	volatile char *pos;
@@ -161,6 +161,7 @@ void stack_buffer_scenarios(void)
 	 * First test does direct read & write starting at the estimated
 	 * stack pointer up to the highest addresses in the buffer
 	 */
+	val = *stack_start;
 	stack_ptr = &val;
 	for (pos = stack_ptr; pos < stack_end; pos++) {
 		/* pos is volatile so this doesn't get optimized out */
@@ -441,6 +442,14 @@ void no_op_entry(void *p1, void *p2, void *p3)
  */
 void test_idle_stack(void)
 {
+	if (IS_ENABLED(CONFIG_KERNEL_COHERENCE)) {
+		/* Stacks on coherence platforms aren't coherent, and
+		 * the idle stack may have been initialized on a
+		 * different CPU!
+		 */
+		ztest_test_skip();
+	}
+
 	int ret;
 #ifdef CONFIG_SMP
 	/* 1cpu test case, so all other CPUs are spinning with co-op

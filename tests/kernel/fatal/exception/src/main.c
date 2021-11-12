@@ -13,6 +13,7 @@
 #include <assert.h>
 
 #if defined(CONFIG_USERSPACE)
+#include <sys/mem_manage.h>
 #include <syscall_handler.h>
 #include "test_syscalls.h"
 #endif
@@ -90,6 +91,38 @@ void entry_cpu_exception(void *p1, void *p2, void *p3)
 	rv = TC_FAIL;
 }
 
+void entry_cpu_exception_extend(void *p1, void *p2, void *p3)
+{
+	expected_reason = K_ERR_CPU_EXCEPTION;
+
+#if defined(CONFIG_ARM64)
+	__asm__ volatile ("svc 0");
+#elif defined(CONFIG_CPU_CORTEX_R)
+	__asm__ volatile ("BKPT");
+#elif defined(CONFIG_CPU_CORTEX_M)
+	__asm__ volatile ("swi 0");
+#elif defined(CONFIG_NIOS2)
+	__asm__ volatile ("trap");
+#elif defined(CONFIG_RISCV)
+	/* In riscv architecture, use an undefined
+	 * instruction to trigger illegal instruction on RISCV.
+	 */
+	__asm__ volatile (".word 0x77777777");
+	/* In arc architecture, SWI instruction is used
+	 * to trigger soft interrupt.
+	 */
+#elif defined(CONFIG_ARC)
+	__asm__ volatile ("swi");
+#else
+	/* used to create a divide by zero error on X86 */
+	volatile int error;
+	volatile int zero = 0;
+
+	error = 32;     /* avoid static checker uninitialized warnings */
+	error = error / zero;
+#endif
+	rv = TC_FAIL;
+}
 
 void entry_oops(void *p1, void *p2, void *p3)
 {
@@ -133,6 +166,19 @@ void entry_arbitrary_reason(void *p1, void *p2, void *p3)
 
 	key = irq_lock();
 	z_except_reason(INT_MAX);
+	TC_ERROR("SHOULD NEVER SEE THIS\n");
+	rv = TC_FAIL;
+	irq_unlock(key);
+}
+
+void entry_arbitrary_reason_negative(void *p1, void *p2, void *p3)
+{
+	unsigned int key;
+
+	expected_reason = -2;
+
+	key = irq_lock();
+	z_except_reason(-2);
 	TC_ERROR("SHOULD NEVER SEE THIS\n");
 	rv = TC_FAIL;
 	irq_unlock(key);
@@ -201,10 +247,9 @@ void stack_sentinel_swap(void *p1, void *p2, void *p3)
 	/* Test that stack overflow check due to swap works */
 	blow_up_stack();
 	TC_PRINT("swapping...\n");
-	z_swap_unlocked();
+	z_swap_irqlock(key);
 	TC_ERROR("should never see this\n");
 	rv = TC_FAIL;
-	irq_unlock(key);
 }
 
 void stack_hw_overflow(void *p1, void *p2, void *p3)
@@ -276,6 +321,14 @@ void test_fatal(void)
 			NULL, NULL, NULL, K_PRIO_COOP(PRIORITY), 0,
 			K_NO_WAIT);
 	zassert_not_equal(rv, TC_FAIL, "thread was not aborted");
+
+	TC_PRINT("test alt thread 1: generic CPU exception divide zero\n");
+	k_thread_create(&alt_thread, alt_stack,
+			K_THREAD_STACK_SIZEOF(alt_stack),
+			entry_cpu_exception_extend,
+			NULL, NULL, NULL, K_PRIO_COOP(PRIORITY), 0,
+			K_NO_WAIT);
+	zassert_not_equal(rv, TC_FAIL, "thread was not aborted");
 #else
 	/*
 	 * We want the native OS to handle segfaults so we can debug it
@@ -302,6 +355,8 @@ void test_fatal(void)
 	k_thread_abort(&alt_thread);
 	zassert_not_equal(rv, TC_FAIL, "thread was not aborted");
 
+#if defined(CONFIG_ASSERT)
+	/* This test shall be skip while ASSERT is off */
 	TC_PRINT("test alt thread 4: fail assertion\n");
 	k_thread_create(&alt_thread, alt_stack,
 			K_THREAD_STACK_SIZEOF(alt_stack),
@@ -310,11 +365,21 @@ void test_fatal(void)
 			K_NO_WAIT);
 	k_thread_abort(&alt_thread);
 	zassert_not_equal(rv, TC_FAIL, "thread was not aborted");
+#endif
 
 	TC_PRINT("test alt thread 5: initiate arbitrary SW exception\n");
 	k_thread_create(&alt_thread, alt_stack,
 			K_THREAD_STACK_SIZEOF(alt_stack),
 			entry_arbitrary_reason,
+			NULL, NULL, NULL, K_PRIO_COOP(PRIORITY), 0,
+			K_NO_WAIT);
+	k_thread_abort(&alt_thread);
+
+	zassert_not_equal(rv, TC_FAIL, "thread was not aborted");
+	TC_PRINT("test alt thread 6: initiate arbitrary SW exception negative\n");
+	k_thread_create(&alt_thread, alt_stack,
+			K_THREAD_STACK_SIZEOF(alt_stack),
+			entry_arbitrary_reason_negative,
 			NULL, NULL, NULL, K_PRIO_COOP(PRIORITY), 0,
 			K_NO_WAIT);
 	k_thread_abort(&alt_thread);
@@ -382,6 +447,54 @@ void test_fatal(void)
 /*test case main entry*/
 void test_main(void)
 {
+#if defined(CONFIG_DEMAND_PAGING) && \
+	!defined(CONFIG_LINKER_GENERIC_SECTIONS_PRESENT_AT_BOOT)
+	uintptr_t pin_addr;
+	size_t pin_size, obj_size;
+
+	/* Need to pin the whole stack object (including reserved
+	 * space), or else it would cause double faults: exception
+	 * being processed while page faults on the stacks.
+	 *
+	 * Same applies for some variables needed during exception
+	 * processing.
+	 */
+#if defined(CONFIG_STACK_SENTINEL) && !defined(CONFIG_ARCH_POSIX)
+
+	obj_size = K_THREAD_STACK_SIZEOF(overflow_stack);
+#if defined(CONFIG_USERSPACE)
+	obj_size = Z_THREAD_STACK_SIZE_ADJUST(obj_size);
+#endif
+
+	k_mem_region_align(&pin_addr, &pin_size,
+			   POINTER_TO_UINT(&overflow_stack),
+			   obj_size, CONFIG_MMU_PAGE_SIZE);
+
+	k_mem_pin(UINT_TO_POINTER(pin_addr), pin_size);
+#endif /* CONFIG_STACK_SENTINEL && !CONFIG_ARCH_POSIX */
+
+	obj_size = K_THREAD_STACK_SIZEOF(alt_stack);
+#if defined(CONFIG_USERSPACE)
+	obj_size = Z_THREAD_STACK_SIZE_ADJUST(obj_size);
+#endif
+
+	k_mem_region_align(&pin_addr, &pin_size,
+			   POINTER_TO_UINT(&alt_stack),
+			   obj_size,
+			   CONFIG_MMU_PAGE_SIZE);
+
+	k_mem_pin(UINT_TO_POINTER(pin_addr), pin_size);
+
+	k_mem_region_align(&pin_addr, &pin_size,
+			   POINTER_TO_UINT((void *)&expected_reason),
+			   sizeof(expected_reason),
+			   CONFIG_MMU_PAGE_SIZE);
+
+	k_mem_pin(UINT_TO_POINTER(pin_addr), pin_size);
+#endif /* CONFIG_DEMAND_PAGING
+	* && !CONFIG_LINKER_GENERIC_SECTIONS_PRESENT_AT_BOOT
+	*/
+
 	ztest_test_suite(fatal,
 			ztest_unit_test(test_fatal));
 	ztest_run_test_suite(fatal);

@@ -27,6 +27,24 @@
 		i2c1 = &i2c_smb_1;
 		kscan0 = &kscan0;
 	};
+
+	power-states {
+		idle: idle {
+			compatible = "zephyr,power-state";
+			power-state-name = "suspend-to-idle";
+			min-residency-us = <1000000>;
+		};
+
+		suspend_to_ram: suspend_to_ram {
+			compatible = "zephyr,power-state";
+			power-state-name = "suspend-to-ram";
+			min-residency-us = <2000000>;
+		};
+	};
+};
+
+&cpu0 {
+	cpu-power-states = <&idle &suspend_to_ram>;
 };
 
 &uart1 {
@@ -53,7 +71,7 @@
 &espi0 {
 	status = "okay";
 	io_girq = <19>;
-	vw_girq = <24>;
+	vw_girqs = <24 25>;
 	pc_girq = <15>;
 };
 

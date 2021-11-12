@@ -14,6 +14,7 @@
 #include <init.h>
 #include <kernel.h>
 #include <devicetree.h>
+#include <sys/atomic.h>
 #include <drivers/dma.h>
 #include <drivers/clock_control.h>
 
@@ -28,6 +29,7 @@ LOG_MODULE_REGISTER(dma_mcux_edma, CONFIG_DMA_LOG_LEVEL);
 struct dma_mcux_edma_config {
 	DMA_Type *base;
 	DMAMUX_Type *dmamux_base;
+	int dma_channels; /* number of channels */
 	void (*irq_config_func)(const struct device *dev);
 };
 
@@ -45,7 +47,10 @@ struct call_back {
 };
 
 struct dma_mcux_edma_data {
+	struct dma_context dma_ctx;
 	struct call_back data_cb[DT_INST_PROP(0, dma_channels)];
+	ATOMIC_DEFINE(channels_atomic, DT_INST_PROP(0, dma_channels));
+	struct k_mutex dma_mutex;
 };
 
 #define DEV_CFG(dev)                                                           \
@@ -141,25 +146,15 @@ static void dma_mcux_edma_irq_handler(const struct device *dev)
 
 	LOG_DBG("IRQ CALLED");
 	for (i = 0; i < DT_INST_PROP(0, dma_channels); i++) {
-		if (DEV_CHANNEL_DATA(dev, i)->busy) {
-			uint32_t flag =
-				EDMA_GetChannelStatusFlags(DEV_BASE(dev), i);
-			if ((flag & (uint32_t)kEDMA_InterruptFlag) != 0U) {
-				LOG_DBG("IRQ OCCURRED");
-				channel_irq(DEV_EDMA_HANDLE(dev, i));
-				LOG_DBG("IRQ DONE");
+		uint32_t flag = EDMA_GetChannelStatusFlags(DEV_BASE(dev), i);
+
+		if ((flag & (uint32_t)kEDMA_InterruptFlag) != 0U) {
+			LOG_DBG("IRQ OCCURRED");
+			channel_irq(DEV_EDMA_HANDLE(dev, i));
+			LOG_DBG("IRQ DONE");
 #if defined __CORTEX_M && (__CORTEX_M == 4U)
-				__DSB();
+			__DSB();
 #endif
-			} else {
-				LOG_DBG("flag is 0x%x", flag);
-				LOG_DBG("DMA ES 0x%x", DEV_BASE(dev)->ES);
-				LOG_DBG("channel id %d", i);
-				EDMA_ClearChannelStatusFlags(
-					DEV_BASE(dev), i,
-					kEDMA_ErrorFlag | kEDMA_DoneFlag);
-				EDMA_AbortTransfer(DEV_EDMA_HANDLE(dev, i));
-			}
 		}
 	}
 }
@@ -275,13 +270,6 @@ static int dma_mcux_edma_configure(const struct device *dev, uint32_t channel,
 	EDMA_EnableChannelInterrupts(DEV_BASE(dev), channel,
 				     kEDMA_ErrorInterruptEnable);
 
-	if (config->source_chaining_en && config->dest_chaining_en) {
-		/*chaining mode only support major link*/
-		LOG_DBG("link major channel %d", config->linked_channel);
-		EDMA_SetChannelLink(DEV_BASE(dev), channel, kEDMA_MajorLink,
-				    config->linked_channel);
-	}
-
 	if (block_config->source_gather_en || block_config->dest_scatter_en) {
 		if (config->block_count > CONFIG_DMA_TCD_QUEUE_SIZE) {
 			LOG_ERR("please config DMA_TCD_QUEUE_SIZE as %d",
@@ -305,7 +293,7 @@ static int dma_mcux_edma_configure(const struct device *dev, uint32_t channel,
 	} else {
 		/* block_count shall be 1 */
 		status_t ret;
-
+		LOG_DBG("block size is: %d", block_config->block_size);
 		EDMA_PrepareTransfer(&(data->transferConfig),
 				     (void *)block_config->source_address,
 				     config->source_data_size,
@@ -321,6 +309,17 @@ static int dma_mcux_edma_configure(const struct device *dev, uint32_t channel,
 			LOG_ERR("submit error 0x%x", ret);
 		}
 		LOG_DBG("data csr is 0x%x", tcdRegs->CSR);
+	}
+
+	if (config->dest_chaining_en) {
+		LOG_DBG("link major channel %d", config->linked_channel);
+		EDMA_SetChannelLink(DEV_BASE(dev), channel, kEDMA_MajorLink,
+				    config->linked_channel);
+	}
+	if (config->source_chaining_en) {
+		LOG_DBG("link minor channel %d", config->linked_channel);
+		EDMA_SetChannelLink(DEV_BASE(dev), channel, kEDMA_MinorLink,
+				    config->linked_channel);
 	}
 
 	data->busy = false;
@@ -402,12 +401,26 @@ static int dma_mcux_edma_get_status(const struct device *dev,
 	return 0;
 }
 
+static bool dma_mcux_edma_channel_filter(const struct device *dev,
+				int channel_id, void *param)
+{
+	enum dma_channel_filter *filter = (enum dma_channel_filter *)param;
+
+	if (filter && *filter == DMA_CHANNEL_PERIODIC) {
+		if (channel_id > 3) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static const struct dma_driver_api dma_mcux_edma_api = {
 	.reload = dma_mcux_edma_reload,
 	.config = dma_mcux_edma_configure,
 	.start = dma_mcux_edma_start,
 	.stop = dma_mcux_edma_stop,
 	.get_status = dma_mcux_edma_get_status,
+	.chan_filter = dma_mcux_edma_channel_filter,
 };
 
 static int dma_mcux_edma_init(const struct device *dev)
@@ -421,6 +434,10 @@ static int dma_mcux_edma_init(const struct device *dev)
 	DEV_CFG(dev)->irq_config_func(dev);
 	memset(DEV_DATA(dev), 0, sizeof(struct dma_mcux_edma_data));
 	memset(tcdpool, 0, sizeof(tcdpool));
+	k_mutex_init(&DEV_DATA(dev)->dma_mutex);
+	DEV_DATA(dev)->dma_ctx.magic = DMA_MAGIC;
+	DEV_DATA(dev)->dma_ctx.dma_channels = DEV_CFG(dev)->dma_channels;
+	DEV_DATA(dev)->dma_ctx.atomic = DEV_DATA(dev)->channels_atomic;
 	return 0;
 }
 
@@ -429,6 +446,7 @@ static void dma_imx_config_func_0(const struct device *dev);
 static const struct dma_mcux_edma_config dma_config_0 = {
 	.base = (DMA_Type *)DT_INST_REG_ADDR(0),
 	.dmamux_base = (DMAMUX_Type *)DT_INST_REG_ADDR_BY_IDX(0, 1),
+	.dma_channels = DT_INST_PROP(0, dma_channels),
 	.irq_config_func = dma_imx_config_func_0,
 };
 
@@ -436,7 +454,7 @@ struct dma_mcux_edma_data dma_data;
 /*
  * define the dma
  */
-DEVICE_AND_API_INIT(dma_mcux_edma_0, CONFIG_DMA_0_NAME, &dma_mcux_edma_init,
+DEVICE_DT_INST_DEFINE(0, &dma_mcux_edma_init, NULL,
 		    &dma_data, &dma_config_0, POST_KERNEL,
 		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &dma_mcux_edma_api);
 
@@ -448,88 +466,88 @@ void dma_imx_config_func_0(const struct device *dev)
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 0, irq),
 		    DT_INST_IRQ_BY_IDX(0, 0, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 0, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 1, irq),
 		    DT_INST_IRQ_BY_IDX(0, 1, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 1, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 2, irq),
 		    DT_INST_IRQ_BY_IDX(0, 2, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 2, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 3, irq),
 		    DT_INST_IRQ_BY_IDX(0, 3, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 3, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 4, irq),
 		    DT_INST_IRQ_BY_IDX(0, 4, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 4, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 5, irq),
 		    DT_INST_IRQ_BY_IDX(0, 5, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 5, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 6, irq),
 		    DT_INST_IRQ_BY_IDX(0, 6, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 6, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 7, irq),
 		    DT_INST_IRQ_BY_IDX(0, 7, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 7, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 8, irq),
 		    DT_INST_IRQ_BY_IDX(0, 8, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 8, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 9, irq),
 		    DT_INST_IRQ_BY_IDX(0, 9, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 9, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 10, irq),
 		    DT_INST_IRQ_BY_IDX(0, 10, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 10, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 11, irq),
 		    DT_INST_IRQ_BY_IDX(0, 11, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 11, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 12, irq),
 		    DT_INST_IRQ_BY_IDX(0, 12, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 12, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 13, irq),
 		    DT_INST_IRQ_BY_IDX(0, 13, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 13, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 14, irq),
 		    DT_INST_IRQ_BY_IDX(0, 14, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 14, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 15, irq),
 		    DT_INST_IRQ_BY_IDX(0, 15, priority),
-		    dma_mcux_edma_irq_handler, DEVICE_GET(dma_mcux_edma_0), 0);
+		    dma_mcux_edma_irq_handler, DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 15, irq));
 
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 16, irq),
 		    DT_INST_IRQ_BY_IDX(0, 16, priority),
 		    dma_mcux_edma_error_irq_handler,
-		    DEVICE_GET(dma_mcux_edma_0), 0);
+		    DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 16, irq));
 
 	LOG_DBG("install irq done");

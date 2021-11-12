@@ -154,7 +154,8 @@ static inline void get_evt_hdr(void)
 
 	if (!rx.remaining) {
 		if (rx.evt.evt == BT_HCI_EVT_LE_META_EVENT &&
-		    rx.hdr[sizeof(*hdr)] == BT_HCI_EVT_LE_ADVERTISING_REPORT) {
+		    (rx.hdr[sizeof(*hdr)] == BT_HCI_EVT_LE_ADVERTISING_REPORT ||
+		     rx.hdr[sizeof(*hdr)] == BT_HCI_EVT_LE_EXT_ADVERTISING_REPORT)) {
 			BT_DBG("Marking adv report as discardable");
 			rx.discardable = true;
 		}
@@ -474,6 +475,7 @@ int __weak bt_hci_transport_setup(const struct device *dev)
 static int h4_open(void)
 {
 	int ret;
+	k_tid_t tid;
 
 	BT_DBG("");
 
@@ -487,11 +489,12 @@ static int h4_open(void)
 
 	uart_irq_callback_set(h4_dev, bt_uart_isr);
 
-	k_thread_create(&rx_thread_data, rx_thread_stack,
-			K_KERNEL_STACK_SIZEOF(rx_thread_stack),
-			rx_thread, NULL, NULL, NULL,
-			K_PRIO_COOP(CONFIG_BT_RX_PRIO),
-			0, K_NO_WAIT);
+	tid = k_thread_create(&rx_thread_data, rx_thread_stack,
+			      K_KERNEL_STACK_SIZEOF(rx_thread_stack),
+			      rx_thread, NULL, NULL, NULL,
+			      K_PRIO_COOP(CONFIG_BT_RX_PRIO),
+			      0, K_NO_WAIT);
+	k_thread_name_set(tid, "bt_rx_thread");
 
 	return 0;
 }
@@ -507,8 +510,8 @@ static int bt_uart_init(const struct device *unused)
 {
 	ARG_UNUSED(unused);
 
-	h4_dev = device_get_binding(CONFIG_BT_UART_ON_DEV_NAME);
-	if (!h4_dev) {
+	h4_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_bt_uart));
+	if (!device_is_ready(h4_dev)) {
 		return -EINVAL;
 	}
 

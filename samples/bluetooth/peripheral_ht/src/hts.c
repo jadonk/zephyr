@@ -25,7 +25,11 @@
 #include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
 
+#ifdef CONFIG_TEMP_NRF5
+static const struct device *temp_dev = DEVICE_DT_GET_ANY(nordic_nrf_temp);
+#else
 static const struct device *temp_dev;
+#endif
 
 static uint8_t simulate_htm;
 static uint8_t indicating;
@@ -49,7 +53,7 @@ static void indicate_destroy(struct bt_gatt_indicate_params *params)
 	indicating = 0U;
 }
 
-/* Heart Rate Service Declaration */
+/* Health Thermometer Service Declaration */
 BT_GATT_SERVICE_DEFINE(hts_svc,
 	BT_GATT_PRIMARY_SERVICE(BT_UUID_HTS),
 	BT_GATT_CHARACTERISTIC(BT_UUID_HTS_MEASUREMENT, BT_GATT_CHRC_INDICATE,
@@ -61,15 +65,13 @@ BT_GATT_SERVICE_DEFINE(hts_svc,
 
 void hts_init(void)
 {
-	temp_dev = device_get_binding("TEMP_0");
-
-	if (!temp_dev) {
-		printk("error: no temp device\n");
-		return;
+	if (temp_dev == NULL || !device_is_ready(temp_dev)) {
+		printk("no temperature device; using simulated data\n");
+		temp_dev = NULL;
+	} else {
+		printk("temp device is %p, name is %s\n", temp_dev,
+		       temp_dev->name);
 	}
-
-	printk("temp device is %p, name is %s\n", temp_dev,
-	       temp_dev->name);
 }
 
 void hts_indicate(void)

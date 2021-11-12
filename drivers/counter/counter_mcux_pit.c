@@ -33,7 +33,14 @@ static uint32_t mcux_pit_get_top_value(const struct device *dev)
 	const struct mcux_pit_config *config = dev->config;
 	pit_chnl_t channel = config->pit_channel;
 
-	return config->base->CHANNEL[channel].LDVAL;
+	/*
+	 * According to RM, the LDVAL trigger = clock ticks -1
+	 * The underlying HAL driver function PIT_SetTimerPeriod()
+	 * automatically subtracted 1 from the value that ends up in
+	 * LDVAL so for reporting purposes we need to add it back in
+	 * here to by consistent.
+	 */
+	return (config->base->CHANNEL[channel].LDVAL + 1);
 }
 
 static int mcux_pit_start(const struct device *dev)
@@ -105,13 +112,6 @@ static uint32_t mcux_pit_get_pending_int(const struct device *dev)
 	flags = PIT_GetStatusFlags(config->base, config->pit_channel);
 
 	return ((flags & mask) == mask);
-}
-
-static uint32_t mcux_pit_get_max_relative_alarm(const struct device *dev)
-{
-	const struct mcux_pit_config *config = dev->config;
-
-	return config->info.max_top_value;
 }
 
 static void mcux_pit_isr(const struct device *dev)
@@ -208,7 +208,6 @@ static const struct counter_driver_api mcux_pit_driver_api = {
 	.cancel_alarm = mcux_pit_cancel_alarm,
 	.get_pending_int = mcux_pit_get_pending_int,
 	.get_top_value = mcux_pit_get_top_value,
-	.get_max_relative_alarm = mcux_pit_get_max_relative_alarm,
 };
 
 /*
@@ -233,7 +232,7 @@ static const struct mcux_pit_config mcux_pit_config_0 = {
 	.irq_config_func = mcux_pit_irq_config_0,
 };
 
-DEVICE_AND_API_INIT(mcux_pit_0, DT_INST_LABEL(0), &mcux_pit_init,
+DEVICE_DT_INST_DEFINE(0, &mcux_pit_init, NULL,
 		    &mcux_pit_data_0, &mcux_pit_config_0, POST_KERNEL,
 		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &mcux_pit_driver_api);
 
@@ -241,18 +240,18 @@ static void mcux_pit_irq_config_0(const struct device *dev)
 {
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 0, irq),
 		    DT_INST_IRQ_BY_IDX(0, 0, priority), mcux_pit_isr,
-		    DEVICE_GET(mcux_pit_0), 0);
+		    DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 0, irq));
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 1, irq),
 		    DT_INST_IRQ_BY_IDX(0, 1, priority), mcux_pit_isr,
-		    DEVICE_GET(mcux_pit_0), 0);
+		    DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 1, irq));
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 2, irq),
 		    DT_INST_IRQ_BY_IDX(0, 2, priority), mcux_pit_isr,
-		    DEVICE_GET(mcux_pit_0), 0);
+		    DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 2, irq));
 	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(0, 3, irq),
 		    DT_INST_IRQ_BY_IDX(0, 3, priority), mcux_pit_isr,
-		    DEVICE_GET(mcux_pit_0), 0);
+		    DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQ_BY_IDX(0, 3, irq));
 }

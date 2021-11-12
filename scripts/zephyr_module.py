@@ -19,6 +19,7 @@ maintained in modules in addition to what is available in the main Zephyr tree.
 
 import argparse
 import os
+import re
 import sys
 import yaml
 import pykwalify.core
@@ -33,6 +34,9 @@ METADATA_SCHEMA = '''
 # the build system.
 type: map
 mapping:
+  name:
+    required: false
+    type: str
   build:
     required: false
     type: map
@@ -43,6 +47,14 @@ mapping:
       kconfig:
         required: false
         type: str
+      cmake-ext:
+        required: false
+        type: bool
+        default: false
+      kconfig-ext:
+        required: false
+        type: bool
+        default: false
       depends:
         required: false
         type: seq
@@ -62,6 +74,9 @@ mapping:
             required: false
             type: str
           arch_root:
+            required: false
+            type: str
+          module_ext_root:
             required: false
             type: str
   tests:
@@ -113,11 +128,15 @@ def process_module(module):
             sys.exit('ERROR: Malformed "build" section in file: {}\n{}'
                      .format(module_yml.as_posix(), e))
 
+        meta['name'] = meta.get('name', module_path.name)
+        meta['name-sanitized'] = re.sub('[^a-zA-Z0-9]', '_', meta['name'])
         return meta
 
     if Path(module_path.joinpath('zephyr/CMakeLists.txt')).is_file() and \
        Path(module_path.joinpath('zephyr/Kconfig')).is_file():
-        return {'build': {'cmake': 'zephyr', 'kconfig': 'zephyr/Kconfig'}}
+        return {'name': module_path.name,
+                'name-sanitized': re.sub('[^a-zA-Z0-9]', '_', module_path.name),
+                'build': {'cmake': 'zephyr', 'kconfig': 'zephyr/Kconfig'}}
 
     return None
 
@@ -126,6 +145,14 @@ def process_cmake(module, meta):
     section = meta.get('build', dict())
     module_path = PurePath(module)
     module_yml = module_path.joinpath('zephyr/module.yml')
+
+    cmake_extern = section.get('cmake-ext', False)
+    if cmake_extern:
+        return('\"{}\":\"{}\":\"{}\"\n'
+               .format(meta['name'],
+                       module_path.as_posix(),
+                       "${ZEPHYR_" + meta['name-sanitized'].upper() + "_CMAKE_DIR}"))
+
     cmake_setting = section.get('cmake', None)
     if not validate_setting(cmake_setting, module, 'CMakeLists.txt'):
         sys.exit('ERROR: "cmake" key in {} has folder value "{}" which '
@@ -136,13 +163,14 @@ def process_cmake(module, meta):
     cmake_file = os.path.join(cmake_path, 'CMakeLists.txt')
     if os.path.isfile(cmake_file):
         return('\"{}\":\"{}\":\"{}\"\n'
-               .format(module_path.name,
+               .format(meta['name'],
                        module_path.as_posix(),
                        Path(cmake_path).resolve().as_posix()))
     else:
         return('\"{}\":\"{}\":\"\"\n'
-               .format(module_path.name,
+               .format(meta['name'],
                        module_path.as_posix()))
+
 
 def process_settings(module, meta):
     section = meta.get('build', dict())
@@ -150,19 +178,37 @@ def process_settings(module, meta):
     out_text = ""
 
     if build_settings is not None:
-        for root in ['board', 'dts', 'soc', 'arch']:
+        for root in ['board', 'dts', 'soc', 'arch', 'module_ext']:
             setting = build_settings.get(root+'_root', None)
             if setting is not None:
                 root_path = PurePath(module) / setting
-                out_text += f'"{root.upper()}_ROOT":"{root_path.as_posix()}"\n'
+                out_text += f'"{root.upper()}_ROOT":'
+                out_text += f'"{root_path.as_posix()}"\n'
 
     return out_text
+
+
+def kconfig_snippet(meta, path, kconfig_file=None):
+    name = meta['name']
+    name_sanitized = meta['name-sanitized']
+
+    snippet = (f'menu "{name} ({path})"',
+               f'osource "{kconfig_file.resolve().as_posix()}"' if kconfig_file
+               else f'osource "$(ZEPHYR_{name_sanitized.upper()}_KCONFIG)"',
+               f'config ZEPHYR_{name_sanitized.upper()}_MODULE',
+               '	bool',
+               '	default y',
+               'endmenu\n')
+    return '\n'.join(snippet)
 
 
 def process_kconfig(module, meta):
     section = meta.get('build', dict())
     module_path = PurePath(module)
     module_yml = module_path.joinpath('zephyr/module.yml')
+    kconfig_extern = section.get('kconfig-ext', False)
+    if kconfig_extern:
+        return kconfig_snippet(meta, module_path)
 
     kconfig_setting = section.get('kconfig', None)
     if not validate_setting(kconfig_setting, module):
@@ -172,10 +218,10 @@ def process_kconfig(module, meta):
 
     kconfig_file = os.path.join(module, kconfig_setting or 'zephyr/Kconfig')
     if os.path.isfile(kconfig_file):
-        return 'osource "{}"\n\n'.format(Path(kconfig_file)
-                                         .resolve().as_posix())
+        return kconfig_snippet(meta, module_path, Path(kconfig_file))
     else:
         return ""
+
 
 def process_twister(module, meta):
 
@@ -199,6 +245,87 @@ def process_twister(module, meta):
     return out
 
 
+def parse_modules(zephyr_base, modules=None, extra_modules=None):
+    if modules is None:
+        # West is imported here, as it is optional
+        # (and thus maybe not installed)
+        # if user is providing a specific modules list.
+        from west.manifest import Manifest
+        from west.util import WestNotFound
+        from west.version import __version__ as WestVersion
+        from packaging import version
+        try:
+            manifest = Manifest.from_file()
+            if version.parse(WestVersion) >= version.parse('0.9.0'):
+                projects = [p.posixpath for p in manifest.get_projects([])
+                            if manifest.is_active(p)]
+            else:
+                projects = [p.posixpath for p in manifest.get_projects([])]
+        except WestNotFound:
+            # Only accept WestNotFound, meaning we are not in a west
+            # workspace. Such setup is allowed, as west may be installed
+            # but the project is not required to use west.
+            projects = []
+    else:
+        projects = modules.copy()
+
+    if extra_modules is None:
+        extra_modules = []
+
+    projects += extra_modules
+
+    Module = namedtuple('Module', ['project', 'meta', 'depends'])
+    # dep_modules is a list of all modules that has an unresolved dependency
+    dep_modules = []
+    # start_modules is a list modules with no depends left (no incoming edge)
+    start_modules = []
+    # sorted_modules is a topological sorted list of the modules
+    sorted_modules = []
+
+    for project in projects:
+        # Avoid including Zephyr base project as module.
+        if project == zephyr_base:
+            continue
+
+        meta = process_module(project)
+        if meta:
+            section = meta.get('build', dict())
+            deps = section.get('depends', [])
+            if not deps:
+                start_modules.append(Module(project, meta, []))
+            else:
+                dep_modules.append(Module(project, meta, deps))
+        elif project in extra_modules:
+            sys.exit(f'{project}, given in ZEPHYR_EXTRA_MODULES, '
+                     'is not a valid zephyr module')
+
+    # This will do a topological sort to ensure the modules are ordered
+    # according to dependency settings.
+    while start_modules:
+        node = start_modules.pop(0)
+        sorted_modules.append(node)
+        node_name = node.meta['name']
+        to_remove = []
+        for module in dep_modules:
+            if node_name in module.depends:
+                module.depends.remove(node_name)
+                if not module.depends:
+                    start_modules.append(module)
+                    to_remove.append(module)
+        for module in to_remove:
+            dep_modules.remove(module)
+
+    if dep_modules:
+        # If there are any modules with unresolved dependencies, then the
+        # modules contains unmet or cyclic dependencies. Error out.
+        error = 'Unmet or cyclic dependencies in modules:\n'
+        for module in dep_modules:
+            error += f'{module.project} depends on: {module.depends}\n'
+        sys.exit(error)
+
+    return sorted_modules
+
+
 def main():
     parser = argparse.ArgumentParser(description='''
     Process a list of projects and create Kconfig / CMake include files for
@@ -219,87 +346,20 @@ def main():
     parser.add_argument('-m', '--modules', nargs='+',
                         help="""List of modules to parse instead of using `west
                              list`""")
-    parser.add_argument('-x', '--extra-modules', nargs='+', default=[],
+    parser.add_argument('-x', '--extra-modules', nargs='+',
                         help='List of extra modules to parse')
     parser.add_argument('-z', '--zephyr-base',
                         help='Path to zephyr repository')
     args = parser.parse_args()
-
-    if args.modules is None:
-        # West is imported here, as it is optional
-        # (and thus maybe not installed)
-        # if user is providing a specific modules list.
-        from west.manifest import Manifest
-        from west.util import WestNotFound
-        try:
-            manifest = Manifest.from_file()
-            projects = [p.posixpath for p in manifest.get_projects([])]
-        except WestNotFound:
-            # Only accept WestNotFound, meaning we are not in a west
-            # workspace. Such setup is allowed, as west may be installed
-            # but the project is not required to use west.
-            projects = []
-    else:
-        projects = args.modules.copy()
-
-    projects += args.extra_modules
-    extra_modules = set(args.extra_modules)
 
     kconfig = ""
     cmake = ""
     settings = ""
     twister = ""
 
-    Module = namedtuple('Module', ['project', 'meta', 'depends'])
-    # dep_modules is a list of all modules that has an unresolved dependency
-    dep_modules = []
-    # start_modules is a list modules with no depends left (no incoming edge)
-    start_modules = []
-    # sorted_modules is a topological sorted list of the modules
-    sorted_modules = []
+    modules = parse_modules(args.zephyr_base, args.modules, args.extra_modules)
 
-    for project in projects:
-        # Avoid including Zephyr base project as module.
-        if project == args.zephyr_base:
-            continue
-
-        meta = process_module(project)
-        if meta:
-            section = meta.get('build', dict())
-            deps = section.get('depends', [])
-            if not deps:
-                start_modules.append(Module(project, meta, []))
-            else:
-                dep_modules.append(Module(project, meta, deps))
-        elif project in extra_modules:
-            sys.exit(f'{project}, given in ZEPHYR_EXTRA_MODULES, '
-                     'is not a valid zephyr module')
-
-    # This will do a topological sort to ensure the modules are ordered
-    # according to dependency settings.
-    while start_modules:
-        node = start_modules.pop(0)
-        sorted_modules.append(node)
-        node_name = PurePath(node.project).name
-        to_remove = []
-        for module in dep_modules:
-            if node_name in module.depends:
-                module.depends.remove(node_name)
-                if not module.depends:
-                    start_modules.append(module)
-                    to_remove.append(module)
-        for module in to_remove:
-            dep_modules.remove(module)
-
-    if dep_modules:
-        # If there are any modules with unresolved dependencies, then the
-        # modules contains unmet or cyclic dependencies. Error out.
-        error = 'Unmet or cyclic dependencies in modules:\n'
-        for module in dep_modules:
-            error += f'{module.project} depends on: {module.depends}\n'
-        sys.exit(error)
-
-    for module in sorted_modules:
+    for module in modules:
         kconfig += process_kconfig(module.project, module.meta)
         cmake += process_cmake(module.project, module.meta)
         settings += process_settings(module.project, module.meta)
@@ -315,6 +375,16 @@ def main():
 
     if args.settings_out:
         with open(args.settings_out, 'w', encoding="utf-8") as fp:
+            fp.write('''\
+# WARNING. THIS FILE IS AUTO-GENERATED. DO NOT MODIFY!
+#
+# This file contains build system settings derived from your modules.
+#
+# Modules may be set via ZEPHYR_MODULES, ZEPHYR_EXTRA_MODULES,
+# and/or the west manifest file.
+#
+# See the Modules guide for more information.
+''')
             fp.write(settings)
 
     if args.twister_out:

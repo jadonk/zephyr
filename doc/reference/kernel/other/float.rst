@@ -75,6 +75,10 @@ or SSE user are not impacted by the computations performed by the other users.
 ARM Cortex-M architecture (with the Floating Point Extension)
 -------------------------------------------------------------
 
+.. note::
+    The Shared FP registers mode is the default Floating Point
+    Services mode in ARM Cortex-M.
+
 On the ARM Cortex-M architecture with the Floating Point Extension, the kernel
 treats *all* threads as FPU users when shared FP registers mode is enabled.
 This means that any thread is allowed to access the floating point registers.
@@ -92,7 +96,8 @@ using one of the techniques listed below.
 
 Pretagging a thread with the :c:macro:`K_FP_REGS` option instructs the
 MPU-based stack protection mechanism to properly configure the size of
-the thread's guard region to always guarantee stack overflow detection.
+the thread's guard region to always guarantee stack overflow detection,
+and enable lazy stacking for the given thread upon thread creation.
 
 During thread context switching the ARM kernel saves the *callee-saved*
 floating point registers, if the switched-out thread has been using them.
@@ -113,9 +118,46 @@ is currently enabled in Zephyr applications on ARM Cortex-M
 architecture, minimizing interrupt latency, when the floating
 point context is active.
 
+When the MPU-based stack protection mechanism is not enabled, lazy stacking
+is always active in the Zephyr application. When the MPU-based stack protection
+is enabled, the following rules apply with respect to lazy stacking:
+
+* Lazy stacking is activated by default on threads that are pretagged with
+  :c:macro:`K_FP_REGS`
+* Lazy stacking is activated dynamically on threads that are not pretagged with
+  :c:macro:`K_FP_REGS`, as soon as the kernel detects that they are using the
+  floating point registers.
+
+
 If an ARM thread does not require use of the floating point registers any
 more, it can call :c:func:`k_float_disable`. This instructs the kernel
 not to save or restore its FP context during thread context switching.
+
+ARM64 architecture
+------------------
+
+.. note::
+    The Shared FP registers mode is the default Floating Point
+    Services mode on ARM64. The compiler is free to optimize code
+    using FP/SIMD registers, and library functions such as memcpy
+    are known to make use of them.
+
+On the ARM64 (Aarch64) architecture the kernel treats each thread as a FPU
+user on a case-by-case basis. A "lazy save" algorithm is used during context
+switching which updates the floating point registers only when it is absolutely
+necessary. For example, the registers are *not* saved when switching from an
+FPU user to a non-user thread, and then back to the original FPU user.
+
+FPU register usage by ISRs is supported although not recommended. When an
+ISR uses floating point or SIMD registers, then the access is trapped, the
+current FPU user context is saved in the thread object and the ISR is resumed
+with interrupts disabled so to prevent another IRQ from interrupting the ISR
+and potentially requesting FPU usage. Because ISR don't have a persistent
+register context, there are no provision for saving an ISR's FPU context
+either, hence the IRQ disabling.
+
+Each thread object becomes 512 bytes larger when Shared FP registers mode
+is enabled.
 
 ARCv2 architecture
 ------------------
@@ -196,13 +238,13 @@ the switched-out thread. Floating point registers are saved on the thread's
 stack. Floating point registers are restored when a thread context is restored
 iff they were saved at the context save. Saving and restoring of the floating
 point registers is synchronous and thus not lazy. The FPU is always disabled
-when an ISR is called (independent of :option:`CONFIG_FPU_SHARING`).
+when an ISR is called (independent of :kconfig:`CONFIG_FPU_SHARING`).
 
 Floating point disabling with :c:func:`k_float_disable` is not implemented.
 
-When :option:`CONFIG_FPU_SHARING` is used, then 136 bytes of stack space
+When :kconfig:`CONFIG_FPU_SHARING` is used, then 136 bytes of stack space
 is required for each FPU user thread to load and store floating point
-registers. No extra stack is required if :option:`CONFIG_FPU_SHARING` is
+registers. No extra stack is required if :kconfig:`CONFIG_FPU_SHARING` is
 not used.
 
 x86 architecture
@@ -293,21 +335,20 @@ perform floating point operations.
 Configuration Options
 *********************
 
-To configure unshared FP registers mode, enable the :option:`CONFIG_FPU`
-configuration option and leave the :option:`CONFIG_FPU_SHARING` configuration
+To configure unshared FP registers mode, enable the :kconfig:`CONFIG_FPU`
+configuration option and leave the :kconfig:`CONFIG_FPU_SHARING` configuration
 option disabled.
 
-To configure shared FP registers mode, enable both the :option:`CONFIG_FPU`
-configuration option and the :option:`CONFIG_FPU_SHARING` configuration option.
+To configure shared FP registers mode, enable both the :kconfig:`CONFIG_FPU`
+configuration option and the :kconfig:`CONFIG_FPU_SHARING` configuration option.
 Also, ensure that any thread that uses the floating point registers has
 sufficient added stack space for saving floating point register values
 during context switches, as described above.
 
-Use the :option:`CONFIG_SSE` configuration option to enable support for
-SSEx instructions (x86 only).
+For x86, use the :kconfig:`CONFIG_X86_SSE` configuration option to enable
+support for SSEx instructions.
 
 API Reference
 *************
 
 .. doxygengroup:: float_apis
-   :project: Zephyr

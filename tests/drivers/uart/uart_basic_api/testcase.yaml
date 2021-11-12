@@ -1,3 +1,7 @@
+common:
+  integration_platforms:
+    - mps2_an385
+
 tests:
   drivers.uart:
     tags: drivers
@@ -13,4 +17,11 @@ tests:
     min_flash: 64
     tags: drivers
     filter: CONFIG_UART_CONSOLE
+    harness: keyboard
+  drivers.uart.cdc_acm:
+    extra_args: OVERLAY_CONFIG="overlay-usb.conf"
+                DTC_OVERLAY_FILE="usb.overlay"
+    tags: drivers usb
+    filter: CONFIG_UART_CONSOLE
+    depends_on: usb_device
     harness: keyboard

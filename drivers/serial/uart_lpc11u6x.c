@@ -100,6 +100,7 @@ static void lpc11u6x_uart0_config_baudrate(const struct device *clk_drv,
 	lpc11u6x_uart0_write_fdr(cfg->uart0, div, mul);
 }
 
+#ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
 static int lpc11u6x_uart0_configure(const struct device *dev,
 				    const struct uart_config *cfg)
 {
@@ -199,6 +200,7 @@ static int lpc11u6x_uart0_config_get(const struct device *dev,
 
 	return 0;
 }
+#endif /* CONFIG_UART_USE_RUNTIME_CONFIGURE */
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 static int lpc11u6x_uart0_fifo_fill(const struct device *dev,
@@ -416,8 +418,10 @@ static const struct uart_driver_api uart0_api = {
 	.poll_in = lpc11u6x_uart0_poll_in,
 	.poll_out = lpc11u6x_uart0_poll_out,
 	.err_check = lpc11u6x_uart0_err_check,
+#ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
 	.configure = lpc11u6x_uart0_configure,
 	.config_get = lpc11u6x_uart0_config_get,
+#endif
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.fifo_fill = lpc11u6x_uart0_fifo_fill,
 	.fifo_read = lpc11u6x_uart0_fifo_read,
@@ -438,8 +442,9 @@ static const struct uart_driver_api uart0_api = {
 
 static struct lpc11u6x_uart0_data uart0_data;
 
-DEVICE_AND_API_INIT(lpc11u6x_uart0, DT_LABEL(DT_NODELABEL(uart0)),
+DEVICE_DT_DEFINE(DT_NODELABEL(uart0),
 		    &lpc11u6x_uart0_init,
+		    NULL,
 		    &uart0_data, &uart0_config,
 		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_OBJECTS,
 		    &uart0_api);
@@ -449,7 +454,7 @@ static void lpc11u6x_uart0_isr_config(const struct device *dev)
 {
 	IRQ_CONNECT(DT_IRQN(DT_NODELABEL(uart0)),
 		    DT_IRQ(DT_NODELABEL(uart0), priority),
-		    lpc11u6x_uart0_isr, DEVICE_GET(lpc11u6x_uart0), 0);
+		    lpc11u6x_uart0_isr, DEVICE_DT_GET(DT_NODELABEL(uart0)), 0);
 
 	irq_enable(DT_IRQN(DT_NODELABEL(uart0)));
 }
@@ -517,6 +522,7 @@ static void lpc11u6x_uartx_config_baud(const struct lpc11u6x_uartx_config *cfg,
 	cfg->base->brg = div & LPC11U6X_UARTX_BRG_MASK;
 }
 
+#ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
 static int lpc11u6x_uartx_configure(const struct device *dev,
 				    const struct uart_config *cfg)
 {
@@ -621,6 +627,7 @@ static int lpc11u6x_uartx_config_get(const struct device *dev,
 
 	return 0;
 }
+#endif /* CONFIG_UART_USE_RUNTIME_CONFIGURE */
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 static int lpc11u6x_uartx_fifo_fill(const struct device *dev,
@@ -846,8 +853,10 @@ static const struct uart_driver_api uartx_api = {
 	.poll_in = lpc11u6x_uartx_poll_in,
 	.poll_out = lpc11u6x_uartx_poll_out,
 	.err_check = lpc11u6x_uartx_err_check,
+#ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
 	.configure = lpc11u6x_uartx_configure,
 	.config_get = lpc11u6x_uartx_config_get,
+#endif
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.fifo_fill = lpc11u6x_uartx_fifo_fill,
 	.fifo_read = lpc11u6x_uartx_fifo_read,
@@ -892,8 +901,8 @@ static const struct lpc11u6x_uartx_config uart_cfg_##idx = {	              \
 									      \
 static struct lpc11u6x_uartx_data uart_data_##idx;                            \
 									      \
-DEVICE_AND_API_INIT(lpc11u6x_uartx_##idx, DT_LABEL(DT_NODELABEL(uart##idx)),  \
-		    &lpc11u6x_uartx_init,				      \
+DEVICE_DT_DEFINE(DT_NODELABEL(uart##idx), 				      \
+		    &lpc11u6x_uartx_init, NULL,				      \
 		    &uart_data_##idx, &uart_cfg_##idx,			      \
 		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_OBJECTS,	      \
 		    &uartx_api)
@@ -921,12 +930,12 @@ LPC11U6X_UARTX_INIT(4);
 struct lpc11u6x_uartx_shared_irq lpc11u6x_uartx_shared_irq_info_1 = {
 	.devices = {
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(uart1), okay)
-		DEVICE_GET(lpc11u6x_uartx_1),
+		DEVICE_DT_GET(DT_NODELABEL(uart1)),
 #else
 		NULL,
 #endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(uart1), okay) */
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(uart4), okay)
-		DEVICE_GET(lpc11u6x_uartx_4),
+		DEVICE_DT_GET(DT_NODELABEL(uart4)),
 #else
 		NULL,
 #endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(uart4), okay) */
@@ -962,12 +971,12 @@ static void lpc11u6x_uartx_isr_config_1(const struct device *dev)
 struct lpc11u6x_uartx_shared_irq lpc11u6x_uartx_shared_irq_info_2 = {
 	.devices = {
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(uart2), okay)
-		DEVICE_GET(lpc11u6x_uartx_2),
+		DEVICE_DT_GET(DT_NODELABEL(uart2)),
 #else
 		NULL,
 #endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(uart2), okay) */
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(uart3), okay)
-		DEVICE_GET(lpc11u6x_uartx_3),
+		DEVICE_DT_GET(DT_NODELABEL(uart3)),
 #else
 		NULL,
 #endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(uart3), okay) */

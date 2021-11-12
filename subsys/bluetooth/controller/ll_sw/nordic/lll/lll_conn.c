@@ -4,25 +4,29 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
 
 #include <toolchain.h>
-#include <zephyr/types.h>
-#include <sys/util.h>
-#include <drivers/clock_control/nrf_clock_control.h>
+#include <soc.h>
 
+#include <sys/util.h>
+
+#include "hal/cpu.h"
+#include "hal/ccm.h"
+#include "hal/radio.h"
+
+#include "util/util.h"
 #include "util/mem.h"
 #include "util/memq.h"
 #include "util/mfifo.h"
-
-#include "hal/ccm.h"
-#include "hal/radio.h"
 
 #include "pdu.h"
 
 #include "lll.h"
 #include "lll_clock.h"
+#include "lll_df_types.h"
 #include "lll_conn.h"
 
 #include "lll_internal.h"
@@ -32,7 +36,6 @@
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_DEBUG_HCI_DRIVER)
 #define LOG_MODULE_NAME bt_ctlr_lll_conn
 #include "common/log.h"
-#include <soc.h>
 #include "hal/debug.h"
 
 static int init_reset(void);
@@ -77,7 +80,7 @@ static uint8_t force_md_cnt;
 #define FORCE_MD_CNT_SET() \
 		do { \
 			if (force_md_cnt || \
-			    (trx_cnt >= ((CONFIG_BT_CTLR_TX_BUFFERS) - 1))) { \
+			    (trx_cnt >= ((CONFIG_BT_BUF_ACL_TX_COUNT) - 1))) { \
 				force_md_cnt = BT_CTLR_FORCE_MD_COUNT; \
 			} \
 		} while (0)
@@ -135,6 +138,7 @@ void lll_conn_prepare_reset(void)
 
 void lll_conn_abort_cb(struct lll_prepare_param *prepare_param, void *param)
 {
+	struct lll_conn *lll;
 	int err;
 
 	/* NOTE: This is not a prepare being cancelled */
@@ -153,6 +157,10 @@ void lll_conn_abort_cb(struct lll_prepare_param *prepare_param, void *param)
 	 */
 	err = lll_hfclock_off();
 	LL_ASSERT(err >= 0);
+
+	/* Accumulate the latency as event is aborted while being in pipeline */
+	lll = prepare_param->param;
+	lll->latency_prepare += (prepare_param->lazy + 1);
 
 	lll_done(param);
 }
@@ -248,7 +256,7 @@ void lll_conn_isr_rx(void *param)
 
 		if (0) {
 #if defined(CONFIG_BT_CENTRAL)
-		/* Event done for master */
+		/* Event done for central */
 		} else if (!lll->role) {
 			radio_disable();
 
@@ -263,7 +271,7 @@ void lll_conn_isr_rx(void *param)
 			goto lll_conn_isr_rx_exit;
 #endif /* CONFIG_BT_CENTRAL */
 #if defined(CONFIG_BT_PERIPHERAL)
-		/* Event done for slave */
+		/* Event done for peripheral */
 		} else {
 			radio_switch_complete_and_disable();
 #endif /* CONFIG_BT_PERIPHERAL */
@@ -338,6 +346,7 @@ lll_conn_isr_rx_exit:
 	if (is_rx_enqueue) {
 #if defined(CONFIG_SOC_COMPATIBLE_NRF52832) && \
 	defined(CONFIG_BT_CTLR_LE_ENC) && \
+	defined(HAL_RADIO_PDU_LEN_MAX) && \
 	(!defined(CONFIG_BT_CTLR_DATA_LENGTH_MAX) || \
 	 (CONFIG_BT_CTLR_DATA_LENGTH_MAX < (HAL_RADIO_PDU_LEN_MAX - 4)))
 		if (lll->enc_rx) {
@@ -348,6 +357,8 @@ lll_conn_isr_rx_exit:
 			memcpy((void *)pdu_data_rx->lldata,
 			       (void *)pkt_decrypt_data, pdu_data_rx->len);
 		}
+#elif !defined(HAL_RADIO_PDU_LEN_MAX)
+#error "Undefined HAL_RADIO_PDU_LEN_MAX."
 #endif
 
 		ull_pdu_rx_alloc();
@@ -488,10 +499,13 @@ void lll_conn_rx_pkt_set(struct lll_conn *lll)
 		radio_pkt_configure(8, (max_rx_octets + 4), (phy << 1) | 0x01);
 
 #if defined(CONFIG_SOC_COMPATIBLE_NRF52832) && \
+	defined(HAL_RADIO_PDU_LEN_MAX) && \
 	(!defined(CONFIG_BT_CTLR_DATA_LENGTH_MAX) || \
 	 (CONFIG_BT_CTLR_DATA_LENGTH_MAX < (HAL_RADIO_PDU_LEN_MAX - 4)))
 		radio_pkt_rx_set(radio_ccm_rx_pkt_set(&lll->ccm_rx, phy,
 						      radio_pkt_decrypt_get()));
+#elif !defined(HAL_RADIO_PDU_LEN_MAX)
+#error "Undefined HAL_RADIO_PDU_LEN_MAX."
 #else
 		radio_pkt_rx_set(radio_ccm_rx_pkt_set(&lll->ccm_rx, phy,
 						      node_rx->pdu));
@@ -646,12 +660,12 @@ static void isr_done(void *param)
 			e->drift.start_to_address_actual_us =
 				radio_tmr_aa_restore() - radio_tmr_ready_get();
 			e->drift.window_widening_event_us =
-				lll->slave.window_widening_event_us;
+				lll->periph.window_widening_event_us;
 			e->drift.preamble_to_addr_us = preamble_to_addr_us;
 
 			/* Reset window widening, as anchor point sync-ed */
-			lll->slave.window_widening_event_us = 0;
-			lll->slave.window_size_event_us = 0;
+			lll->periph.window_widening_event_us = 0;
+			lll->periph.window_size_event_us = 0;
 		}
 	}
 #endif /* CONFIG_BT_PERIPHERAL */
@@ -672,6 +686,7 @@ static inline int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
 {
 #if defined(CONFIG_SOC_COMPATIBLE_NRF52832) && \
 	defined(CONFIG_BT_CTLR_LE_ENC) && \
+	defined(HAL_RADIO_PDU_LEN_MAX) && \
 	(!defined(CONFIG_BT_CTLR_DATA_LENGTH_MAX) || \
 	 (CONFIG_BT_CTLR_DATA_LENGTH_MAX < (HAL_RADIO_PDU_LEN_MAX - 4)))
 	if (lll->enc_rx) {
@@ -681,6 +696,8 @@ static inline int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
 		memcpy((void *)pdu_data_rx, (void *)pkt_decrypt,
 		       offsetof(struct pdu_data, lldata));
 	}
+#elif !defined(HAL_RADIO_PDU_LEN_MAX)
+#error "Undefined HAL_RADIO_PDU_LEN_MAX."
 #endif
 
 	/* Ack for tx-ed data */
@@ -694,10 +711,10 @@ static inline int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
 
 #if defined(CONFIG_BT_PERIPHERAL)
 		/* First ack (and redundantly any other ack) enable use of
-		 * slave latency.
+		 * peripheral latency.
 		 */
 		if (lll->role) {
-			lll->slave.latency_enabled = 1;
+			lll->periph.latency_enabled = 1;
 		}
 #endif /* CONFIG_BT_PERIPHERAL */
 
@@ -754,6 +771,8 @@ static inline int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
 				*tx_release = tx;
 
 				FORCE_MD_CNT_SET();
+			} else {
+				LL_ASSERT(0);
 			}
 
 			if (IS_ENABLED(CONFIG_BT_CENTRAL) && !lll->role &&

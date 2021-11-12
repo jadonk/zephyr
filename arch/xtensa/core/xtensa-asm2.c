@@ -11,6 +11,7 @@
 #include <kernel_internal.h>
 #include <kswap.h>
 #include <_soc_inthandlers.h>
+#include <toolchain.h>
 #include <logging/log.h>
 
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
@@ -59,9 +60,6 @@ void *xtensa_init_stack(struct k_thread *thread, int *stack_top,
 	bsa[-9] = bsa;
 	ret = &bsa[-9];
 
-#ifdef CONFIG_KERNEL_COHERENCE
-	xthal_dcache_region_writeback(ret, (char *)stack_top - (char *)ret);
-#endif
 	return ret;
 }
 
@@ -72,6 +70,11 @@ void arch_new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 	thread->switch_handle = xtensa_init_stack(thread,
 						  (int *)stack_ptr, entry,
 						  p1, p2, p3);
+#ifdef CONFIG_KERNEL_COHERENCE
+	__ASSERT((((size_t)stack) % XCHAL_DCACHE_LINESIZE) == 0, "");
+	__ASSERT((((size_t)stack_ptr) % XCHAL_DCACHE_LINESIZE) == 0, "");
+	z_xtensa_cache_flush_inv(stack, (char *)stack_ptr - (char *)stack);
+#endif
 }
 
 void z_irq_spurious(const void *arg)
@@ -136,9 +139,12 @@ static inline unsigned int get_bits(int offset, int num_bits, unsigned int val)
 /* The wrapper code lives here instead of in the python script that
  * generates _xtensa_handle_one_int*().  Seems cleaner, still kind of
  * ugly.
+ *
+ * This may be unused depending on number of interrupt levels
+ * supported by the SoC.
  */
 #define DEF_INT_C_HANDLER(l)				\
-void *xtensa_int##l##_c(void *interrupted_stack)	\
+__unused void *xtensa_int##l##_c(void *interrupted_stack)	\
 {							   \
 	uint32_t irqs, intenable, m;			   \
 	__asm__ volatile("rsr.interrupt %0" : "=r"(irqs)); \
@@ -224,5 +230,5 @@ int z_xtensa_irq_is_enabled(unsigned int irq)
 
 	__asm__ volatile("rsr.intenable %0" : "=r"(ie));
 
-	return (ie & (1 << irq)) != 0;
+	return (ie & (1 << irq)) != 0U;
 }

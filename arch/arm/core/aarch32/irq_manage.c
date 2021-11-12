@@ -27,7 +27,7 @@
 #include <sw_isr_table.h>
 #include <irq.h>
 #include <tracing/tracing.h>
-#include <power/power.h>
+#include <pm/pm.h>
 
 extern void z_arm_reserved(void);
 
@@ -69,29 +69,25 @@ void z_arm_irq_priority_set(unsigned int irq, unsigned int prio, uint32_t flags)
 	 * of priority levels reserved by the kernel.
 	 */
 
-#if defined(CONFIG_ZERO_LATENCY_IRQS)
 	/* If we have zero latency interrupts, those interrupts will
 	 * run at a priority level which is not masked by irq_lock().
 	 * Our policy is to express priority levels with special properties
 	 * via flags
 	 */
-	if (flags & IRQ_ZERO_LATENCY) {
+	if (IS_ENABLED(CONFIG_ZERO_LATENCY_IRQS) && (flags & IRQ_ZERO_LATENCY)) {
 		prio = _EXC_ZERO_LATENCY_IRQS_PRIO;
 	} else {
 		prio += _IRQ_PRIO_OFFSET;
 	}
-#else
-	ARG_UNUSED(flags);
-	prio += _IRQ_PRIO_OFFSET;
-#endif
+
 	/* The last priority level is also used by PendSV exception, but
 	 * allow other interrupts to use the same level, even if it ends up
 	 * affecting performance (can still be useful on systems with a
 	 * reduced set of priorities, like Cortex-M0/M0+).
 	 */
 	__ASSERT(prio <= (BIT(NUM_IRQ_PRIO_BITS) - 1),
-		 "invalid priority %d! values must be less than %lu\n",
-		 prio - _IRQ_PRIO_OFFSET,
+		 "invalid priority %d for %d irq! values must be less than %lu\n",
+		 prio - _IRQ_PRIO_OFFSET, irq,
 		 BIT(NUM_IRQ_PRIO_BITS) - (_IRQ_PRIO_OFFSET));
 	NVIC_SetPriority((IRQn_Type)irq, prio);
 }
@@ -295,6 +291,7 @@ void irq_target_state_set_all_non_secure(void)
 #endif /* CONFIG_ARM_SECURE_FIRMWARE */
 
 #ifdef CONFIG_DYNAMIC_INTERRUPTS
+#ifdef CONFIG_GEN_ISR_TABLES
 int arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
 			     void (*routine)(const void *parameter),
 			     const void *parameter, uint32_t flags)
@@ -303,6 +300,7 @@ int arch_irq_connect_dynamic(unsigned int irq, unsigned int priority,
 	z_arm_irq_priority_set(irq, priority, flags);
 	return irq;
 }
+#endif /* CONFIG_GEN_ISR_TABLES */
 
 #ifdef CONFIG_DYNAMIC_DIRECT_INTERRUPTS
 static inline void z_arm_irq_dynamic_direct_isr_dispatch(void)

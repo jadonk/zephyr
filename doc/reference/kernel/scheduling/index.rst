@@ -16,12 +16,15 @@ There are various points in time when the scheduler is given an
 opportunity to change the identity of the current thread.  These points
 are called **reschedule points**. Some potential reschedule points are:
 
+- transition of a thread from running state to a suspended or waiting
+  state, for example by :c:func:`k_sem_take` or :c:func:`k_sleep`.
 - transition of a thread to the :ref:`ready state <thread_states>`, for
   example by :c:func:`k_sem_give` or :c:func:`k_thread_start`
-- transition of a thread from running state to a suspended or waiting
-  state, for example by :c:func:`k_sem_take` or :c:func:`k_sleep`
 - return to thread context after processing an interrupt
 - when a running thread invokes :c:func:`k_yield`
+
+A thread **sleeps** when it voluntarily initiates an operation that
+transitions itself to a suspended or waiting state.
 
 Whenever the scheduler changes the identity of the current thread,
 or when execution of the current thread is replaced by an ISR,
@@ -47,7 +50,7 @@ The kernel can be built with one of several choices for the ready queue
 implementation, offering different choices between code size, constant factor
 runtime overhead and performance scaling when many threads are added.
 
-* Simple linked-list ready queue (:option:`CONFIG_SCHED_DUMB`)
+* Simple linked-list ready queue (:kconfig:`CONFIG_SCHED_DUMB`)
 
   The scheduler ready queue will be implemented as a simple unordered list, with
   very fast constant time performance for single threads and very low code size.
@@ -56,7 +59,7 @@ runtime overhead and performance scaling when many threads are added.
   the queue at any given time.  On most platforms (that are not otherwise using
   the red/black tree) this results in a savings of ~2k of code size.
 
-* Red/black tree ready queue (:option:`CONFIG_SCHED_SCALABLE`)
+* Red/black tree ready queue (:kconfig:`CONFIG_SCHED_SCALABLE`)
 
   The scheduler ready queue will be implemented as a red/black tree.  This has
   rather slower constant-time insertion and removal overhead, and on most
@@ -67,7 +70,7 @@ runtime overhead and performance scaling when many threads are added.
   Use this for applications needing many concurrent runnable threads (> 20 or
   so).  Most applications won't need this ready queue implementation.
 
-* Traditional multi-queue ready queue (:option:`CONFIG_SCHED_MULTIQ`)
+* Traditional multi-queue ready queue (:kconfig:`CONFIG_SCHED_MULTIQ`)
 
   When selected, the scheduler ready queue will be implemented as the
   classic/textbook array of lists, one per priority (max 32 priorities).
@@ -90,17 +93,17 @@ The wait_q abstraction used in IPC primitives to pend threads for later wakeup
 shares the same backend data structure choices as the scheduler, and can use
 the same options.
 
-* Scalable wait_q implementation (:option:`CONFIG_WAITQ_SCALABLE`)
+* Scalable wait_q implementation (:kconfig:`CONFIG_WAITQ_SCALABLE`)
 
   When selected, the wait_q will be implemented with a balanced tree.  Choose
   this if you expect to have many threads waiting on individual primitives.
-  There is a ~2kb code size increase over :option:`CONFIG_WAITQ_DUMB` (which may
-  be shared with :option:`CONFIG_SCHED_SCALABLE`) if the red/black tree is not
+  There is a ~2kb code size increase over :kconfig:`CONFIG_WAITQ_DUMB` (which may
+  be shared with :kconfig:`CONFIG_SCHED_SCALABLE`) if the red/black tree is not
   used elsewhere in the application, and pend/unpend operations on "small"
   queues will be somewhat slower (though this is not generally a performance
   path).
 
-* Simple linked-list wait_q (:option:`CONFIG_WAITQ_DUMB`)
+* Simple linked-list wait_q (:kconfig:`CONFIG_WAITQ_DUMB`)
 
   When selected, the wait_q will be implemented with a doubly-linked list.
   Choose this if you expect to have only a few threads blocked on any single
@@ -177,9 +180,7 @@ only when dealing with lower priority threads that are less time-sensitive.
    The kernel's time slicing algorithm does *not* ensure that a set
    of equal-priority threads receive an equitable amount of CPU time,
    since it does not measure the amount of time a thread actually gets to
-   execute. For example, a thread may become the current thread just before
-   the end of a time slice and then immediately have to yield the CPU.
-   However, the algorithm *does* ensure that a thread never executes
+   execute. However, the algorithm *does* ensure that a thread never executes
    for longer than a single time slice without being required to yield.
 
 Scheduler Locking
@@ -202,38 +203,6 @@ becomes the current thread, its non-preemptible status is maintained.
     Locking out the scheduler is a more efficient way for a preemptible thread
     to prevent preemption than changing its priority level to a negative value.
 
-.. _metairq_priorities:
-
-Meta-IRQ Priorities
-===================
-
-When enabled (see :option:`CONFIG_NUM_METAIRQ_PRIORITIES`), there is a special
-subclass of cooperative priorities at the highest (numerically lowest)
-end of the priority space: meta-IRQ threads.  These are scheduled
-according to their normal priority, but also have the special ability
-to preempt all other threads (and other meta-irq threads) at lower
-priorities, even if those threads are cooperative and/or have taken a
-scheduler lock.
-
-This behavior makes the act of unblocking a meta-IRQ thread (by any
-means, e.g. creating it, calling k_sem_give(), etc.) into the
-equivalent of a synchronous system call when done by a lower
-priority thread, or an ARM-like "pended IRQ" when done from true
-interrupt context.  The intent is that this feature will be used to
-implement interrupt "bottom half" processing and/or "tasklet" features
-in driver subsystems.  The thread, once woken, will be guaranteed to
-run before the current CPU returns into application code.
-
-Unlike similar features in other OSes, meta-IRQ threads are true
-threads and run on their own stack (which must be allocated normally),
-not the per-CPU interrupt stack.  Design work to enable the use of the
-IRQ stack on supported architectures is pending.
-
-Note that because this breaks the promise made to cooperative
-threads by the Zephyr API (namely that the OS won't schedule other
-thread until the current thread deliberately blocks), it should be
-used only with great care from application code.  These are not simply
-very high priority threads and should not be used as such.
 
 .. _thread_sleeping:
 

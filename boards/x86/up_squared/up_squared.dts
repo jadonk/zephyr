@@ -14,7 +14,12 @@
 
 / {
 	model = "up_squared";
-	compatible = "intel,apollo_lake";
+	compatible = "up_board,up_squared";
+
+	aliases {
+		i2c-0 = &i2c0;
+		i2c-1 = &i2c1;
+	};
 
 	chosen {
 		zephyr,sram = &dram0;
@@ -24,8 +29,4 @@
 		zephyr,uart-pipe = &uart1;
 		zephyr,bt-mon-uart = &uart1;
 	};
-};
-
-&vtd {
-	status = "okay";
 };

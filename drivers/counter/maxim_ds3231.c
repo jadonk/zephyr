@@ -301,11 +301,11 @@ static const uint8_t *decode_time(struct tm *tp,
 	if (with_sec) {
 		uint8_t reg = *rp++;
 
-		tp->tm_sec = 10 * ((reg >> 4) & 0x07) + (reg & 0x0F);
+		tp->tm_sec = bcd2bin(reg & 0x7F);
 	}
 
 	reg = *rp++;
-	tp->tm_min = 10 * ((reg >> 4) & 0x07) + (reg & 0x0F);
+	tp->tm_min = bcd2bin(reg & 0x7F);
 
 	reg = *rp++;
 	tp->tm_hour = (reg & 0x0F);
@@ -353,7 +353,7 @@ static uint8_t decode_alarm(const uint8_t *ap,
 		tm.tm_mday = (*dp & 0x07);
 		tm.tm_wday = tm.tm_mday - 1;
 	} else {
-		tm.tm_mday = 10 * ((*dp >> 4) & 0x3) + (*dp & 0x0F);
+		tm.tm_mday = bcd2bin(*dp & 0x3F);
 	}
 
 	/* Walk backwards to extract the alarm mask flags. */
@@ -396,7 +396,7 @@ static int encode_alarm(uint8_t *ap,
 		if (flags & MAXIM_DS3231_ALARM_FLAGS_IGNSE) {
 			val = REG_ALARM_IGN;
 		} else {
-			val = ((tm.tm_sec / 10) << 4) | (tm.tm_sec % 10);
+			val = bin2bcd(tm.tm_sec);
 		}
 		*ap++ = val;
 	}
@@ -404,14 +404,14 @@ static int encode_alarm(uint8_t *ap,
 	if (flags & MAXIM_DS3231_ALARM_FLAGS_IGNMN) {
 		val = REG_ALARM_IGN;
 	} else {
-		val = ((tm.tm_min / 10) << 4) | (tm.tm_min % 10);
+		val = bin2bcd(tm.tm_min);
 	}
 	*ap++ = val;
 
 	if (flags & MAXIM_DS3231_ALARM_FLAGS_IGNHR) {
 		val = REG_ALARM_IGN;
 	} else {
-		val = ((tm.tm_hour / 10) << 4) | (tm.tm_hour % 10);
+		val = bin2bcd(tm.tm_hour);
 	}
 	*ap++ = val;
 
@@ -420,7 +420,7 @@ static int encode_alarm(uint8_t *ap,
 	} else if (flags & MAXIM_DS3231_ALARM_FLAGS_DOW) {
 		val = REG_DAYDATE_DOW | (tm.tm_wday + 1);
 	} else {
-		val = ((tm.tm_mday / 10) << 4) | (tm.tm_mday % 10);
+		val = bin2bcd(tm.tm_mday);
 	}
 	*ap++ = val;
 
@@ -434,10 +434,10 @@ static uint32_t decode_rtc(struct ds3231_data *data)
 
 	decode_time(&tm, &rp->sec, true);
 	tm.tm_wday = (rp->dow & 0x07) - 1;
-	tm.tm_mday = 10 * ((rp->dom >> 4) & 0x03) + (rp->dom & 0x0F);
+	tm.tm_mday = bcd2bin(rp->dom & 0x3F);
 	tm.tm_mon = 10 * (((0xF0 & ~REG_MONCEN_CENTURY) & rp->moncen) >> 4)
 		    + (rp->moncen & 0x0F) - 1;
-	tm.tm_year = (10 * (rp->year >> 4)) + (rp->year & 0x0F);
+	tm.tm_year = bcd2bin(rp->year);
 	if (REG_MONCEN_CENTURY & rp->moncen) {
 		tm.tm_year += 100;
 	}
@@ -896,29 +896,29 @@ static void sync_finish_write(const struct device *dev)
 	*bp++ = offsetof(struct register_map, sec);
 
 	(void)gmtime_r(&when, &tm);
-	val = ((tm.tm_sec / 10) << 4) | (tm.tm_sec % 10);
+	val = bin2bcd(tm.tm_sec);
 	*bp++ = val;
 
-	val = ((tm.tm_min / 10) << 4) | (tm.tm_min % 10);
+	val = bin2bcd(tm.tm_min);
 	*bp++ = val;
 
-	val = ((tm.tm_hour / 10) << 4) | (tm.tm_hour % 10);
+	val = bin2bcd(tm.tm_hour);
 	*bp++ = val;
 
 	*bp++ = 1 + tm.tm_wday;
 
-	val = ((tm.tm_mday / 10) << 4) | (tm.tm_mday % 10);
+	val = bin2bcd(tm.tm_mday);
 	*bp++ = val;
 
 	tm.tm_mon += 1;
-	val = ((tm.tm_mon / 10) << 4) | (tm.tm_mon % 10);
+	val = bin2bcd(tm.tm_mon);
 	if (tm.tm_year >= 100) {
 		tm.tm_year -= 100;
 		val |= REG_MONCEN_CENTURY;
 	}
 	*bp++ = val;
 
-	val = ((tm.tm_year / 10) << 4) | (tm.tm_year % 10);
+	val = bin2bcd(tm.tm_year);
 	*bp++ = val;
 
 	uint32_t syncclock = maxim_ds3231_read_syncclock(dev);
@@ -1281,11 +1281,6 @@ static int ds3231_counter_set_top_value(const struct device *dev,
 	return -ENOTSUP;
 }
 
-static uint32_t ds3231_counter_get_max_relative_alarm(const struct device *dev)
-{
-	return UINT32_MAX;
-}
-
 static const struct counter_driver_api ds3231_api = {
 	.start = ds3231_counter_start,
 	.stop = ds3231_counter_stop,
@@ -1295,7 +1290,6 @@ static const struct counter_driver_api ds3231_api = {
 	.set_top_value = ds3231_counter_set_top_value,
 	.get_pending_int = ds3231_counter_get_pending_int,
 	.get_top_value = ds3231_counter_get_top_value,
-	.get_max_relative_alarm = ds3231_counter_get_max_relative_alarm,
 };
 
 static const struct ds3231_config ds3231_0_config = {
@@ -1323,8 +1317,7 @@ static struct ds3231_data ds3231_0_data;
 #error COUNTER_MAXIM_DS3231_INIT_PRIORITY must be greater than I2C_INIT_PRIORITY
 #endif
 
-DEVICE_AND_API_INIT(ds3231_0, DT_INST_LABEL(0),
-		    ds3231_init, &ds3231_0_data,
+DEVICE_DT_INST_DEFINE(0, ds3231_init, NULL, &ds3231_0_data,
 		    &ds3231_0_config,
 		    POST_KERNEL, CONFIG_COUNTER_MAXIM_DS3231_INIT_PRIORITY,
 		    &ds3231_api);

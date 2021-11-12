@@ -10,7 +10,8 @@
 #include <device.h>
 #include <drivers/entropy.h>
 #include <irq.h>
-#include <power/power.h>
+#include <pm/pm.h>
+#include <pm/device.h>
 
 #include <sys/ring_buffer.h>
 #include <sys/sys_io.h>
@@ -35,12 +36,7 @@ struct entropy_cc13xx_cc26xx_data {
 	Power_NotifyObj post_notify;
 	bool constrained;
 #endif
-#ifdef CONFIG_PM_DEVICE
-	uint32_t pm_state;
-#endif
 };
-
-DEVICE_DT_INST_DECLARE(0);
 
 static inline struct entropy_cc13xx_cc26xx_data *
 get_dev_data(const struct device *dev)
@@ -107,12 +103,11 @@ static int entropy_cc13xx_cc26xx_get_entropy(const struct device *dev,
 	struct entropy_cc13xx_cc26xx_data *data = get_dev_data(dev);
 	uint32_t cnt;
 
-#if defined(CONFIG_PM) && \
-	defined(CONFIG_PM_SLEEP_STATES)
+#ifdef CONFIG_PM
 	unsigned int key = irq_lock();
 
 	if (!data->constrained) {
-		pm_ctrl_disable_state(POWER_STATE_SLEEP_2);
+		pm_constraint_set(PM_STATE_STANDBY);
 		data->constrained = true;
 	}
 	irq_unlock(key);
@@ -155,11 +150,10 @@ static void entropy_cc13xx_cc26xx_isr(const void *arg)
 
 		/* When pool is full disable interrupt and stop reading numbers */
 		if (cnt != sizeof(num)) {
-#if defined(CONFIG_PM) && \
-	defined(CONFIG_PM_SLEEP_STATES)
+#ifdef CONFIG_PM
 			if (data->constrained) {
-				pm_ctrl_enable_state(
-					POWER_STATE_SLEEP_2);
+				pm_constraint_release(
+					PM_STATE_STANDBY);
 				data->constrained = false;
 			}
 #endif
@@ -270,56 +264,25 @@ static int post_notify_fxn(unsigned int eventType, uintptr_t eventArg,
 #endif
 
 #ifdef CONFIG_PM_DEVICE
-static int entropy_cc13xx_cc26xx_set_power_state(const struct device *dev,
-						 uint32_t new_state)
+static int entropy_cc13xx_cc26xx_pm_control(const struct device *dev,
+					    enum pm_device_action action)
 {
 	struct entropy_cc13xx_cc26xx_data *data = get_dev_data(dev);
-	int ret = 0;
 
-	if ((new_state == DEVICE_PM_ACTIVE_STATE) &&
-		(new_state != data->pm_state)) {
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
 		Power_setDependency(PowerCC26XX_PERIPH_TRNG);
 		start_trng(data);
-	} else {
-		__ASSERT_NO_MSG(new_state == DEVICE_PM_LOW_POWER_STATE ||
-			new_state == DEVICE_PM_SUSPEND_STATE ||
-			new_state == DEVICE_PM_OFF_STATE);
-
-		if (data->pm_state == DEVICE_PM_ACTIVE_STATE) {
-			stop_trng(data);
-			Power_releaseDependency(PowerCC26XX_PERIPH_TRNG);
-		}
-	}
-	data->pm_state = new_state;
-
-	return ret;
-}
-
-static int entropy_cc13xx_cc26xx_pm_control(const struct device *dev,
-					    uint32_t ctrl_command,
-					    void *context, device_pm_cb cb,
-					    void *arg)
-{
-	struct entropy_cc13xx_cc26xx_data *data = get_dev_data(dev);
-	int ret = 0;
-
-	if (ctrl_command == DEVICE_PM_SET_POWER_STATE) {
-		uint32_t new_state = *((const uint32_t *)context);
-
-		if (new_state != data->pm_state) {
-			ret = entropy_cc13xx_cc26xx_set_power_state(dev,
-				new_state);
-		}
-	} else {
-		__ASSERT_NO_MSG(ctrl_command == DEVICE_PM_GET_POWER_STATE);
-		*((uint32_t *)context) = data->pm_state;
+		break;
+	case PM_DEVICE_ACTION_SUSPEND:
+		stop_trng(data);
+		Power_releaseDependency(PowerCC26XX_PERIPH_TRNG);
+		break;
+	default:
+		return -ENOTSUP;
 	}
 
-	if (cb) {
-		cb(dev, ret, context, arg);
-	}
-
-	return ret;
+	return 0;
 }
 #endif /* CONFIG_PM_DEVICE */
 
@@ -327,20 +290,14 @@ static int entropy_cc13xx_cc26xx_init(const struct device *dev)
 {
 	struct entropy_cc13xx_cc26xx_data *data = get_dev_data(dev);
 
-#ifdef CONFIG_PM_DEVICE
-	get_dev_data(dev)->pm_state = DEVICE_PM_ACTIVE_STATE;
-#endif
-
 	/* Initialize driver data */
 	ring_buf_init(&data->pool, sizeof(data->data), data->data);
 
 #if defined(CONFIG_PM)
 	Power_setDependency(PowerCC26XX_PERIPH_TRNG);
-#if defined(CONFIG_PM_SLEEP_STATES)
 	/* Stay out of standby until buffer is filled with entropy */
-	pm_ctrl_disable_state(POWER_STATE_SLEEP_2);
+	pm_constraint_set(PM_STATE_STANDBY);
 	data->constrained = true;
-#endif
 	/* Register notification function */
 	Power_registerNotify(&data->post_notify,
 		PowerCC26XX_AWAKE_STANDBY,

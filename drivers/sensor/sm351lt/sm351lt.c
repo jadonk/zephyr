@@ -212,7 +212,7 @@ static int sm351lt_init(const struct device *dev)
 #if defined(CONFIG_SM351LT_TRIGGER_OWN_THREAD)
 	data->dev = dev;
 
-	k_sem_init(&data->gpio_sem, 0, UINT_MAX);
+	k_sem_init(&data->gpio_sem, 0, K_SEM_MAX_LIMIT);
 
 	k_thread_create(&data->thread, data->thread_stack,
 			CONFIG_SM351LT_THREAD_STACK_SIZE,
@@ -255,9 +255,9 @@ static int sm351lt_init(const struct device *dev)
 		.gpio_flags = DT_INST_GPIO_FLAGS(inst, gpios),	     \
 	};							     \
 								     \
-	DEVICE_AND_API_INIT(sm351lt_##inst,			     \
-			    DT_INST_LABEL(inst),		     \
+	DEVICE_DT_INST_DEFINE(inst,				     \
 			    sm351lt_init,			     \
+			    NULL,				     \
 			    &sm351lt_data_##inst,		     \
 			    &sm351lt_config_##inst,		     \
 			    POST_KERNEL,			     \

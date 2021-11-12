@@ -24,8 +24,19 @@
 		#size-cells = < 0x1 >;
 		interrupt-parent = <&test_intc>;
 
+		test_pinctrl: pin-controller {
+			compatible = "vnd,pinctrl";
+			test_pincfg_a: pincfg-a {};
+			test_pincfg_b: pincfg-b {};
+			test_pincfg_c: pincfg-c {};
+			test_pincfg_d: pincfg-d {};
+		};
+
 		test_arrays: array-holder {
-			/* vnd,undefined-compat is for DT_NODE_HAS_COMPAT_STATUS(..,okay) */
+			/*
+			 * vnd,undefined-compat is for DT_NODE_HAS_COMPAT_STATUS(..,okay).
+			 * There should only be one vnd,array-holder in the entire DTS.
+			 */
 			compatible = "vnd,array-holder", "vnd,undefined-compat";
 			a = <1000 2000 3000>;
 			b = [aa bb cc dd];
@@ -42,7 +53,7 @@
 			phs = <&test_gpio_1 &test_gpio_2 &test_i2c>;
 			phs-or = <&test_enum_default_0 &test_enum_default_1>;
 			gpios = <&test_gpio_1 10 20>, <&test_gpio_2 30 40>;
-			pha-gpios = <&test_gpio_1 50 60>, <&test_gpio_3 70>, <&test_gpio_2 80 90>;
+			pha-gpios = <&test_gpio_1 50 60>, <0>, <&test_gpio_3 70>, <&test_gpio_2 80 90>;
 			foos = <&test_gpio_1 100>, <&test_gpio_2 110>;
 			foo-names = "A", "b-c";
 			pwms = <&test_pwm1 8 200 3>, <&test_pwm2 5 100 1>;
@@ -155,9 +166,39 @@
 			};
 
 			gpio@11 {
+				gpio-controller;
+				#gpio-cells = <2>;
 				compatible = "vnd,gpio-expander";
 				reg = <0x11>;
 				label = "TEST_EXPANDER_I2C";
+			};
+
+			test_i2c_mux: i2c-mux@12 {
+				compatible = "vnd,i2c-mux";
+				label = "I2C_MUX";
+				reg = <0x12>;
+				i2c-mux-ctlr-1 {
+					compatible = "vnd,i2c-mux-controller";
+					#address-cells = <1>;
+					#size-cells = <0>;
+					label = "I2C_MUX_CTLR_1";
+					test_muxed_i2c_dev_1: muxed-i2c-dev@10 {
+						compatible = "vnd,i2c-device";
+						status = "disabled";
+						reg = <0x10>;
+					};
+				};
+				i2c-mux-ctlr-2 {
+					compatible = "vnd,i2c-mux-controller";
+					#address-cells = <1>;
+					#size-cells = <0>;
+					label = "I2C_MUX_CTLR_1";
+					test_muxed_i2c_dev_2: muxed-i2c-dev@10 {
+						compatible = "vnd,i2c-device";
+						status = "disabled";
+						reg = <0x10>;
+					};
+				};
 			};
 		};
 
@@ -207,6 +248,8 @@
 			};
 
 			gpio@2 {
+				gpio-controller;
+				#gpio-cells = <2>;
 				compatible = "vnd,gpio-expander";
 				reg = <2>;
 				label = "TEST_EXPANDER_SPI";
@@ -223,7 +266,10 @@
 			status = "okay";
 			clock-frequency = < 2000000 >;
 
-			/* no vnd,spi-device-2 instances should have CS */
+			/*
+			 * There should only be one spi-device-2 node.
+			 * It should not have a CS GPIO.
+			 */
 			test_spi_dev_no_cs: test-spi-dev@0 {
 				compatible = "vnd,spi-device-2";
 				label = "TEST_SPI_DEV_NO_CS";
@@ -270,6 +316,10 @@
 			dma-names = "tx", "rx";
 			clocks = <&test_clk 3 7>, <&test_fixed_clk>, <&test_clk 8 2>;
 			clock-names = "clk-a", "clk-fixed", "clk-b";
+			pinctrl-0 = <&test_pincfg_a &test_pincfg_b>;
+			pinctrl-1 = <&test_pincfg_c &test_pincfg_d>;
+			pinctrl-2 = <&test_pincfg_d>;
+			pinctrl-names = "default", "sleep", "f.o.o2";
 		};
 
 		/* there should only be one of these */
@@ -348,12 +398,15 @@
 
 			test_child_a: child-a {
 				val = <0>;
+				status = "okay";
 			};
 			test_child_b: child-b {
 				val = <1>;
+				status = "okay";
 			};
 			test_child_c: child-c {
 				val = <2>;
+				status = "disabled";
 			};
 		};
 

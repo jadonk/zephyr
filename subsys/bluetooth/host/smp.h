@@ -38,7 +38,7 @@ struct bt_smp_hdr {
 #define BT_SMP_OOB_NOT_PRESENT			0x00
 #define BT_SMP_OOB_PRESENT			0x01
 
-#define BT_SMP_MIN_ENC_KEY_SIZE			7
+#define BT_SMP_MIN_ENC_KEY_SIZE			CONFIG_BT_SMP_MIN_ENC_KEY_SIZE
 #define BT_SMP_MAX_ENC_KEY_SIZE			16
 
 #define BT_SMP_DIST_ENC_KEY			0x01
@@ -86,8 +86,8 @@ struct bt_smp_encrypt_info {
 	uint8_t  ltk[16];
 } __packed;
 
-#define BT_SMP_CMD_MASTER_IDENT			0x07
-struct bt_smp_master_ident {
+#define BT_SMP_CMD_CENTRAL_IDENT		0x0
+struct bt_smp_central_ident {
 	uint8_t ediv[2];
 	uint8_t rand[8];
 } __packed;
@@ -122,6 +122,13 @@ struct bt_smp_public_key {
 struct bt_smp_dhkey_check {
 	uint8_t e[16];
 } __packed;
+
+#define BT_SMP_KEYPRESS_NOTIFICATION		0x0e
+struct bt_smp_keypress_notif {
+	uint8_t type;
+} __packed;
+
+#define BT_SMP_NUM_CMDS                         0x0f
 
 int bt_smp_start_security(struct bt_conn *conn);
 bool bt_smp_request_ltk(struct bt_conn *conn, uint64_t rand, uint16_t ediv,

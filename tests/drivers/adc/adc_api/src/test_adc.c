@@ -35,6 +35,7 @@
 #elif defined(CONFIG_BOARD_NRF21540DK_NRF52840) || \
 	defined(CONFIG_BOARD_NRF52DK_NRF52832) || \
 	defined(CONFIG_BOARD_NRF52840DK_NRF52840) || \
+	defined(CONFIG_BOARD_RAK4631_NRF52840) || \
 	defined(CONFIG_BOARD_RAK5010_NRF52840) || \
 	defined(CONFIG_BOARD_NRF52840DONGLE_NRF52840) || \
 	defined(CONFIG_BOARD_NRF52840_BLIP) || \
@@ -43,11 +44,24 @@
 	defined(CONFIG_BOARD_BL652_DVK) || \
 	defined(CONFIG_BOARD_BL653_DVK) || \
 	defined(CONFIG_BOARD_BL654_DVK) || \
+	defined(CONFIG_BOARD_BL654_SENSOR_BOARD) || \
 	defined(CONFIG_BOARD_DEGU_EVK) || \
 	defined(CONFIG_BOARD_ADAFRUIT_FEATHER_NRF52840)	|| \
 	defined(CONFIG_BOARD_RUUVI_RUUVITAG) || \
 	defined(CONFIG_BOARD_BT510) || \
-	defined(CONFIG_BOARD_PINNACLE_100_DVK)
+	defined(CONFIG_BOARD_PINNACLE_100_DVK) || \
+	defined(CONFIG_BOARD_ARDUINO_NANO_33_BLE) || \
+	defined(CONFIG_BOARD_UBX_BMD300EVAL_NRF52832) || \
+	defined(CONFIG_BOARD_UBX_BMD330EVAL_NRF52810) || \
+	defined(CONFIG_BOARD_UBX_BMD340EVAL_NRF52840) || \
+	defined(CONFIG_BOARD_UBX_BMD345EVAL_NRF52840) || \
+	defined(CONFIG_BOARD_UBX_BMD360EVAL_NRF52811) || \
+	defined(CONFIG_BOARD_UBX_BMD380EVAL_NRF52840) || \
+	defined(CONFIG_BOARD_UBX_EVKANNAB1_NRF52832) || \
+	defined(CONFIG_BOARD_UBX_EVKNINAB1_NRF52832) || \
+	defined(CONFIG_BOARD_UBX_EVKNINAB3_NRF52840) || \
+	defined(CONFIG_BOARD_UBX_EVKNINAB4_NRF52833) || \
+	defined(CONFIG_BOARD_BT6X0)
 
 #include <hal/nrf_saadc.h>
 #define ADC_DEVICE_NAME		DT_LABEL(DT_INST(0, nordic_nrf_saadc))
@@ -115,6 +129,15 @@
 #define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
 #define ADC_1ST_CHANNEL_ID	16
 
+#elif defined(CONFIG_BOARD_FRDM_K82F)
+
+#define ADC_DEVICE_NAME		DT_LABEL(DT_INST(0, nxp_kinetis_adc16))
+#define ADC_RESOLUTION		12
+#define ADC_GAIN		ADC_GAIN_1
+#define ADC_REFERENCE		ADC_REF_INTERNAL
+#define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
+#define ADC_1ST_CHANNEL_ID	26
+
 #elif defined(CONFIG_BOARD_HEXIWEAR_KW40Z)
 
 #define ADC_DEVICE_NAME		DT_LABEL(DT_INST(0, nxp_kinetis_adc16))
@@ -148,9 +171,12 @@
 	defined(CONFIG_BOARD_NUCLEO_F103RB) || \
 	defined(CONFIG_BOARD_NUCLEO_F207ZG) || \
 	defined(CONFIG_BOARD_STM32F3_DISCO) || \
+	defined(CONFIG_BOARD_STM32L562E_DK) || \
+	defined(CONFIG_BOARD_NUCLEO_L552ZE_Q) || \
 	defined(CONFIG_BOARD_NUCLEO_F401RE) || \
 	defined(CONFIG_BOARD_NUCLEO_F429ZI) || \
 	defined(CONFIG_BOARD_NUCLEO_F746ZG) || \
+	defined(CONFIG_BOARD_NUCLEO_G071RB) || \
 	defined(CONFIG_BOARD_NUCLEO_L073RZ) || \
 	defined(CONFIG_BOARD_NUCLEO_WB55RG) || \
 	defined(CONFIG_BOARD_NUCLEO_L152RE) || \
@@ -159,7 +185,9 @@
 	defined(CONFIG_BOARD_STM32F103_MINI) || \
 	defined(CONFIG_BOARD_STM32_MIN_DEV_BLUE) || \
 	defined(CONFIG_BOARD_STM32_MIN_DEV_BLACK) || \
-	defined(CONFIG_BOARD_WAVESHARE_OPEN103Z)
+	defined(CONFIG_BOARD_WAVESHARE_OPEN103Z) || \
+	defined(CONFIG_BOARD_RONOTH_LODEV) || \
+	defined(CONFIG_BOARD_STM32L496G_DISCO)
 #define ADC_DEVICE_NAME         DT_LABEL(DT_INST(0, st_stm32_adc))
 #define ADC_RESOLUTION		12
 #define ADC_GAIN		ADC_GAIN_1
@@ -167,7 +195,9 @@
 #define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
 #define ADC_1ST_CHANNEL_ID	0
 
-#elif defined(CONFIG_BOARD_NUCLEO_F302R8) || defined(CONFIG_BOARD_NUCLEO_G474RE)
+#elif defined(CONFIG_BOARD_NUCLEO_F302R8) || \
+	defined(CONFIG_BOARD_NUCLEO_G474RE) || \
+	defined(CONFIG_BOARD_NUCLEO_L412RB_P)
 #define ADC_DEVICE_NAME         DT_LABEL(DT_INST(0, st_stm32_adc))
 #define ADC_RESOLUTION		12
 #define ADC_GAIN		ADC_GAIN_1
@@ -196,7 +226,8 @@
 #define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
 #define ADC_1ST_CHANNEL_ID	5
 
-#elif defined(CONFIG_BOARD_NUCLEO_H743ZI)
+#elif defined(CONFIG_BOARD_NUCLEO_H743ZI) || \
+	defined(CONFIG_BOARD_NUCLEO_H753ZI)
 #define ADC_DEVICE_NAME         DT_LABEL(DT_INST(0, st_stm32_adc))
 #define ADC_RESOLUTION		16
 #define ADC_GAIN		ADC_GAIN_1
@@ -223,7 +254,10 @@
 #define ADC_1ST_CHANNEL_ID	4
 #define ADC_2ND_CHANNEL_ID	5
 
-#elif defined(CONFIG_BOARD_LPCXPRESSO55S69_CPU0)
+#elif defined(CONFIG_BOARD_LPCXPRESSO55S69_CPU0) || \
+	defined(CONFIG_BOARD_LPCXPRESSO55S28) || \
+	defined(CONFIG_BOARD_MIMXRT1170_EVK_CM7) || \
+	defined(CONFIG_BOARD_MIMXRT685_EVK)
 #define ADC_DEVICE_NAME		DT_LABEL(DT_INST(0, nxp_lpc_lpadc))
 #define ADC_RESOLUTION		12
 #define ADC_GAIN		ADC_GAIN_1
@@ -232,7 +266,8 @@
 #define ADC_1ST_CHANNEL_ID	0
 #define ADC_2ND_CHANNEL_ID	1
 
-#elif defined(CONFIG_BOARD_NPCX7M6FB_EVB)
+#elif defined(CONFIG_BOARD_NPCX7M6FB_EVB) || \
+	defined(CONFIG_BOARD_NPCX9M6F_EVB)
 #define ADC_DEVICE_NAME		DT_LABEL(DT_INST(0, nuvoton_npcx_adc))
 #define ADC_RESOLUTION		10
 #define ADC_GAIN		ADC_GAIN_1
@@ -240,6 +275,34 @@
 #define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
 #define ADC_1ST_CHANNEL_ID	0
 #define ADC_2ND_CHANNEL_ID	2
+
+#elif defined(CONFIG_BOARD_CC3220SF_LAUNCHXL) || \
+	defined(CONFIG_BOARD_CC3235SF_LAUNCHXL)
+#define ADC_DEVICE_NAME		DT_LABEL(DT_INST(0, ti_cc32xx_adc))
+#define ADC_RESOLUTION		12
+#define ADC_GAIN		ADC_GAIN_1
+#define ADC_REFERENCE		ADC_REF_INTERNAL
+#define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
+#define ADC_1ST_CHANNEL_ID	0
+#define ADC_2ND_CHANNEL_ID      1
+
+#elif defined(CONFIG_BOARD_IT8XXX2_EVB)
+#define ADC_DEVICE_NAME	DT_LABEL(DT_INST(0, ite_it8xxx2_adc))
+#define ADC_RESOLUTION	3
+#define ADC_GAIN		ADC_GAIN_1
+#define ADC_REFERENCE		ADC_REF_INTERNAL
+#define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
+#define ADC_1ST_CHANNEL_ID	0
+#define ADC_2ND_CHANNEL_ID	1
+
+#elif defined(CONFIG_BOARD_NATIVE_POSIX)
+#define ADC_DEVICE_NAME		DT_LABEL(DT_INST(0, zephyr_adc_emul))
+#define ADC_RESOLUTION		10
+#define ADC_GAIN		ADC_GAIN_1
+#define ADC_REFERENCE		ADC_REF_INTERNAL
+#define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
+#define ADC_1ST_CHANNEL_ID	0
+#define ADC_2ND_CHANNEL_ID	1
 
 #else
 #error "Unsupported board."
@@ -452,10 +515,18 @@ void test_adc_asynchronous_call(void)
 /*
  * test_adc_sample_with_interval
  */
+static uint32_t my_sequence_identifier = 0x12345678;
+static void *user_data = &my_sequence_identifier;
+
 static enum adc_action sample_with_interval_callback(const struct device *dev,
 						     const struct adc_sequence *sequence,
 						     uint16_t sampling_index)
 {
+	if (sequence->options->user_data != &my_sequence_identifier) {
+		user_data = sequence->options->user_data;
+		return ADC_ACTION_FINISH;
+	}
+
 	TC_PRINT("%s: sampling %d\n", __func__, sampling_index);
 	return ADC_ACTION_CONTINUE;
 }
@@ -466,6 +537,7 @@ static int test_task_with_interval(void)
 	const struct adc_sequence_options options = {
 		.interval_us     = 100 * 1000UL,
 		.callback        = sample_with_interval_callback,
+		.user_data       = user_data,
 		.extra_samplings = 4,
 	};
 	const struct adc_sequence sequence = {
@@ -484,6 +556,10 @@ static int test_task_with_interval(void)
 
 	ret = adc_read(adc_dev, &sequence);
 	zassert_equal(ret, 0, "adc_read() failed with code %d", ret);
+
+	zassert_equal(user_data, sequence.options->user_data,
+		"Invalid user data: %p, expected: %p",
+		user_data, sequence.options->user_data);
 
 	check_samples(1 + options.extra_samplings);
 

@@ -74,6 +74,106 @@ typedef __UINT_LEAST64_TYPE__	uint_least64_t;
 typedef __INTPTR_TYPE__		intptr_t;
 typedef __UINTPTR_TYPE__	uintptr_t;
 
+#ifdef __GNUC__
+/* These macros must produce constant integer expressions, which can't
+ * be done in the preprocessor (casts aren't allowed).  Defer to the
+ * GCC internal functions where they're available.
+ */
+#define INT8_C(_v) __INT8_C(_v)
+#define INT16_C(_v) __INT16_C(_v)
+#define INT32_C(_v) __INT32_C(_v)
+#define INT64_C(_v) __INT64_C(_v)
+#define INTMAX_C(_v) __INTMAX_C(_v)
+
+#define UINT8_C(_v) __UINT8_C(_v)
+#define UINT16_C(_v) __UINT16_C(_v)
+#define UINT32_C(_v) __UINT32_C(_v)
+#define UINT64_C(_v) __UINT64_C(_v)
+#define UINTMAX_C(_v) __UINTMAX_C(_v)
+#endif /* __GNUC__ */
+
+#ifdef __CCAC__
+#ifndef __INT8_C
+#define __INT8_C(x)	x
+#endif
+
+#ifndef INT8_C
+#define INT8_C(x)	__INT8_C(x)
+#endif
+
+#ifndef __UINT8_C
+#define __UINT8_C(x)	x ## U
+#endif
+
+#ifndef UINT8_C
+#define UINT8_C(x)	__UINT8_C(x)
+#endif
+
+#ifndef __INT16_C
+#define __INT16_C(x)	x
+#endif
+
+#ifndef INT16_C
+#define INT16_C(x)	__INT16_C(x)
+#endif
+
+#ifndef __UINT16_C
+#define __UINT16_C(x)	x ## U
+#endif
+
+#ifndef UINT16_C
+#define UINT16_C(x)	__UINT16_C(x)
+#endif
+
+#ifndef __INT32_C
+#define __INT32_C(x)	x
+#endif
+
+#ifndef INT32_C
+#define INT32_C(x)	__INT32_C(x)
+#endif
+
+#ifndef __UINT32_C
+#define __UINT32_C(x)	x ## U
+#endif
+
+#ifndef UINT32_C
+#define UINT32_C(x)	__UINT32_C(x)
+#endif
+
+#ifndef __INT64_C
+#define __INT64_C(x)	x
+#endif
+
+#ifndef INT64_C
+#define INT64_C(x)	__INT64_C(x)
+#endif
+
+#ifndef __UINT64_C
+#define __UINT64_C(x)	x ## ULL
+#endif
+
+#ifndef UINT64_C
+#define UINT64_C(x)	__UINT64_C(x)
+#endif
+
+#ifndef __INTMAX_C
+#define __INTMAX_C(x)	x
+#endif
+
+#ifndef INTMAX_C
+#define INTMAX_C(x)	__INTMAX_C(x)
+#endif
+
+#ifndef __UINTMAX_C
+#define __UINTMAX_C(x)	x ## ULL
+#endif
+
+#ifndef UINTMAX_C
+#define UINTMAX_C(x)	__UINTMAX_C(x)
+#endif
+#endif /* __CCAC__ */
+
 #ifdef __cplusplus
 }
 #endif

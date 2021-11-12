@@ -30,7 +30,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <net/ethernet.h>
 #include <ethernet/eth_stats.h>
 
-#include <ptp_clock.h>
+#include <drivers/ptp_clock.h>
 #include <net/gptp.h>
 #include <net/lldp.h>
 
@@ -496,7 +496,7 @@ enum ethernet_hw_caps eth_posix_native_get_capabilities(const struct device *dev
 {
 	ARG_UNUSED(dev);
 
-	return 0
+	return ETHERNET_TXTIME
 #if defined(CONFIG_NET_VLAN)
 		| ETHERNET_HW_VLAN
 #endif
@@ -634,7 +634,7 @@ UTIL_LISTIFY(CONFIG_ETH_NATIVE_POSIX_INTERFACE_COUNT, DEFINE_ETH_DEV_DATA, _)
 #define DEFINE_ETH_DEVICE(x, _)						\
 	ETH_NET_DEVICE_INIT(eth_native_posix_##x,			\
 			    CONFIG_ETH_NATIVE_POSIX_DRV_NAME #x,	\
-			    eth_init, device_pm_control_nop,		\
+			    eth_init, NULL,				\
 			    &eth_context_data_##x,			\
 			    NULL,					\
 			    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,	\
@@ -730,9 +730,10 @@ static const struct ptp_clock_driver_api api = {
 UTIL_LISTIFY(CONFIG_ETH_NATIVE_POSIX_INTERFACE_COUNT, PTP_INIT_FUNC, _)
 
 #define DEFINE_PTP_DEVICE(x, _)						\
-	DEVICE_AND_API_INIT(eth_native_posix_ptp_clock_##x,		\
+	DEVICE_DEFINE(eth_native_posix_ptp_clock_##x,			\
 			    PTP_CLOCK_NAME "_" #x,			\
 			    ptp_init_##x,				\
+			    NULL,					\
 			    &ptp_context_##x,				\
 			    NULL,					\
 			    POST_KERNEL,				\

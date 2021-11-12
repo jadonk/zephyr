@@ -29,16 +29,14 @@ static uint32_t sync(const struct device *cmos)
 		}
 	} while (last == this);
 
-	return z_timer_cycle_get_32();
+	return sys_clock_cycle_get_32();
 }
 
 void timer(void)
 {
 	const struct device *cmos;
 
-#if defined(CONFIG_LOAPIC_TIMER)
-	printk("TIMER: legacy local APIC");
-#elif defined(CONFIG_APIC_TIMER)
+#if defined(CONFIG_APIC_TIMER)
 	printk("TIMER: new local APIC");
 #elif defined(CONFIG_HPET_TIMER)
 	printk("TIMER: HPET");

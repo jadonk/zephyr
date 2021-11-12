@@ -7,17 +7,22 @@
 #include <zephyr.h>
 #include <syscall_handler.h>
 #include <ztest.h>
+#include <linker/linker-defs.h>
 #include "test_syscalls.h"
+#include <mmu.h>
 
 #define BUF_SIZE	32
 #define SLEEP_MS_LONG	15000
 
 #if defined(CONFIG_BOARD_NUCLEO_F429ZI) || defined(CONFIG_BOARD_NUCLEO_F207ZG) \
-	|| defined(CONFIG_BOARD_NUCLEO_L073RZ)
+	|| defined(CONFIG_BOARD_NUCLEO_L073RZ) \
+	|| defined(CONFIG_BOARD_RONOTH_LODEV)
 #define FAULTY_ADDRESS 0x0FFFFFFF
+#elif defined(CONFIG_BOARD_QEMU_CORTEX_R5)
+#define FAULTY_ADDRESS 0xBFFFFFFF
 #elif CONFIG_MMU
-/* Just past the permanent RAM mapping should be a non-present page */
-#define FAULTY_ADDRESS (CONFIG_KERNEL_VM_BASE + CONFIG_KERNEL_RAM_SIZE)
+/* Just past the zephyr image mapping should be a non-present page */
+#define FAULTY_ADDRESS Z_FREE_VM_START
 #else
 #define FAULTY_ADDRESS 0xFFFFFFF0
 #endif

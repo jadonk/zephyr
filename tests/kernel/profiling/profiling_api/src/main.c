@@ -5,7 +5,7 @@
  */
 
 #include <ztest.h>
-#include <power/power.h>
+#include <pm/pm.h>
 #include <irq_offload.h>
 #include <debug/stack.h>
 
@@ -22,24 +22,8 @@ static void tdata_dump_callback(const struct k_thread *thread, void *user_data)
 	log_stack_usage(thread);
 }
 
-/*
- * Weak power hook functions. Used on systems that have not implemented
- * power management.
- */
-__weak void pm_power_state_set(enum power_states state)
-{
-	/* Never called. */
-	__ASSERT_NO_MSG(false);
-}
-
-__weak void _pm_power_state_exit_post_ops(enum power_states state)
-{
-	/* Never called. */
-	__ASSERT_NO_MSG(false);
-}
-
 /* Our PM policy handler */
-enum power_states pm_policy_next_state(int32_t ticks)
+struct pm_state_info pm_policy_next_state(int32_t ticks)
 {
 	static bool test_flag;
 
@@ -51,7 +35,7 @@ enum power_states pm_policy_next_state(int32_t ticks)
 		test_flag = true;
 	}
 
-	return POWER_STATE_ACTIVE;
+	return (struct pm_state_info){PM_STATE_ACTIVE, 0, 0};
 }
 
 /*work handler*/

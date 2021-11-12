@@ -43,15 +43,11 @@ if LOG
 config LOG_BACKEND_NATIVE_POSIX
 	default y if !SERIAL
 
-# For native_posix we can log immediately without any problem
+# For native_posix we can log synchronously without any problem
 # Doing so will be nicer for debugging
-config LOG_IMMEDIATE
-	default y
-
-# If we set LOG_IMMEDIATE, there is no need to have the logging thread
-# running
-config LOG_PROCESS_THREAD
-	default n
+choice LOG_MODE
+	default LOG_MODE_IMMEDIATE
+endchoice
 
 endif # LOG
 
@@ -79,10 +75,20 @@ config FLASH_SIMULATOR
 
 config USB_NATIVE_POSIX
 	default y
-	depends on USB
+	depends on USB_DEVICE_DRIVER
 
 config EEPROM_SIMULATOR
 	default y
 	depends on EEPROM
+
+if I2C
+
+config EMUL
+	default y
+
+config I2C_EMUL
+	default y
+
+endif # I2C
 
 endif # BOARD_NATIVE_POSIX

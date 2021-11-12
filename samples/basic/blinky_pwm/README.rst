@@ -58,6 +58,8 @@ In these other cases, however, manual wiring is necessary:
      - connect PWM2 (PA0) to an LED
    * - :ref:`nucleo_f103rb_board`
      - connect PWM1 (PA8) to an LED
+   * - :ref:`nucleo_wb55rg_board`
+     - connect PWM1 (PA8) to an LED
 
 Building and Running
 ********************
@@ -65,7 +67,7 @@ Building and Running
 To build and flash this sample for the :ref:`nrf52840dk_nrf52840`:
 
 .. zephyr-app-commands::
-   :zephyr-app: samples/basic/blink_led
+   :zephyr-app: samples/basic/blinky_pwm
    :board: nrf52840dk_nrf52840
    :goals: build flash
    :compact:

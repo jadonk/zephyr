@@ -39,8 +39,10 @@
 	movl %eax, %cr4
 	clts
 
-	/* Page tables created at build time by gen_mmu.py */
-	movl $z_x86_kernel_ptables, %eax
+	/* Page tables created at build time by gen_mmu.py
+	 * NOTE: Presumes phys=virt
+	 */
+	movl $Z_MEM_PHYS_ADDR(z_x86_kernel_ptables), %eax
 	movl %eax, %cr3
 
 	set_efer
@@ -61,7 +63,8 @@
 	movq %rax, %cr4
 	clts
 
-	movq $z_x86_kernel_ptables, %rax
+	/* NOTE: Presumes phys=virt */
+	movq $Z_MEM_PHYS_ADDR(z_x86_kernel_ptables), %rax
 	movq %rax, %cr3
 
 	set_efer
@@ -75,14 +78,40 @@
 	movq %rax, %cr0
 .endm
 
+/* The .locore section begins the page-aligned initialization region
+ * of low memory.  The first address is used as the architectural
+ * entry point for auxiliary CPUs being brought up (in real mode!)
+ * via a startup IPI.  It's is ALSO used by some loaders (well,
+ * ACRN...) who hard-coded the address by inspecting _start on a
+ * non-SMP build.
+ *
+ *               === OUTRAGEOUS HACK FOLLOWS ===
+ *
+ * Therefore it needs to start at OS entry with a 32 bit jump to the
+ * 32 bit entry point, and gets clobbered later (see the beginning of
+ * __start32) with NOP bytes such that the next CPU will fall through
+ * to the 16 bit SMP entry.
+ *
+ * We write out the JMP followed by 8 NOPs for simplicity.  No i386
+ * JMP encodes with more than 8 bytes, so we can come back later and
+ * scribble over it with 8 0x90 bytes (which is the 1-byte NOP) and be
+ * sure to get all of it without overwriting anything.
+ */
 .section .locore,"ax"
+.code32
+.globl __start
+__start:
+	jmp __start32
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
 
 #if CONFIG_MP_NUM_CPUS > 1
-
-	/*
-	 * APs are sent here on startup, in real mode. This
-	 * is first because we want it on a page boundary.
-	 */
 
 .code16
 .global x86_ap_start
@@ -95,8 +124,10 @@ x86_ap_start:
 
 	lgdt gdt48
 	lidt idt48
-	movw $1, %ax
-	lmsw %ax
+	movl %cr0, %eax
+	or $1, %eax
+	movl %eax, %cr0
+
 	jmpl $X86_KERNEL_CS_32, $1f
 .code32
 1:	movw $X86_KERNEL_DS_32, %ax
@@ -130,13 +161,24 @@ unknown_loapic_id:
 #endif /* CONFIG_MP_NUM_CPUS > 1 */
 
 .code32
-.globl __start
-__start:
+.globl __start32
+__start32:
 	/*
 	 * kernel execution begins here in 32-bit mode, with flat-mode
 	 * descriptors in all segment registers, interrupts disabled.
-	 * first, let common code do things like detect multiboot info.
 	 */
+
+	/* See note above, re: OUTRAGEOUS HACK */
+	movl $__start, %ebp
+	movb $0x90, 0(%ebp)
+	movb $0x90, 1(%ebp)
+	movb $0x90, 2(%ebp)
+	movb $0x90, 3(%ebp)
+	movb $0x90, 4(%ebp)
+	movb $0x90, 5(%ebp)
+	movb $0x90, 6(%ebp)
+	movb $0x90, 7(%ebp)
+	wbinvd
 
 	lgdt gdt48
 	lidt idt48
@@ -145,16 +187,8 @@ __start:
 
 	/*
 	 * N.B.: if multiboot info struct is present, "common.S"
-	 * has left a pointer to it in EBX. do not clobber (yet).
-	 *
-	 * next, clear the BSS. note we're still in 32-bit mode,
-	 * so the BSS must fit entirely in the first 4GB of RAM.
+	 * has left a pointer to it in EBX.
 	 */
-	cld
-	xorl %eax, %eax
-	movl $__bss_start, %edi
-	movl $__bss_num_dwords, %ecx
-	rep stosl
 
 	movl $x86_cpuboot, %ebp		/* BSP is always logical CPU id 0 */
 	movl %ebx, __x86_cpuboot_t_arg_OFFSET(%ebp)	/* multiboot info */
@@ -178,6 +212,15 @@ enter_code64:
 	movw %ax, %es
 	movw %ax, %ss
 	movw %ax, %fs
+
+	/* On Intel processors, if GS is not zero and is being set to
+	 * zero, GS_BASE is also being set to zero. This would interfere
+	 * with the actual use of GS_BASE for usespace. To avoid accidentally
+	 * clearing GS_BASE, simply set GS to 0 at boot, so any subsequent
+	 * clearing of GS will not clear GS_BASE.
+	 */
+	mov $0, %eax
+	movw %ax, %gs
 
 	movw __x86_cpuboot_t_tr_OFFSET(%rbp), %ax
 	ltr %ax
@@ -473,7 +516,7 @@ except: /*
 	jz 1f
 	swapgs
 #ifdef CONFIG_X86_KPTI
-	/* Load kernel's page table */
+	/* Load kernel's page table. NOTE: Presumes phys=virt */
 	movq $z_x86_kernel_ptables, %r11
 	movq %r11, %cr3
 #endif /* CONFIG_X86_KPTI */
@@ -628,7 +671,7 @@ irq:
 	jz 1f
 	swapgs
 #ifdef CONFIG_X86_KPTI
-	/* Load kernel's page table */
+	/* Load kernel's page table. NOTE: presumes phys=virt */
 	movq $z_x86_kernel_ptables, %rsi
 	movq %rsi, %cr3
 #endif /* CONFIG_X86_KPTI */

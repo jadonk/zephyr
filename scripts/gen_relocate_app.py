@@ -60,7 +60,7 @@ LOAD_ADDRESS_LOCATION_BSS = "GROUP_LINK_IN({0})"
 
 MPU_RO_REGION_START = """
 
-     _{0}_mpu_ro_region_start = {1}_ADDR;
+     _{0}_mpu_ro_region_start = ORIGIN({1});
 
 """
 
@@ -257,9 +257,13 @@ def string_create_helper(region, memory_type,
                 linker_string += LINKER_SECTION_SEQ_MPU.format(memory_type.lower(), region, memory_type.upper(),
                                                                region.upper(), tmp, load_address_string, align_size)
             else:
-                linker_string += LINKER_SECTION_SEQ.format(memory_type.lower(), region, memory_type.upper(),
-                                                           region.upper(), tmp, load_address_string)
-
+                if memory_type == 'SRAM' and region == 'text':
+                    align_size = 0
+                    linker_string += LINKER_SECTION_SEQ_MPU.format(memory_type.lower(), region, memory_type.upper(),
+                                                                   region.upper(), tmp, load_address_string, align_size)
+                else:
+                    linker_string += LINKER_SECTION_SEQ.format(memory_type.lower(), region, memory_type.upper(),
+                                                               region.upper(), tmp, load_address_string)
             if load_address_in_flash:
                 linker_string += SECTION_LOAD_MEMORY_SEQ.format(memory_type.lower(), region, memory_type.upper(),
                                                                 region.upper())
@@ -395,7 +399,7 @@ def create_dict_wrt_mem():
     if args.input_rel_dict == '':
         sys.exit("Disable CONFIG_CODE_DATA_RELOCATION if no file needs relocation")
     for line in args.input_rel_dict.split(';'):
-        mem_region, file_name = line.split(':')
+        mem_region, file_name = line.split(':', 1)
 
         file_name_list = glob.glob(file_name)
         if not file_name_list:

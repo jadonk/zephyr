@@ -416,8 +416,8 @@ static void ppp_process_msg(struct ppp_driver_context *ppp)
 #endif
 			net_pkt_unref(ppp->pkt);
 		} else {
-			/* Skip FCS bytes (2) */
-			net_buf_frag_last(ppp->pkt->buffer)->len -= 2;
+			/* Remove FCS bytes (2) */
+			net_pkt_remove_tail(ppp->pkt, 2);
 
 			/* Make sure we now start reading from PPP header in
 			 * PPP L2 recv()
@@ -576,6 +576,20 @@ static int ppp_send(const struct device *dev, struct net_pkt *pkt)
 			protocol = htons(PPP_IP);
 		} else if (net_pkt_family(pkt) == AF_INET6) {
 			protocol = htons(PPP_IPV6);
+		} else if (IS_ENABLED(CONFIG_NET_SOCKETS_PACKET) &&
+			   net_pkt_family(pkt) == AF_PACKET) {
+			char type = (NET_IPV6_HDR(pkt)->vtc & 0xf0);
+
+			switch (type) {
+			case 0x60:
+				protocol = htons(PPP_IPV6);
+				break;
+			case 0x40:
+				protocol = htons(PPP_IP);
+				break;
+			default:
+				return -EPROTONOSUPPORT;
+			}
 		} else {
 			return -EPROTONOSUPPORT;
 		}
@@ -702,9 +716,9 @@ static int ppp_driver_init(const struct device *dev)
 	ring_buf_init(&ppp->rx_ringbuf, sizeof(ppp->rx_buf), ppp->rx_buf);
 	k_work_init(&ppp->cb_work, ppp_isr_cb_work);
 
-	k_work_q_start(&ppp->cb_workq, ppp_workq,
-		       K_KERNEL_STACK_SIZEOF(ppp_workq),
-		       K_PRIO_COOP(PPP_WORKQ_PRIORITY));
+	k_work_queue_start(&ppp->cb_workq, ppp_workq,
+			   K_KERNEL_STACK_SIZEOF(ppp_workq),
+			   K_PRIO_COOP(PPP_WORKQ_PRIORITY), NULL);
 	k_thread_name_set(&ppp->cb_workq.thread, "ppp_workq");
 #endif
 
@@ -848,7 +862,7 @@ static int ppp_start(const struct device *dev)
 
 		dev_name = mux->name;
 #elif IS_ENABLED(CONFIG_MODEM_GSM_PPP)
-		dev_name = CONFIG_MODEM_GSM_UART_NAME;
+		dev_name = DT_BUS_LABEL(DT_INST(0, zephyr_gsm_ppp));
 #else
 		dev_name = CONFIG_NET_PPP_UART_NAME;
 #endif
@@ -900,6 +914,6 @@ static const struct ppp_api ppp_if_api = {
 };
 
 NET_DEVICE_INIT(ppp, CONFIG_NET_PPP_DRV_NAME, ppp_driver_init,
-		device_pm_control_nop, &ppp_driver_context_data, NULL,
+		NULL, &ppp_driver_context_data, NULL,
 		CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &ppp_if_api,
 		PPP_L2, NET_L2_GET_CTX_TYPE(PPP_L2), PPP_MTU);

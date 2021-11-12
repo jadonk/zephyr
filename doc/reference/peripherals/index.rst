@@ -18,6 +18,7 @@ Peripherals
    gna.rst
    gpio.rst
    hwinfo.rst
+   i2c_eeprom_slave.rst
    i2c.rst
    ipm.rst
    kscan.rst
@@ -31,5 +32,7 @@ Peripherals
    sensor.rst
    spi.rst
    uart.rst
+   mdio.rst
    watchdog.rst
    video.rst
+   espi.rst

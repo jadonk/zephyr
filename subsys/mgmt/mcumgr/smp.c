@@ -117,6 +117,9 @@ zephyr_smp_split_frag(struct net_buf **nb, void *arg, uint16_t mtu)
 		frag = src;
 	} else {
 		frag = zephyr_smp_alloc_rsp(src, arg);
+		if (!frag) {
+			return NULL;
+		}
 
 		/* Copy fragment payload into new buffer. */
 		net_buf_add_mem(frag, src->data, mtu);
@@ -184,6 +187,7 @@ zephyr_smp_tx_rsp(struct smp_streamer *ns, void *rsp, void *arg)
 	while (nb != NULL) {
 		frag = zephyr_smp_split_frag(&nb, zst, mtu);
 		if (frag == NULL) {
+			zephyr_smp_free_buf(nb, zst);
 			return MGMT_ERR_ENOMEM;
 		}
 
@@ -273,7 +277,7 @@ zephyr_smp_handle_reqs(struct k_work *work)
 
 	zst = (void *)work;
 
-	while ((nb = k_fifo_get(&zst->zst_fifo, K_NO_WAIT)) != NULL) {
+	while ((nb = net_buf_get(&zst->zst_fifo, K_NO_WAIT)) != NULL) {
 		zephyr_smp_process_packet(zst, nb);
 	}
 }
@@ -299,6 +303,6 @@ zephyr_smp_transport_init(struct zephyr_smp_transport *zst,
 void
 zephyr_smp_rx_req(struct zephyr_smp_transport *zst, struct net_buf *nb)
 {
-	k_fifo_put(&zst->zst_fifo, nb);
+	net_buf_put(&zst->zst_fifo, nb);
 	k_work_submit(&zst->zst_work);
 }

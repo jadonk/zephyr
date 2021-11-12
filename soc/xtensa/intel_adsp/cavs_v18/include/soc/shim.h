@@ -10,10 +10,10 @@
 #ifndef __PLATFORM_LIB_SHIM_H__
 #define __PLATFORM_LIB_SHIM_H__
 
-#include <sys/util.h>
 #include <soc/memory.h>
 
 #ifndef ASSEMBLY
+#include <sys/util.h>
 #include <stdint.h>
 #endif
 
@@ -235,10 +235,6 @@
 #define LSPGCTL			0x71D50
 #define LSRMCTL			0x71D54
 #define LSPGISTS		0x71D58
-
-#define SHIM_LSPGCTL		0x50
-#define SHIM_LSPGISTS		0x58
-
 
 #define SHIM_L2_MECS		(SHIM_BASE + 0xd0)
 

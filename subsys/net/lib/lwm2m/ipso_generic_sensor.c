@@ -24,13 +24,15 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include "lwm2m_engine.h"
 #include "lwm2m_resource_ids.h"
 
-#ifdef CONFIG_LWM2M_IPSO_GENERIC_SENSOR_TIMESTAMP
-#define ADD_TIMESTAMPS 1
-#define NUMBER_OF_OBJ_FIELDS 10
+#define GENERIC_VERSION_MAJOR 1
+
+#if defined(CONFIG_LWM2M_IPSO_GENERIC_SENSOR_VERSION_1_1)
+#define GENERIC_VERSION_MINOR 1
+#define NUMBER_OF_OBJ_FIELDS 13
 #else
-#define ADD_TIMESTAMPS 0
+#define GENERIC_VERSION_MINOR 0
 #define NUMBER_OF_OBJ_FIELDS 9
-#endif
+#endif /* defined(CONFIG_LWM2M_IPSO_GENERIC_SENSOR_VERSION_1_1) */
 
 #define MAX_INSTANCE_COUNT CONFIG_LWM2M_IPSO_GENERIC_SENSOR_INSTANCE_COUNT
 
@@ -65,17 +67,20 @@ static char sensor_type[MAX_INSTANCE_COUNT][SENSOR_TYPE_STR_MAX_SIZE];
 
 static struct lwm2m_engine_obj sensor;
 static struct lwm2m_engine_obj_field fields[] = {
-	OBJ_FIELD_DATA(SENSOR_VALUE_RID, R, FLOAT32),
+	OBJ_FIELD_DATA(SENSOR_VALUE_RID, R, FLOAT),
 	OBJ_FIELD_DATA(SENSOR_UNITS_RID, R_OPT, STRING),
-	OBJ_FIELD_DATA(MIN_MEASURED_VALUE_RID, R_OPT, FLOAT32),
-	OBJ_FIELD_DATA(MAX_MEASURED_VALUE_RID, R_OPT, FLOAT32),
-	OBJ_FIELD_DATA(MIN_RANGE_VALUE_RID, R_OPT, FLOAT32),
-	OBJ_FIELD_DATA(MAX_RANGE_VALUE_RID, R_OPT, FLOAT32),
+	OBJ_FIELD_DATA(MIN_MEASURED_VALUE_RID, R_OPT, FLOAT),
+	OBJ_FIELD_DATA(MAX_MEASURED_VALUE_RID, R_OPT, FLOAT),
+	OBJ_FIELD_DATA(MIN_RANGE_VALUE_RID, R_OPT, FLOAT),
+	OBJ_FIELD_DATA(MAX_RANGE_VALUE_RID, R_OPT, FLOAT),
 	OBJ_FIELD_EXECUTE_OPT(RESET_MIN_MAX_MEASURED_VALUES_RID),
 	OBJ_FIELD_DATA(APPLICATION_TYPE_RID, RW_OPT, STRING),
 	OBJ_FIELD_DATA(SENSOR_TYPE_RID, R_OPT, STRING),
-#if ADD_TIMESTAMPS
-	OBJ_FIELD_DATA(TIMESTAMP_RID, RW_OPT, TIME),
+#if defined(CONFIG_LWM2M_IPSO_GENERIC_SENSOR_VERSION_1_1)
+	OBJ_FIELD_DATA(TIMESTAMP_RID, R_OPT, TIME),
+	OBJ_FIELD_DATA(FRACTIONAL_TIMESTAMP_RID, R_OPT, FLOAT),
+	OBJ_FIELD_DATA(MEASUREMENT_QUALITY_INDICATOR_RID, R_OPT, U8),
+	OBJ_FIELD_DATA(MEASUREMENT_QUALITY_LEVEL_RID, R_OPT, U8),
 #endif
 };
 
@@ -206,8 +211,8 @@ static struct lwm2m_engine_obj_inst *generic_sensor_create(uint16_t obj_inst_id)
 
 	/* initialize instance resource data */
 	INIT_OBJ_RES(SENSOR_VALUE_RID, res[index], i, res_inst[index], j, 1,
-		     true, &sensor_value[index], sizeof(*sensor_value), NULL,
-		     NULL, sensor_value_write_cb, NULL);
+		     false, true, &sensor_value[index], sizeof(*sensor_value),
+		     NULL, NULL, NULL, sensor_value_write_cb, NULL);
 	INIT_OBJ_RES_DATA(SENSOR_UNITS_RID, res[index], i, res_inst[index], j,
 			  units[index], UNIT_STR_MAX_SIZE);
 	INIT_OBJ_RES_DATA(MIN_MEASURED_VALUE_RID, res[index], i,
@@ -227,8 +232,14 @@ static struct lwm2m_engine_obj_inst *generic_sensor_create(uint16_t obj_inst_id)
 	INIT_OBJ_RES_DATA(SENSOR_TYPE_RID, res[index], i, res_inst[index], j,
 			  sensor_type[index], SENSOR_TYPE_STR_MAX_SIZE);
 
-#if ADD_TIMESTAMPS
+#if defined(CONFIG_LWM2M_IPSO_GENERIC_SENSOR_VERSION_1_1)
 	INIT_OBJ_RES_OPTDATA(TIMESTAMP_RID, res[index], i, res_inst[index], j);
+	INIT_OBJ_RES_OPTDATA(FRACTIONAL_TIMESTAMP_RID, res[index], i,
+			     res_inst[index], j);
+	INIT_OBJ_RES_OPTDATA(MEASUREMENT_QUALITY_INDICATOR_RID, res[index], i,
+			     res_inst[index], j);
+	INIT_OBJ_RES_OPTDATA(MEASUREMENT_QUALITY_LEVEL_RID, res[index], i,
+			     res_inst[index], j);
 #endif
 
 	inst[index].resources = res[index];
@@ -241,6 +252,9 @@ static struct lwm2m_engine_obj_inst *generic_sensor_create(uint16_t obj_inst_id)
 static int ipso_generic_sensor_init(const struct device *dev)
 {
 	sensor.obj_id = IPSO_OBJECT_ID;
+	sensor.version_major = GENERIC_VERSION_MAJOR;
+	sensor.version_minor = GENERIC_VERSION_MINOR;
+	sensor.is_core = false;
 	sensor.fields = fields;
 	sensor.field_count = ARRAY_SIZE(fields);
 	sensor.max_instance_count = MAX_INSTANCE_COUNT;

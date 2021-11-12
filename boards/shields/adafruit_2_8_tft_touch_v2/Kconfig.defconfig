@@ -3,6 +3,9 @@
 
 if SHIELD_ADAFRUIT_2_8_TFT_TOUCH_V2
 
+config GPIO
+	default y
+
 if DISPLAY
 
 config SPI
@@ -22,9 +25,6 @@ config KSCAN_FT5336
 # NOTE: Enable if IRQ line is available (requires to solder jumper)
 config KSCAN_FT5336_INTERRUPT
 	default n
-
-config KSCAN_INIT_PRIORITY
-	default 60
 
 endif # KSCAN
 
@@ -71,11 +71,11 @@ endif # LVGL
 
 endif # DISPLAY
 
-if DISK_ACCESS_SDHC
+if DISK_DRIVERS
 
-config DISK_ACCESS_SPI_SDHC
+config DISK_DRIVER_SDMMC
 	default y
 
-endif # DISK_ACCESS_SDHC
+endif # DISK_DRIVERS
 
 endif # SHIELD_ADAFRUIT_2_8_TFT_TOUCH_V2

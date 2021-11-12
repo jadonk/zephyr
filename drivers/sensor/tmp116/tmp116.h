@@ -15,6 +15,7 @@
 #define TMP116_REG_EEPROM1		0x5
 #define TMP116_REG_EEPROM2		0x6
 #define TMP116_REG_EEPROM3		0x7
+#define TMP117_REG_TEMP_OFFSET		0x7
 #define TMP116_REG_EEPROM4		0x8
 #define TMP116_REG_DEVICE_ID		0xF
 
@@ -24,13 +25,15 @@
 #define TMP116_DEVICE_ID		0x1116
 #define TMP117_DEVICE_ID		0x0117
 
+#define TMP116_CFGR_DATA_READY BIT(13)
+
 struct tmp116_data {
-	const struct device *i2c;
 	uint16_t sample;
+	uint16_t id;
 };
 
 struct tmp116_dev_config {
-	uint16_t i2c_addr;
+	struct i2c_dt_spec bus;
 };
 
 #endif /*  ZEPHYR_DRIVERS_SENSOR_TMP116_TMP116_H_ */

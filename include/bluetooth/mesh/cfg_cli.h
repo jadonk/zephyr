@@ -1,5 +1,5 @@
 /** @file
- *  @brief Bluetooth Mesh Configuration Client Model APIs.
+ *  @brief Configuration Client Model APIs.
  */
 
 /*
@@ -11,8 +11,8 @@
 #define ZEPHYR_INCLUDE_BLUETOOTH_MESH_CFG_CLI_H_
 
 /**
- * @brief Bluetooth Mesh
- * @defgroup bt_mesh_cfg_cli Bluetooth Mesh Configuration Client Model
+ * @brief Configuration Client Model
+ * @defgroup bt_mesh_cfg_cli Configuration Client Model
  * @ingroup bt_mesh
  * @{
  */
@@ -27,9 +27,7 @@ struct bt_mesh_cfg_cli {
 	struct bt_mesh_model *model;
 
 	/* Internal parameters for tracking message responses. */
-	struct k_sem          op_sync;
-	uint32_t                 op_pending;
-	void                 *op_param;
+	struct bt_mesh_msg_ack_ctx ack_ctx;
 };
 
 /** @def BT_MESH_MODEL_CFG_CLI
@@ -54,17 +52,21 @@ int bt_mesh_cfg_node_reset(uint16_t net_idx, uint16_t addr, bool *status);
 
 /** @brief Get the target node's composition data.
  *
+ *  If the other device does not have the given composition data page, it will
+ *  return the largest page number it supports that is less than the requested
+ *  page index. The actual page the device responds with is returned in @c rsp.
+ *
  *  @param net_idx Network index to encrypt with.
  *  @param addr    Target node address.
  *  @param page    Composition data page, or 0xff to request the first available
  *                 page.
- *  @param status  Status response parameter.
+ *  @param rsp     Return parameter for the returned page number, or NULL.
  *  @param comp    Composition data buffer to fill.
  *
  *  @return 0 on success, or (negative) error code on failure.
  */
 int bt_mesh_cfg_comp_data_get(uint16_t net_idx, uint16_t addr, uint8_t page,
-			      uint8_t *status, struct net_buf_simple *comp);
+			      uint8_t *rsp, struct net_buf_simple *comp);
 
 /** @brief Get the target node's network beacon state.
  *
@@ -77,6 +79,32 @@ int bt_mesh_cfg_comp_data_get(uint16_t net_idx, uint16_t addr, uint8_t page,
  *  @return 0 on success, or (negative) error code on failure.
  */
 int bt_mesh_cfg_beacon_get(uint16_t net_idx, uint16_t addr, uint8_t *status);
+
+/** @brief             Get the target node's network key refresh phase state.
+ *  @param net_idx     Network index to encrypt with.
+ *  @param addr        Target node address.
+ *  @param key_net_idx Network key index.
+ *  @param status      Status response parameter.
+ *  @param phase       Pointer to the Key Refresh variable to fill.
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_cfg_krp_get(uint16_t net_idx, uint16_t addr, uint16_t key_net_idx,
+			uint8_t *status, uint8_t *phase);
+
+/** @brief             Set the target node's network key refresh phase parameters.
+ *  @param net_idx     Network index to encrypt with.
+ *  @param addr        Target node address.
+ *  @param key_net_idx Network key index.
+ *  @param transition  Transition parameter.
+ *  @param status      Status response parameter.
+ *  @param phase       Pointer to the new Key Refresh phase. Will return the actual
+ *                     Key Refresh phase after updating.
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_cfg_krp_set(uint16_t net_idx, uint16_t addr, uint16_t key_net_idx,
+			uint8_t transition, uint8_t *status, uint8_t *phase);
 
 /** @brief Set the target node's network beacon state.
  *
@@ -472,7 +500,9 @@ int bt_mesh_cfg_mod_app_get_vnd(uint16_t net_idx, uint16_t addr, uint16_t elem_a
 /** Model publication configuration parameters. */
 struct bt_mesh_cfg_mod_pub {
 	/** Publication destination address. */
-	uint16_t  addr;
+	uint16_t addr;
+	/** Virtual address UUID, or NULL if this is not a virtual address. */
+	const uint8_t *uuid;
 	/** Application index to publish with. */
 	uint16_t  app_idx;
 	/** Friendship credential flag. */
@@ -924,6 +954,109 @@ int bt_mesh_cfg_hb_pub_set(uint16_t net_idx, uint16_t addr,
 int bt_mesh_cfg_hb_pub_get(uint16_t net_idx, uint16_t addr,
 			   struct bt_mesh_cfg_hb_pub *pub, uint8_t *status);
 
+/** @brief Delete all group addresses in a SIG model's subscription list.
+ *
+ *  @param net_idx   Network index to encrypt with.
+ *  @param addr      Target node address.
+ *  @param elem_addr Element address the model is in.
+ *  @param mod_id    Model ID.
+ *  @param status    Status response parameter.
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_cfg_mod_sub_del_all(uint16_t net_idx, uint16_t addr,
+				uint16_t elem_addr, uint16_t mod_id,
+				uint8_t *status);
+
+/** @brief Delete all group addresses in a vendor model's subscription list.
+ *
+ *  @param net_idx   Network index to encrypt with.
+ *  @param addr      Target node address.
+ *  @param elem_addr Element address the model is in.
+ *  @param mod_id    Model ID.
+ *  @param cid       Company ID of the model.
+ *  @param status    Status response parameter.
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_cfg_mod_sub_del_all_vnd(uint16_t net_idx, uint16_t addr,
+				    uint16_t elem_addr, uint16_t mod_id,
+				    uint16_t cid, uint8_t *status);
+
+/** @brief Update a network key to the target node.
+ *
+ *  @param net_idx     Network index to encrypt with.
+ *  @param addr        Target node address.
+ *  @param key_net_idx Network key index.
+ *  @param net_key     Network key.
+ *  @param status      Status response parameter.
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_cfg_net_key_update(uint16_t net_idx, uint16_t addr,
+			       uint16_t key_net_idx, const uint8_t net_key[16],
+			       uint8_t *status);
+
+/** @brief Update an application key to the target node.
+ *
+ *  @param net_idx     Network index to encrypt with.
+ *  @param addr        Target node address.
+ *  @param key_net_idx Network key index the application key belongs to.
+ *  @param key_app_idx Application key index.
+ *  @param app_key     Application key.
+ *  @param status      Status response parameter.
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_cfg_app_key_update(uint16_t net_idx, uint16_t addr,
+			       uint16_t key_net_idx, uint16_t key_app_idx,
+			       const uint8_t app_key[16], uint8_t *status);
+
+/** @brief Set the Node Identity parameters.
+ *
+ *  @param net_idx Network index to encrypt with.
+ *  @param addr    Target node address.
+ *  @param new_identity  New identity state. Must be one of
+ *                      @ref BT_MESH_NODE_IDENTITY_STOPPED or
+ *                      @ref BT_MESH_NODE_IDENTITY_RUNNING
+ *  @param key_net_idx Network key index the application key belongs to.
+ *  @param status  Status response parameter.
+ *  @param identity Identity response parameter.
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_cfg_node_identity_set(uint16_t net_idx, uint16_t addr,
+				  uint16_t key_net_idx, uint8_t new_identity,
+				  uint8_t *status, uint8_t *identity);
+
+/** @brief Get the Node Identity parameters.
+ *
+ *  @param net_idx Network index to encrypt with.
+ *  @param addr    Target node address.
+ *  @param key_net_idx Network key index the application key belongs to.
+ *  @param status  Status response parameter.
+ *  @param identity Identity response parameter. Must be one of
+ *                      @ref BT_MESH_NODE_IDENTITY_STOPPED or
+ *                      @ref BT_MESH_NODE_IDENTITY_RUNNING
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_cfg_node_identity_get(uint16_t net_idx, uint16_t addr,
+				  uint16_t key_net_idx, uint8_t *status,
+				  uint8_t *identity);
+
+/** @brief Get the Low Power Node Polltimeout parameters.
+ *
+ *  @param net_idx Network index to encrypt with.
+ *  @param addr    Target node address.
+ *  @param unicast_addr LPN unicast address.
+ *  @param polltimeout Poltimeout response parameter.
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_cfg_lpn_timeout_get(uint16_t net_idx, uint16_t addr,
+				uint16_t unicast_addr, int32_t *polltimeout);
+
 /** @brief Get the current transmission timeout value.
  *
  *  @return The configured transmission timeout in milliseconds.
@@ -935,6 +1068,100 @@ int32_t bt_mesh_cfg_cli_timeout_get(void);
  *  @param timeout The new transmission timeout.
  */
 void bt_mesh_cfg_cli_timeout_set(int32_t timeout);
+
+/** Parsed Composition data page 0 representation.
+ *
+ *  Should be pulled from the return buffer passed to
+ *  @ref bt_mesh_cfg_comp_data_get using
+ *  @ref bt_mesh_comp_p0_get.
+ */
+struct bt_mesh_comp_p0 {
+	/** Company ID */
+	uint16_t cid;
+	/** Product ID */
+	uint16_t pid;
+	/** Version ID */
+	uint16_t vid;
+	/** Replay protection list size */
+	uint16_t crpl;
+	/** Supported features, see @ref BT_MESH_FEAT_SUPPORTED. */
+	uint16_t feat;
+
+	struct net_buf_simple *_buf;
+};
+
+/** Composition data page 0 element representation */
+struct bt_mesh_comp_p0_elem {
+	/** Element location */
+	uint16_t loc;
+	/** The number of SIG models in this element */
+	size_t nsig;
+	/** The number of vendor models in this element */
+	size_t nvnd;
+
+	uint8_t *_buf;
+};
+
+/** @brief Create a composition data page 0 representation from a buffer.
+ *
+ *  The composition data page object will take ownership over the buffer, which
+ *  should not be manipulated directly after this call.
+ *
+ *  This function can be used in combination with @ref bt_mesh_cfg_comp_data_get
+ *  to read out composition data page 0 from other devices:
+ *
+ *  @code
+ *  NET_BUF_SIMPLE_DEFINE(buf, BT_MESH_RX_SDU_MAX);
+ *  struct bt_mesh_comp_p0 comp;
+ *
+ *  err = bt_mesh_cfg_comp_data_get(net_idx, addr, 0, &page, &buf);
+ *  if (!err) {
+ *          bt_mesh_comp_p0_get(&comp, &buf);
+ *  }
+ *  @endcode
+ *
+ *  @param buf  Network buffer containing composition data.
+ *  @param comp Composition data structure to fill.
+ *
+ *  @return 0 on success, or (negative) error code on failure.
+ */
+int bt_mesh_comp_p0_get(struct bt_mesh_comp_p0 *comp,
+			struct net_buf_simple *buf);
+
+/** @brief Pull a composition data page 0 element from a composition data page 0
+ *         instance.
+ *
+ *  Each call to this function will pull out a new element from the composition
+ *  data page, until all elements have been pulled.
+ *
+ *  @param comp Composition data page
+ *  @param elem Element to fill.
+ *
+ *  @return A pointer to @c elem on success, or NULL if no more elements could
+ *          be pulled.
+ */
+struct bt_mesh_comp_p0_elem *bt_mesh_comp_p0_elem_pull(const struct bt_mesh_comp_p0 *comp,
+						       struct bt_mesh_comp_p0_elem *elem);
+
+/** @brief Get a SIG model from the given composition data page 0 element.
+ *
+ *  @param elem Element to read the model from.
+ *  @param idx  Index of the SIG model to read.
+ *
+ *  @return The Model ID of the SIG model at the given index, or 0xffff if the
+ *          index is out of bounds.
+ */
+uint16_t bt_mesh_comp_p0_elem_mod(struct bt_mesh_comp_p0_elem *elem, int idx);
+
+/** @brief Get a vendor model from the given composition data page 0 element.
+ *
+ *  @param elem Element to read the model from.
+ *  @param idx  Index of the vendor model to read.
+ *
+ *  @return The model ID of the vendor model at the given index, or
+ *          {0xffff, 0xffff} if the index is out of bounds.
+ */
+struct bt_mesh_mod_id_vnd bt_mesh_comp_p0_elem_mod_vnd(struct bt_mesh_comp_p0_elem *elem, int idx);
 
 /** @cond INTERNAL_HIDDEN */
 extern const struct bt_mesh_model_op bt_mesh_cfg_cli_op[];

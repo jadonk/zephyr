@@ -27,9 +27,9 @@ extern "C" {
 /* Exhaustively enumerated, highly optimized time unit conversion API */
 
 #if defined(CONFIG_TIMER_READS_ITS_FREQUENCY_AT_RUNTIME)
-__syscall int z_clock_hw_cycles_per_sec_runtime_get(void);
+__syscall int sys_clock_hw_cycles_per_sec_runtime_get(void);
 
-static inline int z_impl_z_clock_hw_cycles_per_sec_runtime_get(void)
+static inline int z_impl_sys_clock_hw_cycles_per_sec_runtime_get(void)
 {
 	extern int z_clock_hw_cycles_per_sec;
 
@@ -50,7 +50,7 @@ static inline int z_impl_z_clock_hw_cycles_per_sec_runtime_get(void)
 static TIME_CONSTEXPR inline int sys_clock_hw_cycles_per_sec(void)
 {
 #if defined(CONFIG_TIMER_READS_ITS_FREQUENCY_AT_RUNTIME)
-	return z_clock_hw_cycles_per_sec_runtime_get();
+	return sys_clock_hw_cycles_per_sec_runtime_get();
 #else
 	return CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC;
 #endif
@@ -96,7 +96,8 @@ static TIME_CONSTEXPR ALWAYS_INLINE uint64_t z_tmcvt(uint64_t t, uint32_t from_h
 
 		if (round_up) {
 			off = rdivisor - 1U;
-		} else if (round_off) {
+		}
+		if (round_off) {
 			off = rdivisor / 2U;
 		}
 	}
@@ -111,13 +112,13 @@ static TIME_CONSTEXPR ALWAYS_INLINE uint64_t z_tmcvt(uint64_t t, uint32_t from_h
 		if (result32 && (t < BIT64(32))) {
 			return ((uint32_t)t) / (from_hz / to_hz);
 		} else {
-			return t / (from_hz / to_hz);
+			return t / ((uint64_t)from_hz / to_hz);
 		}
 	} else if (mul_ratio) {
 		if (result32) {
 			return ((uint32_t)t) * (to_hz / from_hz);
 		} else {
-			return t * (to_hz / from_hz);
+			return t * ((uint64_t)to_hz / from_hz);
 		}
 	} else {
 		if (result32) {

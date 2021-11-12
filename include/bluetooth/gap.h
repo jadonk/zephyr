@@ -50,9 +50,12 @@ extern "C" {
 #define BT_DATA_LE_SC_CONFIRM_VALUE     0x22 /* LE SC Confirmation Value */
 #define BT_DATA_LE_SC_RANDOM_VALUE      0x23 /* LE SC Random Value */
 #define BT_DATA_URI                     0x24 /* URI */
+#define BT_DATA_CHANNEL_MAP_UPDATE_IND  0x28 /* Channel Map Update Indication */
 #define BT_DATA_MESH_PROV               0x29 /* Mesh Provisioning PDU */
 #define BT_DATA_MESH_MESSAGE            0x2a /* Mesh Networking PDU */
 #define BT_DATA_MESH_BEACON             0x2b /* Mesh Beacon */
+#define BT_DATA_BIG_INFO                0x2c /* BIGInfo */
+#define BT_DATA_BROADCAST_CODE          0x2d /* Broadcast Code */
 
 #define BT_DATA_MANUFACTURER_DATA       0xff /* Manufacturer Specific Data */
 
@@ -73,6 +76,12 @@ extern "C" {
 #define BT_GAP_ADV_FAST_INT_MAX_2               0x00f0  /* 150 ms   */
 #define BT_GAP_ADV_SLOW_INT_MIN                 0x0640  /* 1 s      */
 #define BT_GAP_ADV_SLOW_INT_MAX                 0x0780  /* 1.2 s    */
+#define BT_GAP_PER_ADV_FAST_INT_MIN_1           0x0018  /* 30 ms    */
+#define BT_GAP_PER_ADV_FAST_INT_MAX_1           0x0030  /* 60 ms    */
+#define BT_GAP_PER_ADV_FAST_INT_MIN_2           0x0050  /* 100 ms   */
+#define BT_GAP_PER_ADV_FAST_INT_MAX_2           0x0078  /* 150 ms   */
+#define BT_GAP_PER_ADV_SLOW_INT_MIN             0x0320  /* 1 s      */
+#define BT_GAP_PER_ADV_SLOW_INT_MAX             0x03C0  /* 1.2 s    */
 #define BT_GAP_INIT_CONN_INT_MIN                0x0018  /* 30 ms    */
 #define BT_GAP_INIT_CONN_INT_MAX                0x0028  /* 50 ms    */
 
@@ -144,8 +153,13 @@ enum {
 #define BT_GAP_DATA_TIME_MAX                    0x4290 /* 17040 us */
 
 #define BT_GAP_SID_MAX                          0x0F
-#define BT_GAP_PER_ADV_MAX_MAX_SKIP             0x01F3
-#define BT_GAP_PER_ADV_MAX_MAX_TIMEOUT          0x4000
+#define BT_GAP_PER_ADV_MAX_SKIP                 0x01F3
+#define BT_GAP_PER_ADV_MIN_TIMEOUT              0x000A
+#define BT_GAP_PER_ADV_MAX_TIMEOUT              0x4000
+/** Minimum Periodic Advertising Interval (N * 1.25 ms) */
+#define BT_GAP_PER_ADV_MIN_INTERVAL             0x0006
+/** Maximum Periodic Advertising Interval (N * 1.25 ms) */
+#define BT_GAP_PER_ADV_MAX_INTERVAL             0xFFFF
 
 
 /** Constant Tone Extension (CTE) types */
@@ -158,6 +172,20 @@ enum {
 	BT_GAP_CTE_AOD_2US = 0x02,
 	/** No extensions */
 	BT_GAP_CTE_NONE = 0xFF,
+};
+
+
+/** @brief Peripheral sleep clock accuracy (SCA) in ppm (parts per million) */
+enum {
+	BT_GAP_SCA_UNKNOWN = 0,
+	BT_GAP_SCA_251_500 = 0,
+	BT_GAP_SCA_151_250 = 1,
+	BT_GAP_SCA_101_150 = 2,
+	BT_GAP_SCA_76_100 = 3,
+	BT_GAP_SCA_51_75 = 4,
+	BT_GAP_SCA_31_50 = 5,
+	BT_GAP_SCA_21_30 = 6,
+	BT_GAP_SCA_0_20 = 7,
 };
 
 /**

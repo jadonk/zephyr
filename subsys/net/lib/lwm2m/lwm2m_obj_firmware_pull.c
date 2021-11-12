@@ -27,7 +27,6 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define NETWORK_CONNECT_TIMEOUT	K_SECONDS(10)
 #define PACKET_TRANSFER_RETRY_MAX	3
 
-static struct k_work firmware_work;
 static char firmware_uri[URI_LEN];
 static struct lwm2m_ctx firmware_ctx = {
 	.sock_fd = -1
@@ -183,7 +182,7 @@ static int transfer_request(struct coap_block_context *ctx,
 #endif
 
 	/* send request */
-	ret = lwm2m_send_message(msg);
+	ret = lwm2m_send_message_async(msg);
 	if (ret < 0) {
 		LOG_ERR("Error sending LWM2M packet (err:%d).", ret);
 		goto cleanup;
@@ -212,6 +211,7 @@ do_firmware_transfer_reply_cb(const struct coap_packet *response,
 	size_t write_buflen;
 	uint8_t resp_code, *write_buf;
 	struct coap_block_context received_block_ctx;
+	const uint8_t *payload_start;
 
 	/* token is used to determine a valid ACK vs a separated response */
 	tkl = coap_header_get_token(check_response, token);
@@ -267,9 +267,9 @@ do_firmware_transfer_reply_cb(const struct coap_packet *response,
 	last_block = !coap_next_block(check_response, &firmware_block_ctx);
 
 	/* Process incoming data */
-	payload_offset = response->hdr_len + response->opt_len;
-	coap_packet_get_payload(response, &payload_len);
+	payload_start = coap_packet_get_payload(response, &payload_len);
 	if (payload_len > 0) {
+		payload_offset = payload_start - response->data;
 		LOG_DBG("total: %zd, current: %zd",
 			firmware_block_ctx.total_size,
 			firmware_block_ctx.current);
@@ -366,7 +366,7 @@ static void do_transmit_timeout_cb(struct lwm2m_message *msg)
 	}
 }
 
-static void firmware_transfer(struct k_work *work)
+static void firmware_transfer(void)
 {
 	int ret;
 	char *server_addr;
@@ -468,12 +468,11 @@ int lwm2m_firmware_start_transfer(char *package_uri)
 	firmware_ctx.sock_fd = -1;
 	firmware_ctx.fault_cb = socket_fault_cb;
 	firmware_retry = 0;
-	k_work_init(&firmware_work, firmware_transfer);
 	lwm2m_firmware_set_update_state(STATE_DOWNLOADING);
 
-	/* start file transfer work */
+	/* start file transfer */
 	strncpy(firmware_uri, package_uri, URI_LEN - 1);
-	k_work_submit(&firmware_work);
+	firmware_transfer();
 
 	return 0;
 }

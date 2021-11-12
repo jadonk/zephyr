@@ -1,5 +1,5 @@
 /** @file
- *  @brief Bluetooth Mesh Health Server Model APIs.
+ *  @brief Health Server Model APIs.
  */
 
 /*
@@ -11,8 +11,8 @@
 #define ZEPHYR_INCLUDE_BLUETOOTH_MESH_HEALTH_SRV_H_
 
 /**
- * @brief Bluetooth Mesh Health Server Model
- * @defgroup bt_mesh_health_srv Bluetooth Mesh Health Server Model
+ * @brief Health Server Model
+ * @defgroup bt_mesh_health_srv Health Server Model
  * @ingroup bt_mesh
  * @{
  */
@@ -153,7 +153,7 @@ struct bt_mesh_health_srv {
 	const struct bt_mesh_health_srv_cb *cb;
 
 	/** Attention Timer state */
-	struct k_delayed_work attn_timer;
+	struct k_work_delayable attn_timer;
 };
 
 /** @def BT_MESH_MODEL_HEALTH_SRV

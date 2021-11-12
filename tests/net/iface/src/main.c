@@ -150,7 +150,7 @@ NET_DEVICE_INIT_INSTANCE(net_iface1_test,
 			 "iface1",
 			 iface1,
 			 net_iface_dev_init,
-			 device_pm_control_nop,
+			 NULL,
 			 &net_iface1_data,
 			 NULL,
 			 CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
@@ -163,7 +163,7 @@ NET_DEVICE_INIT_INSTANCE(net_iface2_test,
 			 "iface2",
 			 iface2,
 			 net_iface_dev_init,
-			 device_pm_control_nop,
+			 NULL,
 			 &net_iface2_data,
 			 NULL,
 			 CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
@@ -176,7 +176,7 @@ NET_DEVICE_INIT_INSTANCE(net_iface3_test,
 			 "iface3",
 			 iface3,
 			 net_iface_dev_init,
-			 device_pm_control_nop,
+			 NULL,
 			 &net_iface3_data,
 			 NULL,
 			 CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
@@ -261,7 +261,7 @@ static int eth_fake_init(const struct device *dev)
 	return 0;
 }
 
-ETH_NET_DEVICE_INIT(eth_fake, "eth_fake", eth_fake_init, device_pm_control_nop,
+ETH_NET_DEVICE_INIT(eth_fake, "eth_fake", eth_fake_init, NULL,
 		    &eth_fake_data, NULL, CONFIG_ETH_INIT_PRIORITY,
 		    &eth_fake_api_funcs, NET_ETH_MTU);
 
@@ -718,6 +718,14 @@ static void test_v6_addr_add(void)
 	zassert_true(ret, "Cannot add IPv6 address");
 }
 
+static void test_v6_addr_add_mcast_twice(void)
+{
+	struct net_if_mcast_addr *maddr;
+
+	maddr = net_if_ipv6_maddr_add(iface1, &in6addr_mcast);
+	zassert_equal(maddr, NULL, "Address was added twice");
+}
+
 static void test_v6_addr_lookup(void)
 {
 	int ret;
@@ -859,6 +867,7 @@ void test_main(void)
 			 ztest_user_unit_test(test_v4_addr_lookup_user),
 			 ztest_unit_test(test_v4_addr_rm_user_from_userspace),
 			 ztest_unit_test(test_v6_addr_add),
+			 ztest_unit_test(test_v6_addr_add_mcast_twice),
 			 ztest_unit_test(test_v6_addr_lookup),
 			 ztest_unit_test(test_v6_addr_rm),
 			 ztest_unit_test(test_v6_addr_add_user_from_userspace),

@@ -7,6 +7,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include <cavs/version.h>
+
 #include <sys/sys_io.h>
 
 #include <adsp/cache.h>
@@ -61,57 +63,14 @@
 #define SSP_MN_DIV_BASE(x)			\
 	(0x00078D00 + ((x) * SSP_MN_DIV_SIZE))
 
-#define PDM_BASE				0x00010000
+#define PDM_BASE				DMIC_BASE
 
 /* SOC DSP SHIM Registers */
+#if CAVS_VERSION == CAVS_VERSION_1_5
 #define SOC_DSP_SHIM_REG_BASE			0x00001000
-
-/* SOC DSP SHIM Register - Clock Control */
-#define SOC_CLKCTL_REQ_AUDIO_PLL_CLK		BIT(31)
-#define SOC_CLKCTL_REQ_XTAL_CLK			BIT(30)
-#define SOC_CLKCTL_REQ_FAST_CLK			BIT(29)
-
-#define SOC_CLKCTL_TCPLCG_POS(x)		(16 + x)
-#define SOC_CLKCTL_TCPLCG_DIS(x)		(1 << SOC_CLKCTL_TCPLCG_POS(x))
-
-#define SOC_CLKCTL_DPCS_POS(x)			(8 + x)
-#define SOC_CLKCTL_DPCS_DIV1(x)			(0 << SOC_CLKCTL_DPCS_POS(x))
-#define SOC_CLKCTL_DPCS_DIV2(x)			(1 << SOC_CLKCTL_DPCS_POS(x))
-#define SOC_CLKCTL_DPCS_DIV4(x)			(3 << SOC_CLKCTL_DPCS_POS(x))
-
-#define SOC_CLKCTL_TCPAPLLS			BIT(7)
-
-#define SOC_CLKCTL_LDCS_POS			(5)
-#define SOC_CLKCTL_LDCS_LMPCS			(0 << SOC_CLKCTL_LDCS_POS)
-#define SOC_CLKCTL_LDCS_LDOCS			(1 << SOC_CLKCTL_LDCS_POS)
-
-#define SOC_CLKCTL_HDCS_POS			(4)
-#define SOC_CLKCTL_HDCS_HMPCS			(0 << SOC_CLKCTL_HDCS_POS)
-#define SOC_CLKCTL_HDCS_HDOCS			(1 << SOC_CLKCTL_HDCS_POS)
-
-#define SOC_CLKCTL_LDOCS_POS			(3)
-#define SOC_CLKCTL_LDOCS_PLL			(0 << SOC_CLKCTL_LDOCS_POS)
-#define SOC_CLKCTL_LDOCS_FAST			(1 << SOC_CLKCTL_LDOCS_POS)
-
-#define SOC_CLKCTL_HDOCS_POS			(2)
-#define SOC_CLKCTL_HDOCS_PLL			(0 << SOC_CLKCTL_HDOCS_POS)
-#define SOC_CLKCTL_HDOCS_FAST			(1 << SOC_CLKCTL_HDOCS_POS)
-
-#define SOC_CLKCTL_LPMEM_PLL_CLK_SEL_POS	(1)
-#define SOC_CLKCTL_LPMEM_PLL_CLK_SEL_DIV2	\
-	(0 << SOC_CLKCTL_LPMEM_PLL_CLK_SEL_POS)
-#define SOC_CLKCTL_LPMEM_PLL_CLK_SEL_DIV4	\
-	(1 << SOC_CLKCTL_LPMEM_PLL_CLK_SEL_POS)
-
-#define SOC_CLKCTL_HPMEM_PLL_CLK_SEL_POS	(0)
-#define SOC_CLKCTL_HPMEM_PLL_CLK_SEL_DIV2	\
-	(0 << SOC_CLKCTL_HPMEM_PLL_CLK_SEL_POS)
-#define SOC_CLKCTL_HPMEM_PLL_CLK_SEL_DIV4	\
-	(1 << SOC_CLKCTL_HPMEM_PLL_CLK_SEL_POS)
-
-/* SOC DSP SHIM Register - Power Control */
-#define SOC_PWRCTL_DISABLE_PWR_GATING_DSP0	BIT(0)
-#define SOC_PWRCTL_DISABLE_PWR_GATING_DSP1	BIT(1)
+#else
+#define SOC_DSP_SHIM_REG_BASE			0x00071f00
+#endif
 
 /* DSP Wall Clock Timers (0 and 1) */
 #define DSP_WCT_IRQ(x) \
@@ -160,5 +119,6 @@ struct soc_dsp_shim_regs {
 extern void z_soc_irq_enable(uint32_t irq);
 extern void z_soc_irq_disable(uint32_t irq);
 extern int z_soc_irq_is_enabled(unsigned int irq);
+
 
 #endif /* __INC_SOC_H */

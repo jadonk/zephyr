@@ -40,10 +40,11 @@
 #include <linker/linker-defs.h>
 #include <offsets.h>
 #include <sys/util.h>
+#include <sys/mem_manage.h>
 
 #include <linker/linker-tool.h>
 
-#ifdef CONFIG_XIP
+#if defined(CONFIG_XIP) || defined(Z_VM_KERNEL)
 	#define ROMABLE_REGION ROM
 	#define RAMABLE_REGION RAM
 #else
@@ -51,17 +52,24 @@
 	#define RAMABLE_REGION RAM
 #endif
 
+#ifdef CONFIG_MMU
+	#define MMU_PAGE_ALIGN		. = ALIGN(CONFIG_MMU_PAGE_SIZE);
+#else
+	#define MMU_PAGE_ALIGN
+#endif
+
 /* Used to align areas with separate memory permission characteristics
  * so that the page permissions can be set in the MMU. Without this,
  * the kernel is just one blob with the same RWX permissions on all RAM
  */
 #ifdef CONFIG_SRAM_REGION_PERMISSIONS
-	#define MMU_PAGE_ALIGN	. = ALIGN(CONFIG_MMU_PAGE_SIZE);
+	#define MMU_PAGE_ALIGN_PERM	MMU_PAGE_ALIGN
 #else
-	#define MMU_PAGE_ALIGN
+	#define MMU_PAGE_ALIGN_PERM
 #endif
 
-ENTRY(CONFIG_KERNEL_ENTRY)
+epoint = Z_MEM_PHYS_ADDR(CONFIG_KERNEL_ENTRY);
+ENTRY(epoint)
 
 /* SECTIONS definitions */
 SECTIONS
@@ -79,48 +87,254 @@ SECTIONS
 	*(.iplt)
 	}
 
+#ifdef CONFIG_LINKER_USE_BOOT_SECTION
+
+	SECTION_PROLOGUE(boot.text,,)
+	{
+#include <snippets-rom-start.ld>
+
+		MMU_PAGE_ALIGN
+		lnkr_boot_start = .;
+		z_mapped_start = .;
+
+		lnkr_boot_text_start = .;
+
+		KEEP(*(.boot_text.__start))
+		*(.boot_text)
+		*(.boot_text.*)
+
+		MMU_PAGE_ALIGN_PERM
+
+		lnkr_boot_text_end = .;
+	} GROUP_ROM_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	SECTION_PROLOGUE(boot.rodata,,)
+	{
+		MMU_PAGE_ALIGN_PERM
+
+		lnkr_boot_rodata_start = .;
+
+		*(.boot_rodata)
+		*(.boot_rodata.*)
+
+		MMU_PAGE_ALIGN_PERM
+
+		lnkr_boot_rodata_end = .;
+	} GROUP_ROM_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	SECTION_PROLOGUE(boot.data,,)
+	{
+		MMU_PAGE_ALIGN_PERM
+
+		. = ALIGN(4);
+
+		lnkr_boot_data_start = .;
+
+		*(.boot_data)
+		*(.boot_data.*)
+
+		lnkr_boot_data_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	SECTION_PROLOGUE(boot.bss, (NOLOAD),)
+	{
+		. = ALIGN(4);
+
+		lnkr_boot_bss_start = .;
+
+		*(.boot_bss)
+		*(.boot_bss.*)
+
+		lnkr_boot_bss_end = .;
+	} GROUP_NOLOAD_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	SECTION_PROLOGUE(boot.noinit, (NOLOAD),)
+	{
+		. = ALIGN(4);
+
+		lnkr_boot_noinit_start = .;
+
+		*(.boot_noinit)
+		*(.boot_noinit.*)
+
+		lnkr_boot_noinit_end = .;
+
+		MMU_PAGE_ALIGN
+
+		lnkr_boot_end = .;
+	} GROUP_NOLOAD_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	lnkr_boot_text_size = lnkr_boot_text_end - lnkr_boot_text_start;
+	lnkr_boot_rodata_size = lnkr_boot_rodata_end - lnkr_boot_rodata_start;
+	lnkr_boot_data_size = lnkr_boot_data_end - lnkr_boot_data_start;
+	lnkr_boot_bss_size = lnkr_boot_bss_end - lnkr_boot_bss_start;
+	lnkr_boot_noinit_size = lnkr_boot_noinit_end - lnkr_boot_noinit_start;
+
+#endif /* CONFIG_LINKER_USE_BOOT_SECTION */
+
+#ifdef CONFIG_LINKER_USE_PINNED_SECTION
+
+	SECTION_PROLOGUE(pinned.text,,)
+	{
+#ifndef CONFIG_LINKER_USE_BOOT_SECTION
+#include <snippets-rom-start.ld>
+#endif
+
+		MMU_PAGE_ALIGN
+
+		lnkr_pinned_start = .;
+
+#ifndef CONFIG_LINKER_USE_BOOT_SECTION
+		z_mapped_start = .;
+#endif
+
+		lnkr_pinned_text_start = .;
+
+		*(.pinned_text)
+		*(.pinned_text.*)
+
+		*(.gnu.linkonce.t.exc_*)
+
+#include <linker/kobject-text.ld>
+
+		MMU_PAGE_ALIGN_PERM
+
+		lnkr_pinned_text_end = .;
+	} GROUP_ROM_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	MMU_PAGE_ALIGN_PERM
+
+	lnkr_pinned_rodata_start = .;
+
+#include <linker/common-rom.ld>
+#include <linker/thread-local-storage.ld>
+
+	SECTION_PROLOGUE(pinned.rodata,,)
+	{
+#include <arch/x86/ia32/scripts/static_intr.ld>
+
+		*(.pinned_rodata)
+		*(.pinned_rodata.*)
+
+#include <snippets-rodata.ld>
+
+#include <linker/kobject-rom.ld>
+
+		MMU_PAGE_ALIGN_PERM
+
+		lnkr_pinned_rodata_end = .;
+	} GROUP_ROM_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	SECTION_PROLOGUE(pinned.data,,)
+	{
+		MMU_PAGE_ALIGN_PERM
+
+		lnkr_pinned_data_start = .;
+
+		. = ALIGN(4);
+
+#include <arch/x86/ia32/scripts/shared_kernel_pages.ld>
+#include <arch/x86/ia32/scripts/dynamic_intr.ld>
+
+		*(.pinned_data)
+		*(.pinned_data.*)
+
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+#include <linker/common-ram.ld>
+#include <arch/x86/pagetables.ld>
+#include <linker/kobject-data.ld>
+
+	lnkr_pinned_data_end = .;
+
+	SECTION_PROLOGUE(pinned.bss, (NOLOAD),)
+	{
+		. = ALIGN(4);
+
+		lnkr_pinned_bss_start = .;
+
+		*(.pinned_bss)
+		*(.pinned_bss.*)
+
+		lnkr_pinned_bss_end = .;
+	} GROUP_NOLOAD_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	SECTION_PROLOGUE(pinned.noinit, (NOLOAD),)
+	{
+		. = ALIGN(4);
+
+		lnkr_pinned_noinit_start = .;
+
+		*(.pinned_noinit)
+		*(.pinned_noinit.*)
+
+		lnkr_pinned_noinit_end = .;
+
+		MMU_PAGE_ALIGN
+
+		lnkr_pinned_end = .;
+
+	} GROUP_NOLOAD_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	lnkr_pinned_text_size = lnkr_pinned_text_end - lnkr_pinned_text_start;
+	lnkr_pinned_rodata_size = lnkr_pinned_rodata_end - lnkr_pinned_rodata_start;
+	lnkr_pinned_data_size = lnkr_pinned_data_end - lnkr_pinned_data_start;
+	lnkr_pinned_bss_size = lnkr_pinned_bss_end - lnkr_pinned_bss_start;
+	lnkr_pinned_noinit_size = lnkr_pinned_noinit_end - lnkr_pinned_noinit_start;
+
+#endif /* CONFIG_LINKER_USE_PINNED_SECTION */
 
 	GROUP_START(ROMABLE_REGION)
 
 	. = ALIGN(8);
 
 #ifdef CONFIG_XIP
-	_image_rom_start = PHYS_LOAD_ADDR;
+	__rom_region_start = PHYS_LOAD_ADDR;
 #endif
 	SECTION_PROLOGUE(_TEXT_SECTION_NAME,,)
 	{
-	_image_text_start = .;
+	__text_region_start = .;
 
+#if !defined(CONFIG_LINKER_USE_BOOT_SECTION) || \
+    !defined(CONFIG_LINKER_USE_PINNED_SECTION)
+#ifndef CONFIG_XIP
+	z_mapped_start = .;
+#endif
+#endif
+
+#if !defined(CONFIG_LINKER_USE_BOOT_SECTION) || \
+    !defined(CONFIG_LINKER_USE_PINNED_SECTION)
 /* Located in generated directory. This file is populated by calling
  * zephyr_linker_sources(ROM_START ...). This typically contains the vector
  * table and debug information.
  */
 #include <snippets-rom-start.ld>
+#endif
 
-	*(.text_start)
-	*(".text_start.*")
+	/* Needs KEEP() as ENTRY() is given a physical address */
+	KEEP(*(.text.__start))
 	*(.text)
 	*(".text.*")
 	*(.gnu.linkonce.t.*)
-	*(.eh_frame_hdr)
-	*(.eh_frame)
 	*(.init)
 	*(.fini)
 	*(.eini)
-	KEEP(*(.openocd_dbg))
-	KEEP(*(".openocd_dbg.*"))
 
+#ifndef CONFIG_LINKER_USE_PINNED_SECTION
 #include <linker/kobject-text.ld>
+#endif
 
-	MMU_PAGE_ALIGN
-	} GROUP_LINK_IN(ROMABLE_REGION)
+	MMU_PAGE_ALIGN_PERM
+	} GROUP_ROM_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
-	_image_text_end = .;
-	_image_text_size = _image_text_end - _image_text_start;
-	_image_rodata_start = .;
+	__text_region_end = .;
+	__text_region_size = __text_region_end - __text_region_start;
+	__rodata_region_start = .;
 
+#ifndef CONFIG_LINKER_USE_PINNED_SECTION
 #include <linker/common-rom.ld>
 #include <linker/thread-local-storage.ld>
+#endif
 
 	SECTION_PROLOGUE(_RODATA_SECTION_NAME,,)
 	{
@@ -129,41 +343,31 @@ SECTIONS
 	*(.gnu.linkonce.r.*)
 
 #ifndef CONFIG_DYNAMIC_INTERRUPTS
-	. = ALIGN(8);
-	_idt_base_address = .;
-#ifdef LINKER_PASS2
-	KEEP(*(staticIdt))
-#else
-	. += CONFIG_IDT_NUM_VECTORS * 8;
-#endif /* LINKER_PASS2 */
-
-	. = ALIGN(4);
-	_irq_to_interrupt_vector = .;
-#ifdef LINKER_PASS2
-	KEEP(*(irq_int_vector_map))
-#else
-	. += CONFIG_MAX_IRQ_LINES;
-#endif
+#ifndef CONFIG_LINKER_USE_PINNED_SECTION
+#include <arch/x86/ia32/scripts/static_intr.ld>
+#endif /* !CONFIG_LINKER_USE_PINNED_SECTION */
 #endif /* CONFIG_DYNAMIC_INTERRUPTS */
 
+#ifndef CONFIG_LINKER_USE_PINNED_SECTION
 /* Located in generated directory. This file is populated by the
  * zephyr_linker_sources() Cmake function.
  */
 #include <snippets-rodata.ld>
 
 #include <linker/kobject-rom.ld>
-	} GROUP_LINK_IN(ROMABLE_REGION)
+#endif
+	} GROUP_ROM_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
 #include <linker/cplusplus-rom.ld>
 
-	MMU_PAGE_ALIGN
+	MMU_PAGE_ALIGN_PERM
 	/* ROM ends here, position counter will now be in RAM areas */
 #ifdef CONFIG_XIP
-	_image_rom_end = .;
-	_image_rom_size = _image_rom_end - _image_rom_start;
+	__rom_region_end = .;
+	__rom_region_size = __rom_region_end - __rom_region_start;
 #endif
-	_image_rodata_end = .;
-	_image_rodata_size = _image_rodata_end - _image_rodata_start;
+	__rodata_region_end = .;
+	__rodata_region_size = __rodata_region_end - __rodata_region_start;
 	GROUP_END(ROMABLE_REGION)
 	/*
 	 * Needed for dynamic linking which we do not have, do discard
@@ -177,6 +381,10 @@ SECTIONS
 	/* RAMABLE_REGION */
 	GROUP_START(RAMABLE_REGION)
 
+#ifdef CONFIG_XIP
+	MMU_PAGE_ALIGN
+	z_mapped_start = .;
+#endif
 /* Located in generated directory. This file is populated by the
  * zephyr_linker_sources() Cmake function.
  */
@@ -184,8 +392,8 @@ SECTIONS
 
 #ifdef CONFIG_USERSPACE
 	/* APP SHARED MEMORY REGION */
-#define SMEM_PARTITION_ALIGN(size) MMU_PAGE_ALIGN
-#define APP_SHARED_ALIGN  MMU_PAGE_ALIGN
+#define SMEM_PARTITION_ALIGN(size) MMU_PAGE_ALIGN_PERM
+#define APP_SHARED_ALIGN  MMU_PAGE_ALIGN_PERM
 
 #include <app_smem.ld>
 
@@ -198,7 +406,7 @@ SECTIONS
 
 	SECTION_PROLOGUE(_BSS_SECTION_NAME, (NOLOAD),)
 	{
-	MMU_PAGE_ALIGN
+	MMU_PAGE_ALIGN_PERM
 #if !defined(CONFIG_USERSPACE)
 	_image_ram_start = .;
 #endif
@@ -221,38 +429,29 @@ SECTIONS
 	 */
 	. = ALIGN(4);
 	__bss_end = .;
-	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
+	} GROUP_NOLOAD_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
 	__bss_num_words	= (__bss_end - __bss_start) >> 2;
 
 #include <linker/common-noinit.ld>
 
-	MMU_PAGE_ALIGN
+	MMU_PAGE_ALIGN_PERM
+
 
 	SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME,,)
 	{
 
-	__data_ram_start = .;
+	__data_region_start = .;
+	__data_start = .;
 
 	*(.data)
 	*(".data.*")
 	*(".kernel.*")
 
 #ifdef CONFIG_DYNAMIC_INTERRUPTS
-	. = ALIGN(4);
-	_irq_to_interrupt_vector = .;
-#ifdef LINKER_PASS2
-	KEEP(*(irq_int_vector_map))
-#else
-	. += CONFIG_MAX_IRQ_LINES;
-#endif /* LINKER_PASS2 */
-
-	z_interrupt_vectors_allocated = .;
-#ifdef LINKER_PASS2
-	KEEP(*(irq_vectors_alloc))
-#else
-	. += (CONFIG_IDT_NUM_VECTORS + 7) / 8;
-#endif /* LINKER_PASS2 */
+#ifndef CONFIG_LINKER_USE_PINNED_SECTION
+#include <arch/x86/ia32/scripts/dynamic_intr.ld>
+#endif /* !CONFIG_LINKER_USE_PINNED_SECTION */
 #endif /* CONFIG_DYNAMIC_INTERRUPTS */
 
 /* Located in generated directory. This file is populated by the
@@ -260,72 +459,36 @@ SECTIONS
  */
 #include <snippets-rwdata.ld>
 
-#ifdef CONFIG_X86_KPTI
-	MMU_PAGE_ALIGN
-	z_shared_kernel_page_start = .;
-	/* Special page containing supervisor data that is still mapped in
-	 * user mode page tables. IDT, GDT, TSSes, trampoline stack, and
-	 * any LDT must go here as they always must live in a page that is
-	 * marked 'present'. Still not directly user accessible, but
-	 * no sensitive data should be here as Meltdown exploits may read it.
-	 */
-#endif /* CONFIG_X86_KPTI */
-
-#ifdef CONFIG_DYNAMIC_INTERRUPTS
-	. = ALIGN(8);
-	_idt_base_address = .;
-#ifdef LINKER_PASS2
-	KEEP(*(staticIdt))
-#else
-	. += CONFIG_IDT_NUM_VECTORS * 8;
-#endif /* LINKER_PASS2 */
-#endif /* CONFIG_DYNAMIC_INTERRUPTS */
-
-#ifdef CONFIG_GDT_DYNAMIC
-	KEEP(*(.tss))
-	. = ALIGN(8);
-	_gdt = .;
-#ifdef LINKER_PASS2
-	KEEP(*(gdt))
-#else /* LINKER_PASS2 */
-
-#ifdef CONFIG_USERSPACE
-    #define GDT_NUM_ENTRIES 7
-#elif defined(CONFIG_HW_STACK_PROTECTION)
-    #define GDT_NUM_ENTRIES 5
-#else
-    #define GDT_NUM_ENTRIES 3
-#endif /* CONFIG_X86_USERSPACE */
-	. += GDT_NUM_ENTRIES * 8;
-#endif /* LINKER_PASS2 */
-#endif /* CONFIG_GDT_DYNAMIC */
-
-#ifdef CONFIG_X86_KPTI
-	z_trampoline_stack_start = .;
-	MMU_PAGE_ALIGN
-	z_trampoline_stack_end = .;
-	z_shared_kernel_page_end = .;
-
-	ASSERT(z_trampoline_stack_end - z_trampoline_stack_start >= 40,
-		"trampoline stack too small");
-	ASSERT(z_shared_kernel_page_end - z_shared_kernel_page_start == 4096,
-	       "shared kernel area is not one memory page");
-#endif /* CONFIG_X86_KPTI */
+#ifndef CONFIG_LINKER_USE_PINNED_SECTION
+#include <arch/x86/ia32/scripts/shared_kernel_pages.ld>
+#endif /* !CONFIG_LINKER_USE_PINNED_SECTION */
 
 	. = ALIGN(4);
+	__data_end = .;
+
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+	__data_size = __data_end - __data_start;
+	__data_load_start = LOADADDR(_DATA_SECTION_NAME);
 
-	__data_rom_start = LOADADDR(_DATA_SECTION_NAME);
+	__data_region_load_start = LOADADDR(_DATA_SECTION_NAME);
 
-#include <linker/common-ram.ld>
 #include <linker/cplusplus-ram.ld>
+
+#ifndef CONFIG_LINKER_USE_PINNED_SECTION
+#include <linker/common-ram.ld>
 #include <arch/x86/pagetables.ld>
 
 /* Must be last in RAM */
-#include <linker/kobject.ld>
+#include <linker/kobject-data.ld>
+#endif /* !CONFIG_LINKER_USE_PINNED_SECTION */
+
+/* Located in generated directory. This file is populated by the
+ * zephyr_linker_sources() Cmake function.
+ */
+#include <snippets-data-sections.ld>
 
 	MMU_PAGE_ALIGN
-	__data_ram_end = .;
+	__data_region_end = .;
 
 	/* All unused memory also owned by the kernel for heaps */
 	__kernel_ram_end = KERNEL_BASE_ADDR + KERNEL_RAM_SIZE;
@@ -334,11 +497,13 @@ SECTIONS
 	_image_ram_end = .;
 	_image_ram_all = (KERNEL_BASE_ADDR + KERNEL_RAM_SIZE) - _image_ram_start;
 
+	z_mapped_end = .;
+	z_mapped_size = z_mapped_end - z_mapped_start;
 	_end = .; /* end of image */
 
 	GROUP_END(RAMABLE_REGION)
 
-#ifndef LINKER_PASS2
+#ifndef LINKER_ZEPHYR_FINAL
 	/* static interrupts */
 	SECTION_PROLOGUE(intList,,)
 	{
@@ -377,6 +542,6 @@ SECTIONS
  * to 3 extra bytes copied in next section (BSS). At run time, the XIP copy
  * is done first followed by clearing the BSS section.
  */
-__data_size = (__data_ram_end - __data_ram_start);
+__data_size = (__data_region_end - __data_region_start);
 __data_num_words = (__data_size + 3) >> 2;
 #endif

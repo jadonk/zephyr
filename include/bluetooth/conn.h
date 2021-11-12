@@ -285,7 +285,7 @@ struct bt_conn_le_info {
 	/** Remote device address used during connection setup. */
 	const bt_addr_le_t *remote;
 	uint16_t interval; /** Connection interval */
-	uint16_t latency; /** Connection slave latency */
+	uint16_t latency; /** Connection peripheral latency */
 	uint16_t timeout; /** Connection supervision timeout */
 
 #if defined(CONFIG_BT_USER_PHY_UPDATE)
@@ -303,11 +303,14 @@ struct bt_conn_br_info {
 	const bt_addr_t *dst; /** Destination (Remote) BR/EDR address */
 };
 
-/** Connection role (master or slave) */
 enum {
-	BT_CONN_ROLE_MASTER,
-	BT_CONN_ROLE_SLAVE,
+	BT_CONN_ROLE_CENTRAL = 0,
+	BT_CONN_ROLE_PERIPHERAL = 1,
 };
+
+/** Connection role (central or peripheral) */
+#define BT_CONN_ROLE_MASTER __DEPRECATED_MACRO BT_CONN_ROLE_CENTRAL
+#define BT_CONN_ROLE_SLAVE __DEPRECATED_MACRO BT_CONN_ROLE_PERIPHERAL
 
 /** Connection Info Structure */
 struct bt_conn_info {
@@ -346,7 +349,7 @@ struct bt_conn_br_remote_info {
 /** @brief Connection Remote Info Structure
  *
  *  @note The version, manufacturer and subversion fields will only contain
- *        valid data if @option{CONFIG_BT_REMOTE_VERSION} is enabled.
+ *        valid data if @kconfig{CONFIG_BT_REMOTE_VERSION} is enabled.
  */
 struct bt_conn_remote_info {
 	/** Connection Type */
@@ -411,7 +414,7 @@ int bt_conn_get_info(const struct bt_conn *conn, struct bt_conn_info *info);
  *  @param remote_info Connection remote info object.
  *
  *  @note In order to retrieve the remote version (version, manufacturer
- *  and subversion) @option{CONFIG_BT_REMOTE_VERSION} must be enabled
+ *  and subversion) @kconfig{CONFIG_BT_REMOTE_VERSION} must be enabled
  *
  *  @note The remote information is exchanged directly after the connection has
  *  been established. The application can be notified about when the remote
@@ -438,7 +441,7 @@ int bt_conn_le_get_tx_power_level(struct bt_conn *conn,
  *
  *  If the local device is in the peripheral role then updating the connection
  *  parameters will be delayed. This delay can be configured by through the
- *  @option{CONFIG_BT_CONN_PARAM_UPDATE_TIMEOUT} option.
+ *  @kconfig{CONFIG_BT_CONN_PARAM_UPDATE_TIMEOUT} option.
  *
  *  @param conn Connection object.
  *  @param param Updated connection parameters.
@@ -475,6 +478,18 @@ int bt_conn_le_phy_update(struct bt_conn *conn,
  *
  *  Disconnect an active connection with the specified reason code or cancel
  *  pending outgoing connection.
+ *
+ *  The disconnect reason for a normal disconnect should be:
+ *  @ref BT_HCI_ERR_REMOTE_USER_TERM_CONN.
+ *
+ *  The following disconnect reasons are accepted:
+ *   - @ref BT_HCI_ERR_AUTH_FAIL
+ *   - @ref BT_HCI_ERR_REMOTE_USER_TERM_CONN
+ *   - @ref BT_HCI_ERR_REMOTE_LOW_RESOURCES
+ *   - @ref BT_HCI_ERR_REMOTE_POWER_OFF
+ *   - @ref BT_HCI_ERR_UNSUPP_REMOTE_FEATURE
+ *   - @ref BT_HCI_ERR_PAIRING_NOT_SUPPORTED
+ *   - @ref BT_HCI_ERR_UNACCEPT_CONN_PARAM
  *
  *  @param conn Connection to disconnect.
  *  @param reason Reason code for the disconnection.
@@ -527,10 +542,10 @@ struct bt_conn_le_create_param {
 
 	/** @brief Connection initiation timeout (N * 10 MS)
 	 *
-	 *  Set zero to use the default @option{CONFIG_BT_CREATE_CONN_TIMEOUT}
+	 *  Set zero to use the default @kconfig{CONFIG_BT_CREATE_CONN_TIMEOUT}
 	 *  timeout.
 	 *
-	 *  @note Unused in @ref bt_conn_create_auto_le
+	 *  @note Unused in @ref bt_conn_le_create_auto
 	 */
 	uint16_t timeout;
 };
@@ -570,7 +585,7 @@ struct bt_conn_le_create_param {
 				BT_GAP_SCAN_FAST_INTERVAL, \
 				BT_GAP_SCAN_FAST_INTERVAL)
 
-/** Default LE create connection using whitelist parameters.
+/** Default LE create connection using filter accept list parameters.
  *  Scan window:   30 ms.
  *  Scan interval: 60 ms.
  */
@@ -588,6 +603,9 @@ struct bt_conn_le_create_param {
  *
  *  This uses the General Connection Establishment procedure.
  *
+ *  The application must disable explicit scanning before initiating
+ *  a new LE connection.
+ *
  *  @param[in]  peer         Remote address.
  *  @param[in]  create_param Create connection parameters.
  *  @param[in]  conn_param   Initial connection parameters.
@@ -600,32 +618,14 @@ int bt_conn_le_create(const bt_addr_le_t *peer,
 		      const struct bt_le_conn_param *conn_param,
 		      struct bt_conn **conn);
 
-__deprecated static inline
-struct bt_conn *bt_conn_create_le(const bt_addr_le_t *peer,
-				  const struct bt_le_conn_param *conn_param)
-{
-	struct bt_conn *conn;
-	struct bt_conn_le_create_param param = BT_CONN_LE_CREATE_PARAM_INIT(
-						BT_CONN_LE_OPT_NONE,
-						BT_GAP_SCAN_FAST_INTERVAL,
-						BT_GAP_SCAN_FAST_INTERVAL);
-
-	if (bt_conn_le_create(peer, &param, conn_param,
-			      &conn)) {
-		return NULL;
-	}
-
-	return conn;
-}
-
-/** @brief Automatically connect to remote devices in whitelist.
+/** @brief Automatically connect to remote devices in the filter accept list..
  *
  *  This uses the Auto Connection Establishment procedure.
  *  The procedure will continue until a single connection is established or the
  *  procedure is stopped through @ref bt_conn_create_auto_stop.
- *  To establish connections to all devices in the whitelist the procedure
- *  should be started again in the connected callback after a new connection has
- *  been established.
+ *  To establish connections to all devices in the the filter accept list the
+ *  procedure should be started again in the connected callback after a
+ *  new connection has been established.
  *
  *  @param create_param Create connection parameters
  *  @param conn_param   Initial connection parameters.
@@ -635,17 +635,6 @@ struct bt_conn *bt_conn_create_le(const bt_addr_le_t *peer,
  */
 int bt_conn_le_create_auto(const struct bt_conn_le_create_param *create_param,
 			   const struct bt_le_conn_param *conn_param);
-
-__deprecated static inline
-int bt_conn_create_auto_le(const struct bt_le_conn_param *conn_param)
-{
-	struct bt_conn_le_create_param param = BT_CONN_LE_CREATE_PARAM_INIT(
-						BT_CONN_LE_OPT_NONE,
-						BT_GAP_SCAN_FAST_INTERVAL,
-						BT_GAP_SCAN_FAST_WINDOW);
-
-	return bt_conn_le_create_auto(&param, conn_param);
-}
 
 /** @brief Stop automatic connect creation.
  *
@@ -670,45 +659,6 @@ int bt_conn_create_auto_stop(void);
 int bt_le_set_auto_conn(const bt_addr_le_t *addr,
 			const struct bt_le_conn_param *param);
 
-/** @brief Initiate directed advertising to a remote device
- *
- *  Allows initiating a new LE connection to remote peer with the remote
- *  acting in central role and the local device in peripheral role.
- *
- *  The advertising type will either be BT_LE_ADV_DIRECT_IND, or
- *  BT_LE_ADV_DIRECT_IND_LOW_DUTY if the BT_LE_ADV_OPT_DIR_MODE_LOW_DUTY
- *  option was used as part of the advertising parameters.
- *
- *  In case of high duty cycle this will result in a callback with
- *  connected() with a new connection or with an error.
- *
- *  The advertising may be canceled with bt_conn_disconnect().
- *
- *  The caller gets a new reference to the connection object which must be
- *  released with bt_conn_unref() once done using the object.
- *
- *  @param peer  Remote address.
- *  @param param Directed advertising parameters.
- *
- *  @return Valid connection object on success or NULL otherwise.
- */
-__deprecated static inline
-struct bt_conn *bt_conn_create_slave_le(const bt_addr_le_t *peer,
-					const struct bt_le_adv_param *param)
-{
-	struct bt_le_adv_param adv_param = *param;
-
-	adv_param.options |= (BT_LE_ADV_OPT_CONNECTABLE |
-			      BT_LE_ADV_OPT_ONE_TIME);
-	adv_param.peer = peer;
-
-	if (!bt_le_adv_start(&adv_param, NULL, 0, NULL, 0)) {
-		return NULL;
-	}
-
-	return bt_conn_lookup_addr_le(param->id, peer);
-}
-
 /** Security level. */
 typedef enum __packed {
 	/** Level 0: Only for BR/EDR special cases, like SDP */
@@ -721,13 +671,6 @@ typedef enum __packed {
 	BT_SECURITY_L3,
 	/** Level 4: Authenticated Secure Connections and 128-bit key. */
 	BT_SECURITY_L4,
-
-	BT_SECURITY_NONE   __deprecated = BT_SECURITY_L0,
-	BT_SECURITY_LOW    __deprecated = BT_SECURITY_L1,
-	BT_SECURITY_MEDIUM __deprecated = BT_SECURITY_L2,
-	BT_SECURITY_HIGH   __deprecated = BT_SECURITY_L3,
-	BT_SECURITY_FIPS   __deprecated = BT_SECURITY_L4,
-
 	/** Bit to force new pairing procedure, bit-wise OR with requested
 	 *  security level.
 	 */
@@ -753,10 +696,10 @@ typedef enum __packed {
  *  This function may return error if the pairing procedure has already been
  *  initiated by the local device or the peer device.
  *
- *  @note When @option{CONFIG_BT_SMP_SC_ONLY} is enabled then the security
+ *  @note When @kconfig{CONFIG_BT_SMP_SC_ONLY} is enabled then the security
  *        level will always be level 4.
  *
- *  @note When @option{CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY} is enabled then the
+ *  @note When @kconfig{CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY} is enabled then the
  *        security level will always be level 3.
  *
  *  @param conn Connection object.
@@ -771,12 +714,6 @@ int bt_conn_set_security(struct bt_conn *conn, bt_security_t sec);
  *  @return Connection security level
  */
 bt_security_t bt_conn_get_security(struct bt_conn *conn);
-
-static inline int __deprecated bt_conn_security(struct bt_conn *conn,
-						bt_security_t sec)
-{
-	return bt_conn_set_security(conn, sec);
-}
 
 /** @brief Get encryption key size.
  *
@@ -835,15 +772,20 @@ struct bt_conn_cb {
 	 *  In case the err parameter is non-zero it means that the
 	 *  connection establishment failed.
 	 *
+	 *  @note If the connection was established from an advertising set then
+	 *        the advertising set cannot be restarted directly from this
+	 *        callback. Instead use the connected callback of the
+	 *        advertising set.
+	 *
 	 *  @param conn New connection object.
 	 *  @param err HCI error. Zero for success, non-zero otherwise.
 	 *
 	 *  @p err can mean either of the following:
 	 *  - @ref BT_HCI_ERR_UNKNOWN_CONN_ID Creating the connection started by
-	 *    @ref bt_conn_create_le was canceled either by the user through
+	 *    @ref bt_conn_le_create was canceled either by the user through
 	 *    @ref bt_conn_disconnect or by the timeout in the host through
 	 *    @ref bt_conn_le_create_param timeout parameter, which defaults to
-	 *    @option{CONFIG_BT_CREATE_CONN_TIMEOUT} seconds.
+	 *    @kconfig{CONFIG_BT_CREATE_CONN_TIMEOUT} seconds.
 	 *  - @p BT_HCI_ERR_ADV_TIMEOUT High duty cycle directed connectable
 	 *    advertiser started by @ref bt_le_adv_start failed to be connected
 	 *    within the timeout.
@@ -862,7 +804,7 @@ struct bt_conn_cb {
 	 *  available.
 	 *  To avoid this issue it is recommended to either start connectable
 	 *  advertise or create a new connection using @ref k_work_submit or
-	 *  increase @option{CONFIG_BT_MAX_CONN}.
+	 *  increase @kconfig{CONFIG_BT_MAX_CONN}.
 	 *
 	 *  @param conn Connection object.
 	 *  @param reason HCI reason for the disconnection.
@@ -884,6 +826,9 @@ struct bt_conn_cb {
 	 *  requirements for each callback. Each callback gets the
 	 *  parameters as returned by previous callbacks, i.e. they are not
 	 *  necessarily the same ones as the remote originally sent.
+	 *
+	 *  If the application does not have this callback then the default
+	 *  is to accept the parameters.
 	 *
 	 *  @param conn Connection object.
 	 *  @param param Proposed connection parameters.
@@ -989,6 +934,17 @@ struct bt_conn_cb {
  *  @param cb Callback struct. Must point to memory that remains valid.
  */
 void bt_conn_cb_register(struct bt_conn_cb *cb);
+
+/** @def BT_CONN_CB_DEFINE
+ *
+ *  @brief Register a callback structure for connection events.
+ *
+ *  @param _name Name of callback structure.
+ */
+#define BT_CONN_CB_DEFINE(_name)					\
+	static const STRUCT_SECTION_ITERABLE(bt_conn_cb,		\
+						_CONCAT(bt_conn_cb_,	\
+							_name))
 
 /** @brief Enable/disable bonding.
  *

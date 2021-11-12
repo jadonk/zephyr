@@ -48,9 +48,9 @@ void test_mem_domain_setup(void)
 	struct k_mem_partition *parts[] = { &ro_part, &ztest_mem_partition };
 
 	num_rw_parts = max_parts - PARTS_USED;
-	zassert_true(NUM_RW_PARTS >= num_rw_parts,
-		     "CONFIG_MAX_DOMAIN_PARTITIONS incorrectly tuned, %d should be at least %d",
-		     CONFIG_MAX_DOMAIN_PARTITIONS, max_parts);
+	zassert_true(num_rw_parts <= NUM_RW_PARTS,
+			"CONFIG_MAX_DOMAIN_PARTITIONS incorrectly tuned, %d should be at least %d",
+			CONFIG_MAX_DOMAIN_PARTITIONS, max_parts);
 	zassert_true(num_rw_parts > 0, "no free memory partitions");
 
 	k_mem_domain_init(&test_domain, ARRAY_SIZE(parts), parts);
@@ -298,7 +298,7 @@ static void spin_entry(void *p1, void *p2, void *p3)
  * @see k_mem_domain_add_thread()
  */
 
-#ifdef CONFIG_SMP
+#if CONFIG_MP_NUM_CPUS > 1
 #define PRIO	K_PRIO_COOP(0)
 #else
 #define PRIO	K_PRIO_PREEMPT(1)
@@ -328,6 +328,9 @@ void test_mem_domain_migration(void)
 	printk("migrate to new domain\n");
 	k_mem_domain_add_thread(&test_domain, &child_thread);
 
+	/**TESTPOINT: add to existing domain will do nothing */
+	k_mem_domain_add_thread(&test_domain, &child_thread);
+
 	/* set spin_done so the child thread completes */
 	printk("set test completion\n");
 	spin_done = true;
@@ -346,7 +349,7 @@ void test_mem_domain_migration(void)
  * - System testing
  *
  * Prerequisite Conditions:
-* - N/A
+ * - N/A
  *
  * Input Specifications:
  * - N/A
@@ -378,4 +381,115 @@ void test_mem_part_overlap(void)
 	set_fault_valid(true);
 
 	k_mem_domain_add_partition(&test_domain, &overlap_part);
+}
+
+extern struct k_spinlock z_mem_domain_lock;
+
+static ZTEST_BMEM bool need_recover_spinlock;
+
+static struct k_mem_domain test_domain_fail;
+
+void post_fatal_error_handler(unsigned int reason, const z_arch_esf_t *pEsf)
+{
+	if (need_recover_spinlock) {
+		k_spin_release(&z_mem_domain_lock);
+
+		need_recover_spinlock = false;
+	}
+}
+
+static volatile uint8_t __aligned(MEM_REGION_ALLOC)
+	exceed_buf[MEM_REGION_ALLOC];
+
+K_MEM_PARTITION_DEFINE(exceed_part, exceed_buf, sizeof(exceed_buf),
+		      K_MEM_PARTITION_P_RW_U_RW);
+
+/**
+ * @brief Test system assert when adding memory partitions more than possible
+ *
+ * @details
+ * - Add memory partitions one by one and more than architecture allows to add.
+ * - When partitions added more than it is allowed by architecture, test that
+ *   system assert for that case works correctly.
+ *
+ * @ingroup kernel_memprotect_tests
+ */
+void test_mem_part_assert_add_overmax(void)
+{
+	int max_parts = num_rw_parts + PARTS_USED;
+
+	/* Make sure the partitions of the domain is full, used in
+	 * previous test cases.
+	 */
+	zassert_equal(max_parts, arch_mem_domain_max_partitions_get(),
+			"domain still have room of partitions(%d).",
+			max_parts);
+
+	need_recover_spinlock = true;
+	set_fault_valid(true);
+
+	/* Add one more partition will trigger assert due to exceeding */
+	k_mem_domain_add_partition(&test_domain, &exceed_part);
+
+	/* should not reach here */
+	ztest_test_fail();
+}
+
+
+#if defined(CONFIG_ASSERT)
+static volatile uint8_t __aligned(MEM_REGION_ALLOC) misc_buf[MEM_REGION_ALLOC];
+K_MEM_PARTITION_DEFINE(find_no_part, misc_buf, sizeof(misc_buf),
+		       K_MEM_PARTITION_P_RO_U_RO);
+
+/**
+ * @brief Test error case of removing memory partition fail
+ *
+ * @details Try to remove a partition not in the domain will cause
+ * assertion, then triggher an expected fatal error.
+ * And while the fatal error happened, the memory domain spinlock
+ * is held, we need to release them to make other follow test case.
+ *
+ * @ingroup kernel_memprotect_tests
+ */
+void test_mem_domain_remove_part_fail(void)
+{
+	struct k_mem_partition *no_parts = &find_no_part;
+
+	need_recover_spinlock = true;
+	set_fault_valid(true);
+	k_mem_domain_remove_partition(&test_domain, no_parts);
+}
+#else
+void test_mem_domain_remove_part_fail(void)
+{
+	ztest_test_skip();
+}
+#endif
+
+/**
+ * @brief Test error case of initializing memory domain fail
+ *
+ * @details Try to initialize a domain with invalid partition, then see
+ * if an expected fatal error happens.
+ * And while the fatal error happened, the memory domain spinlock
+ * is held, we need to release them to make other follow test case.
+ *
+ * @ingroup kernel_memprotect_tests
+ */
+void test_mem_domain_init_fail(void)
+{
+	struct k_mem_partition *no_parts[] = {&ro_part, 0};
+
+	/* init another domain fail, expected fault happened */
+	need_recover_spinlock = true;
+	set_fault_valid(true);
+	k_mem_domain_init(&test_domain_fail, ARRAY_SIZE(no_parts),
+			no_parts);
+
+	/* For acrh which not CONFIG_ARCH_MEM_DOMAIN_DATA, if assert is off,
+	 * it will reach here.
+	 */
+#if !defined(CONFIG_ASSERT) && defined(CONFIG_ARCH_MEM_DOMAIN_DATA)
+	zassert_unreachable("should not be here");
+#endif
 }

@@ -14,38 +14,12 @@
  * @{
  */
 
-#include <zephyr/types.h>
-
-#ifdef CONFIG_POSIX_API
-#ifdef __NEWLIB__
-#include <sys/_timeval.h>
-#else
-#include <sys/types.h>
-#endif /* __NEWLIB__ */
-#endif /* CONFIG_POSIX_API */
+#include <toolchain.h>
+#include <net/socket_types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#ifdef CONFIG_POSIX_API
-/* Rely on the underlying libc definition */
-#ifdef __NEWLIB__
-#define zsock_timeval timeval
-#else
-/* workaround for older Newlib 2.x, as it lacks sys/_timeval.h */
-struct zsock_timeval {
-	time_t tv_sec;
-	suseconds_t tv_usec;
-};
-#endif /* __NEWLIB__ */
-#else
-struct zsock_timeval {
-	/* Using longs, as many (?) implementations seem to use it. */
-	long tv_sec;
-	long tv_usec;
-};
-#endif /* CONFIG_POSIX_API */
 
 typedef struct zsock_fd_set {
 	uint32_t bitset[(CONFIG_POSIX_MAX_FDS + 31) / 32];
@@ -64,12 +38,14 @@ typedef struct zsock_fd_set {
  * use :c:func:`zsock_poll()` instead. In Zephyr this function works only with
  * sockets, not arbitrary file descriptors.
  * This function is also exposed as ``select()``
- * if :option:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined (in which case
+ * if :kconfig:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined (in which case
  * it may conflict with generic POSIX ``select()`` function).
  * @endrst
  */
-int zsock_select(int nfds, zsock_fd_set *readfds, zsock_fd_set *writefds,
-		 zsock_fd_set *exceptfds, struct zsock_timeval *timeout);
+__syscall int zsock_select(int nfds, zsock_fd_set *readfds,
+			   zsock_fd_set *writefds,
+			   zsock_fd_set *exceptfds,
+			   struct zsock_timeval *timeout);
 
 /** Number of file descriptors which can be added to zsock_fd_set */
 #define ZSOCK_FD_SETSIZE (sizeof(((zsock_fd_set *)0)->bitset) * 8)
@@ -83,7 +59,7 @@ int zsock_select(int nfds, zsock_fd_set *readfds, zsock_fd_set *writefds,
  * <http://pubs.opengroup.org/onlinepubs/9699919799/functions/select.html>`__
  * for normative description.
  * This function is also exposed as ``FD_ZERO()``
- * if :option:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
+ * if :kconfig:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
  * @endrst
  */
 void ZSOCK_FD_ZERO(zsock_fd_set *set);
@@ -97,7 +73,7 @@ void ZSOCK_FD_ZERO(zsock_fd_set *set);
  * <http://pubs.opengroup.org/onlinepubs/9699919799/functions/select.html>`__
  * for normative description.
  * This function is also exposed as ``FD_ISSET()``
- * if :option:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
+ * if :kconfig:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
  * @endrst
  */
 int ZSOCK_FD_ISSET(int fd, zsock_fd_set *set);
@@ -111,7 +87,7 @@ int ZSOCK_FD_ISSET(int fd, zsock_fd_set *set);
  * <http://pubs.opengroup.org/onlinepubs/9699919799/functions/select.html>`__
  * for normative description.
  * This function is also exposed as ``FD_CLR()``
- * if :option:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
+ * if :kconfig:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
  * @endrst
  */
 void ZSOCK_FD_CLR(int fd, zsock_fd_set *set);
@@ -125,7 +101,7 @@ void ZSOCK_FD_CLR(int fd, zsock_fd_set *set);
  * <http://pubs.opengroup.org/onlinepubs/9699919799/functions/select.html>`__
  * for normative description.
  * This function is also exposed as ``FD_SET()``
- * if :option:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
+ * if :kconfig:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
  * @endrst
  */
 void ZSOCK_FD_SET(int fd, zsock_fd_set *set);
@@ -168,6 +144,8 @@ static inline void FD_SET(int fd, zsock_fd_set *set)
 #ifdef __cplusplus
 }
 #endif
+
+#include <syscalls/socket_select.h>
 
 /**
  * @}

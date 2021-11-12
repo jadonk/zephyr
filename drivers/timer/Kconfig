@@ -13,9 +13,11 @@ menuconfig APIC_TIMER
 	depends on LOAPIC
 	select TICKLESS_CAPABLE
 	help
-	  Use the "new" local APIC timer driver for the system timer.
-	  This is a replacement for the legacy local APIC timer driver
-	  which supports tickless operation, but not the Quark MVIC.
+	  Use the x86 local APIC in one-shot mode as the system time
+	  source.  NOTE: this probably isn't what you want except on
+	  older or idiosyncratic hardware (or environments like qemu
+	  without complete APIC emulation).  Modern hardware will work
+	  better with CONFIG_APIC_TSC_DEADLINE_TIMER.
 
 if APIC_TIMER
 
@@ -24,20 +26,19 @@ config APIC_TIMER_IRQ
 	default 24
 	help
 	  This option specifies the IRQ used by the local APIC timer.
-
-config APIC_TIMER_IRQ_PRIORITY
-	int "Local APIC timer IRQ priority"
-	default 4
-	help
-	  This option specifies the IRQ priority used by the local APIC timer.
+	  Note: this MUST be set to the index immediately after the
+	  last IO-APIC IRQ (the timer is the first entry in the APIC
+	  local vector table).  This footgun is not intended to be
+	  user-configurable and almost certainly should be managed via
+	  a different mechanism.
 
 config APIC_TIMER_TSC
-	bool "Use invariant TSC for z_timer_cycle_get_32()"
+	bool "Use invariant TSC for sys_clock_cycle_get_32()"
 	help
 	  If your CPU supports invariant TSC, and you know the ratio of the
 	  TSC frequency to CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC (the local APIC
 	  timer frequency), then enable this for a much faster and more
-	  accurate z_timer_cycle_get_32().
+	  accurate sys_clock_cycle_get_32().
 
 if APIC_TIMER_TSC
 
@@ -53,46 +54,39 @@ endif # APIC_TIMER_TSC
 
 endif # APIC_TIMER
 
+config APIC_TSC_DEADLINE_TIMER
+	bool "Even newer APIC timer using TSC deadline mode"
+	depends on X86
+	select LOAPIC
+	select TICKLESS_CAPABLE
+	help
+	  Extremely simple timer driver based the local APIC TSC
+	  deadline capability.  The use of a free-running 64 bit
+	  counter with comparator eliminates almost all edge cases
+	  from the handling, and the near-instruction-cycle resolution
+	  permits effectively unlimited precision where needed (the
+	  limit becomes the CPU time taken to execute the timing
+	  logic). SMP-safe and very fast, this should be the obvious
+	  choice for any x86 device with invariant TSC and TSC
+	  deadline capability.
+
+config APIC_TIMER_IRQ_PRIORITY
+	int "Local APIC timer interrupt priority"
+	depends on APIC_TIMER || APIC_TSC_DEADLINE_TIMER
+	default 4
+	help
+	  This option specifies the interrupt priority used by the
+	  local APIC timer.
+
 config HPET_TIMER
 	bool "HPET timer"
-	depends on X86
 	select IOAPIC if X86
 	select LOAPIC if X86
-	select TIMER_READS_ITS_FREQUENCY_AT_RUNTIME
+	imply TIMER_READS_ITS_FREQUENCY_AT_RUNTIME
 	select TICKLESS_CAPABLE
 	help
 	  This option selects High Precision Event Timer (HPET) as a
 	  system timer.
-
-config LOAPIC_TIMER
-	bool "LOAPIC timer"
-	depends on LOAPIC && X86
-	help
-	  This option selects LOAPIC timer as a system timer.
-
-if LOAPIC_TIMER
-config LOAPIC_TIMER_IRQ
-	int "Local APIC Timer IRQ"
-	default 24
-	help
-	  This option specifies the IRQ used by the LOAPIC timer.
-
-config LOAPIC_TIMER_IRQ_PRIORITY
-	int "Local APIC Timer IRQ Priority"
-	default 2
-	help
-	  This options specifies the IRQ priority used by the LOAPIC timer.
-
-config TSC_CYCLES_PER_SEC
-	int "Frequency of x86 CPU timestamp counter"
-	default 0
-	help
-	  The x86 implementation of LOAPIC k_cycle_get_32() relies on the x86 TSC.
-	  This runs at the CPU speed and not the bus speed. If set to 0, the
-	  value of CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC will be used instead;
-	  many MCUs these values are the same.
-
-endif # LOAPIC_TIMER
 
 menuconfig ARCV2_TIMER
 	bool "ARC Timer"
@@ -114,6 +108,7 @@ config ARCV2_TIMER_IRQ_PRIORITY
 config ARM_ARCH_TIMER
 	bool "ARM architected timer"
 	depends on GIC
+	select ARCH_HAS_CUSTOM_BUSY_WAIT
 	select TICKLESS_CAPABLE
 	help
 	  This module implements a kernel device driver for the ARM architected
@@ -123,13 +118,15 @@ config ARM_ARCH_TIMER
 DT_COMPAT_ARM_V6M_SYSTICK := arm,armv6m-systick
 DT_COMPAT_ARM_V7M_SYSTICK := arm,armv7m-systick
 DT_COMPAT_ARM_V8M_SYSTICK := arm,armv8m-systick
+DT_COMPAT_ARM_V8_1M_SYSTICK := arm,armv8.1m-systick
 
 config CORTEX_M_SYSTICK
 	bool "Cortex-M SYSTICK timer"
 	depends on CPU_CORTEX_M_HAS_SYSTICK
 	default $(dt_compat_enabled,$(DT_COMPAT_ARM_V6M_SYSTICK)) || \
 		$(dt_compat_enabled,$(DT_COMPAT_ARM_V7M_SYSTICK)) || \
-		$(dt_compat_enabled,$(DT_COMPAT_ARM_V8M_SYSTICK))
+		$(dt_compat_enabled,$(DT_COMPAT_ARM_V8M_SYSTICK)) || \
+		$(dt_compat_enabled,$(DT_COMPAT_ARM_V8_1M_SYSTICK))
 	select TICKLESS_CAPABLE
 	help
 	  This module implements a kernel device driver for the Cortex-M processor
@@ -144,6 +141,14 @@ config ALTERA_AVALON_TIMER
 	  Interval Timer as described in the Embedded IP documentation, for use
 	  with Nios II and possibly other Altera soft CPUs. It provides the
 	  standard "system clock driver" interfaces.
+
+config ITE_IT8XXX2_TIMER
+	bool "ITE it8xxx2 timer driver"
+	depends on SOC_IT8XXX2
+	select TICKLESS_CAPABLE
+	help
+	  This module implements a kernel device driver for the ITE it8xxx2
+	  HW timer model
 
 config NRF_RTC_TIMER
 	bool "nRF Real Time Counter (NRF_RTC1) Timer"
@@ -212,7 +217,6 @@ config RV32M1_LPTMR_TIMER
 	bool "RV32M1 LPTMR system timer driver"
 	default y
 	depends on SOC_OPENISA_RV32M1_RISCV32
-	depends on !TICKLESS_IDLE
 	depends on RV32M1_INTMUX
 	help
 	  This module implements a kernel device driver for using the LPTMR
@@ -222,7 +226,6 @@ config RV32M1_LPTMR_TIMER
 config LITEX_TIMER
 	bool "LiteX Timer"
 	default y
-	depends on !TICKLESS_IDLE
 	depends on SOC_RISCV32_LITEX_VEXRISCV
 	help
 	  This module implements a kernel device driver for LiteX Timer.
@@ -244,6 +247,15 @@ config XTENSA_TIMER
 	help
 	  Enables a system timer driver for Xtensa based on the CCOUNT
 	  and CCOMPARE special registers.
+
+config ESP32C3_SYS_TIMER
+	bool "ESP32C3 sys-timer support"
+	depends on SOC_ESP32C3
+	default y
+	select TICKLESS_CAPABLE
+	help
+	  This option enables the system timer driver for the Espressif ESP32C3
+	  and provides the standard "system clock driver" interface.
 
 config XTENSA_TIMER_ID
 	int "System timer CCOMPAREn register index"
@@ -285,6 +297,15 @@ config CC13X2_CC26X2_RTC_TIMER
 	  CC13X2_CC26X2 series Real Time Counter and provides the standard
 	  "system clock driver" interfaces.
 
+config RCAR_CMT_TIMER
+	bool "Renesas RCar cmt timer"
+	default y
+	depends on SOC_SERIES_RCAR_GEN3
+	help
+	  This module implements a kernel device driver for the Renesas RCAR
+	  platform provides the standard "system clock driver" interfaces.
+	  If unchecked, no timer will be used.
+
 config XLNX_PSTTC_TIMER
 	bool "Xilinx PS ttc timer support"
 	default y
@@ -322,6 +343,16 @@ config LEON_GPTIMER
 	  This module implements a kernel device driver for the GRLIB
 	  GPTIMER which is common in LEON systems.
 
+config NPCX_ITIM_TIMER
+	bool "Nuvoton NPCX series internal 64/32-bit timers"
+	default y
+	depends on SOC_FAMILY_NPCX
+	select TICKLESS_CAPABLE
+	help
+	  This module implements a kernel device driver for the Nuvoton NPCX
+	  series internal 64/32-bit timers and provides the standard "system
+	  clock driver" interfaces.
+
 config SYSTEM_CLOCK_DISABLE
 	bool "API to disable system clock"
 	help
@@ -353,14 +384,34 @@ config SYSTEM_CLOCK_INIT_PRIORITY
 	  the clock to be running already, you should let the default value as it
 	  is (0).
 
+# Hidden option to be selected by individual SoC.
 config TICKLESS_CAPABLE
-	bool "Timer driver supports tickless operation"
+	bool
 	help
 	  Timer drivers should select this flag if they are capable of
 	  supporting tickless operation.  That is, a call to
-	  z_clock_set_timeout() with a number of ticks greater than
+	  sys_clock_set_timeout() with a number of ticks greater than
 	  one should be expected not to produce a call to
-	  z_clock_announce() (really, not to produce an interrupt at
+	  sys_clock_announce() (really, not to produce an interrupt at
 	  all) until the specified expiration.
+
+DT_COMPAT_NXP_OS_TIMER := nxp,os-timer
+
+config MCUX_OS_TIMER
+	bool "MCUX OS Event timer"
+	depends on HAS_MCUX_OS_TIMER
+	default $(dt_compat_enabled,$(DT_COMPAT_NXP_OS_TIMER))
+	select TICKLESS_CAPABLE
+	help
+	  This module implements a kernel device driver for the NXP OS
+	  event timer and provides the standard "system clock driver" interfaces.
+
+config MCUX_LPTMR_TIMER
+	bool "MCUX LPTMR timer"
+	depends on HAS_MCUX_LPTMR && !COUNTER_MCUX_LPTMR
+	help
+	  This module implements a kernel device driver for the NXP MCUX Low
+	  Power Timer (LPTMR) and provides the standard "system clock driver"
+	  interfaces.
 
 endmenu

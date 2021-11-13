@@ -5,6 +5,7 @@
 
 config GPIO_EMUL
 	bool "Emulated GPIO driver"
+	select GPIO_GET_DIRECTION_BITS
 	help
 	  Enable the emulated GPIO driver. Mainly used for testing, this
 	  driver allows for an arbitrary number of emulated GPIO controllers

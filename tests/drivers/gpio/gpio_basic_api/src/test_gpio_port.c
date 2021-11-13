@@ -81,10 +81,38 @@ static int setup(void)
 	zassert_equal(rc, 0,
 		      "pin config input failed");
 
+	if (IS_ENABLED(CONFIG_GPIO_GET_DIRECTION_BITS)) {
+		gpio_port_pins_t inputs;
+
+		rc = gpio_port_get_direction_bits(dev, &inputs, NULL);
+		zassert_equal(rc, 0, "get direction bits failed");
+		zassert_equal(BIT(PIN_IN), inputs & BIT(PIN_IN), "input mismatch");
+		zassert_true(gpio_pin_is_input(dev, PIN_IN), "pin is input failed");
+	}
+
 	/* Test output low */
 	rc = gpio_pin_configure(dev, PIN_OUT, GPIO_OUTPUT_LOW);
 	zassert_equal(rc, 0,
 		      "pin config output low failed");
+
+	if (IS_ENABLED(CONFIG_GPIO_GET_DIRECTION_BITS)) {
+		gpio_port_pins_t outputs;
+
+		rc = gpio_port_get_direction_bits(dev, NULL, &outputs);
+		zassert_equal(rc, 0, "get direction bits failed");
+		zassert_equal(BIT(PIN_OUT), outputs & BIT(PIN_OUT), "output mismatch");
+		zassert_true(gpio_pin_is_output(dev, PIN_OUT), "pin is output failed");
+	}
+
+	if (IS_ENABLED(CONFIG_GPIO_GET_DIRECTION_BITS)) {
+		gpio_port_pins_t inputs;
+		gpio_port_pins_t outputs;
+
+		rc = gpio_port_get_direction_bits(dev, &inputs, &outputs);
+		zassert_equal(rc, 0, "get direction bits failed");
+		zassert_equal(BIT(PIN_OUT), outputs & BIT(PIN_OUT), "output mismatch");
+		zassert_equal(BIT(PIN_IN), inputs & BIT(PIN_IN), "input mismatch");
+	}
 
 	rc = gpio_port_get_raw(dev, &v1);
 	zassert_equal(rc, 0,

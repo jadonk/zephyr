@@ -492,13 +492,6 @@ struct gpio_driver_data {
 	 * wrapper functions in this header.
 	 */
 	gpio_port_pins_t invert;
-	/*
-	 * Mask identifying pins that are configured as output
-	 *
-	 * Management of this mask is the responsibility of the
-	 * wrapper functions in this header.
-	 */
-	gpio_port_pins_t output;
 };
 
 struct gpio_callback;
@@ -758,6 +751,11 @@ static inline int z_impl_gpio_pin_configure(const struct device *port,
 	(void)cfg;
 	__ASSERT((cfg->port_pin_mask & (gpio_port_pins_t)BIT(pin)) != 0U,
 		 "Unsupported pin");
+
+	ret = gpio_config(port, pin, flags);
+	if (ret != 0) {
+		return ret;
+	}
 
 	if ((flags & GPIO_ACTIVE_LOW) != 0) {
 		data->invert |= (gpio_port_pins_t)BIT(pin);

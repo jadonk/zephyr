@@ -7,52 +7,38 @@
 #include <kernel.h>
 #include <string.h>
 #include <sys/math_extras.h>
-#include <sys/util.h>
 
-static void *z_heap_aligned_alloc(struct k_heap *heap, size_t align, size_t size)
+void *z_heap_malloc(struct k_heap *heap, size_t size)
 {
-	void *mem;
-	struct k_heap **heap_ref;
-	size_t __align;
-
 	/*
-	 * Adjust the size to make room for our heap reference.
-	 * Merge a rewind bit with align value (see sys_heap_aligned_alloc()).
-	 * This allows for storing the heap pointer right below the aligned
-	 * boundary without wasting any memory.
+	 * get a block large enough to hold an initial (hidden) heap
+	 * pointer, as well as the space the caller requested
 	 */
-	if (size_add_overflow(size, sizeof(heap_ref), &size)) {
+	if (size_add_overflow(size, sizeof(struct k_heap *),
+			      &size)) {
 		return NULL;
 	}
 	__align = align | sizeof(heap_ref);
 
-	mem = k_heap_aligned_alloc(heap, __align, size, K_NO_WAIT);
-	if (mem == NULL) {
+	struct k_heap **blk = k_heap_alloc(heap, size, K_NO_WAIT);
+
+	if (blk == NULL) {
 		return NULL;
 	}
 
-	heap_ref = mem;
-	*heap_ref = heap;
-	mem = ++heap_ref;
-	__ASSERT(align == 0 || ((uintptr_t)mem & (align - 1)) == 0,
-		 "misaligned memory at %p (align = %zu)", mem, align);
+	blk[0] = heap;
 
-	return mem;
+	/* return address of the user area part of the block to the caller */
+	return (char *)&blk[1];
 }
 
 void k_free(void *ptr)
 {
-	struct k_heap **heap_ref;
-
 	if (ptr != NULL) {
-		heap_ref = ptr;
-		ptr = --heap_ref;
+		struct k_heap **blk = &((struct k_heap **)ptr)[-1];
+		struct k_heap *heap = *blk;
 
-		SYS_PORT_TRACING_OBJ_FUNC_ENTER(k_heap_sys, k_free, *heap_ref);
-
-		k_heap_free(*heap_ref, ptr);
-
-		SYS_PORT_TRACING_OBJ_FUNC_EXIT(k_heap_sys, k_free, *heap_ref);
+		k_heap_free(heap, blk);
 	}
 }
 
@@ -61,33 +47,9 @@ void k_free(void *ptr)
 K_HEAP_DEFINE(_system_heap, CONFIG_HEAP_MEM_POOL_SIZE);
 #define _SYSTEM_HEAP (&_system_heap)
 
-void *k_aligned_alloc(size_t align, size_t size)
-{
-	__ASSERT(align / sizeof(void *) >= 1
-		&& (align % sizeof(void *)) == 0,
-		"align must be a multiple of sizeof(void *)");
-
-	__ASSERT((align & (align - 1)) == 0,
-		"align must be a power of 2");
-
-	SYS_PORT_TRACING_OBJ_FUNC_ENTER(k_heap_sys, k_aligned_alloc, _SYSTEM_HEAP);
-
-	void *ret = z_heap_aligned_alloc(_SYSTEM_HEAP, align, size);
-
-	SYS_PORT_TRACING_OBJ_FUNC_EXIT(k_heap_sys, k_aligned_alloc, _SYSTEM_HEAP, ret);
-
-	return ret;
-}
-
 void *k_malloc(size_t size)
 {
-	SYS_PORT_TRACING_OBJ_FUNC_ENTER(k_heap_sys, k_malloc, _SYSTEM_HEAP);
-
-	void *ret = k_aligned_alloc(sizeof(void *), size);
-
-	SYS_PORT_TRACING_OBJ_FUNC_EXIT(k_heap_sys, k_malloc, _SYSTEM_HEAP, ret);
-
-	return ret;
+	return z_heap_malloc(_SYSTEM_HEAP, size);
 }
 
 void *k_calloc(size_t nmemb, size_t size)

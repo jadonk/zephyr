@@ -7,7 +7,6 @@
 /dts-v1/;
 #include <posix/posix.dtsi>
 #include <dt-bindings/i2c/i2c.h>
-#include <dt-bindings/gpio/gpio.h>
 
 / {
 	model = "Native POSIX Board";
@@ -27,15 +26,6 @@
 		eeprom-0 = &eeprom0;
 		i2c-0 = &i2c0;
 		spi-0 = &spi0;
-		led0 = &led0;
-	};
-
-	leds {
-		compatible = "gpio-leds";
-		led0: led_0 {
-			gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
-			label = "Green LED";
-		};
 	};
 
 	flashcontroller0: flash-controller@0 {

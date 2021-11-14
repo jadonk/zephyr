@@ -315,6 +315,37 @@ static int gpio_nrfx_manage_callback(const struct device *port,
 				     callback, set);
 }
 
+static int gpio_nrfx_port_get_direction_bits_raw(const struct device *port,
+						 gpio_port_pins_t *inputs,
+						 gpio_port_pins_t *outputs)
+{
+	uint32_t pin;
+	uint32_t abs_pin;
+	gpio_port_pins_t ip = 0;
+	gpio_port_pins_t op = 0;
+	const struct gpio_nrfx_cfg *const cfg = get_port_cfg(port);
+
+	if (inputs != NULL) {
+		for (pin = 0; pin < cfg->port_num; ++pin) {
+			abs_pin = NRF_GPIO_PIN_MAP(cfg->port_num, pin);
+			ip |= (nrf_gpio_pin_dir_get(abs_pin) == NRF_GPIO_PIN_DIR_INPUT) * BIT(pin);
+		}
+
+		*inputs = ip;
+	}
+
+	if (outputs != NULL) {
+		for (pin = 0; pin < cfg->port_num; ++pin) {
+			abs_pin = NRF_GPIO_PIN_MAP(cfg->port_num, pin);
+			op |= (nrf_gpio_pin_dir_get(abs_pin) == NRF_GPIO_PIN_DIR_OUTPUT) * BIT(pin);
+		}
+
+		*outputs = op;
+	}
+
+	return 0;
+}
+
 static const struct gpio_driver_api gpio_nrfx_drv_api_funcs = {
 	.pin_configure = gpio_nrfx_config,
 	.port_get_raw = gpio_nrfx_port_get_raw,
@@ -324,6 +355,7 @@ static const struct gpio_driver_api gpio_nrfx_drv_api_funcs = {
 	.port_toggle_bits = gpio_nrfx_port_toggle_bits,
 	.pin_interrupt_configure = gpio_nrfx_pin_interrupt_configure,
 	.manage_callback = gpio_nrfx_manage_callback,
+	.port_get_direction_bits_raw = gpio_nrfx_port_get_direction_bits_raw,
 };
 
 static void cfg_edge_sense_pins(const struct device *port,

@@ -303,15 +303,30 @@ static int gpio_sifive_manage_callback(const struct device *dev,
 	return gpio_manage_callback(&data->cb, callback, set);
 }
 
+static int gpio_sifive_port_get_dir(const struct device *dev, gpio_port_pins_t *inputs,
+				    gpio_port_pins_t *outputs)
+{
+	if (inputs != NULL) {
+		*inputs = DEV_GPIO(dev)->in_en;
+	}
+
+	if (outputs != NULL) {
+		*outputs = DEV_GPIO(dev)->out_en;
+	}
+
+	return 0;
+}
+
 static const struct gpio_driver_api gpio_sifive_driver = {
-	.pin_configure           = gpio_sifive_config,
-	.port_get_raw            = gpio_sifive_port_get_raw,
-	.port_set_masked_raw     = gpio_sifive_port_set_masked_raw,
-	.port_set_bits_raw       = gpio_sifive_port_set_bits_raw,
-	.port_clear_bits_raw     = gpio_sifive_port_clear_bits_raw,
-	.port_toggle_bits        = gpio_sifive_port_toggle_bits,
+	.pin_configure = gpio_sifive_config,
+	.port_get_raw = gpio_sifive_port_get_raw,
+	.port_set_masked_raw = gpio_sifive_port_set_masked_raw,
+	.port_set_bits_raw = gpio_sifive_port_set_bits_raw,
+	.port_clear_bits_raw = gpio_sifive_port_clear_bits_raw,
+	.port_toggle_bits = gpio_sifive_port_toggle_bits,
 	.pin_interrupt_configure = gpio_sifive_pin_interrupt_configure,
-	.manage_callback         = gpio_sifive_manage_callback,
+	.manage_callback = gpio_sifive_manage_callback,
+	.port_get_direction_bits_raw = gpio_sifive_port_get_dir,
 };
 
 /**

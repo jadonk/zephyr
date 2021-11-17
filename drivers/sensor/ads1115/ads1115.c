@@ -28,18 +28,22 @@ LOG_MODULE_REGISTER(ads1115, LOG_LEVEL_INF);
 #define ADS1115_AIN_INDEX_MAX	3
 
 struct ads1115_data {
-	struct k_timer *		timer;
-	struct k_work 			sample_worker;
+	struct k_timer *			timer;
+	struct k_work 				sample_worker;
 	const struct device *		i2c_master;
-	uint16_t 			i2c_slave_addr;
-	uint16_t 			ain_value[4];
+	uint16_t 					i2c_slave_addr;
+	uint16_t 					ain_value[4];
+	uint16_t					ch_index;
+	bool						single_mode;
 };
 
-#define ADS1115_DEV(idx) DT_NODELABEL(adccollector ## idx)
+#define ADS1115_DEV(idx) DT_NODELABEL(adc ## idx)
 
 #define CREATE_COLLECTOR_DEVICE(idx)                                \
      static struct ads1115_data ads1115_data_##idx = {				\
 			.i2c_slave_addr = DT_INST_REG_ADDR(idx),				\
+			.single_mode	= true,									\
+			.ch_index = 0,											\
 	 };																\
      DEVICE_DT_DEFINE(ADS1115_DEV(idx),                             \
                      ads1115_init,                           		\
@@ -64,10 +68,12 @@ struct ads1115_data {
 static int ads1115_init(const struct device *dev);
 static int ads115_sample_fetch(const struct device *dev,enum sensor_channel chan);
 static int ads1115_channel_get(const struct device *dev,enum sensor_channel chan,struct sensor_value *val);
+static int ads1115_attr_set(const struct device *dev,enum sensor_channel chan,enum sensor_attribute attr,const struct sensor_value *val);
 
 static const struct sensor_driver_api ads1115_api_funcs = {
 	.sample_fetch = ads115_sample_fetch,
 	.channel_get = ads1115_channel_get,
+	.attr_set = ads1115_attr_set,
 };
 
 static int ads1115_reg_write(struct ads1115_data *p_data, uint8_t reg, uint16_t *p_val)
@@ -101,7 +107,7 @@ static int ads1115_reg_read(struct ads1115_data *p_data, uint8_t reg, uint16_t *
 	wr_buff[0] = reg;
 	wr_buff[1] = (p_data->i2c_slave_addr << 1) | 0x01;
 
-	err = i2c_write_read(p_data->i2c_master, p_data->i2c_slave_addr, wr_buff, 2, rd_buff, 2);
+	err = i2c_write_read(p_data->i2c_master, p_data->i2c_slave_addr, wr_buff, 1, rd_buff, 2);
 	if (err < 0) {
 		LOG_ERR("0x%02x ads1115_reg_read reg 0x%02x error %d",p_data->i2c_slave_addr,reg,err);
 		return err;
@@ -247,32 +253,94 @@ static int ads115_sample_fetch(const struct device *dev,
 	uint8_t rty = 0;
 	int err = 0;
 
-	/* Collect each channel */
-	for(i = 0 ; i < (ADS1115_AIN_INDEX_MAX + 1); i++)
+	if(!p_ads1115_data->single_mode)
 	{
-		ads1115_chan_change_with_start_conversion(p_ads1115_data, i);
-
-		do
+		/* Collect each channel */
+		for(i = 0 ; i < (ADS1115_AIN_INDEX_MAX + 1); i++)
 		{
-			k_msleep(50);
-			ads1115_once_conversion_status_get(p_ads1115_data , &status);
-			//LOG_INF("try %d to get conversion status is 0x%04x",rty,status);
-		}while( (!status) && (rty++ < 3) );
+			ads1115_chan_change_with_start_conversion(p_ads1115_data, i);
+			do
+			{
+				k_msleep(1);
+				ads1115_once_conversion_status_get(p_ads1115_data , &status);
+				LOG_DBG("try %d to get conversion status is 0x%04x",rty,status);
+			}while( (!status) && (rty++ < 3) );
 
-		rty = 0;
-		if(status)
+			rty = 0;
+			if(status)
+			{
+				ads1115_reg_read(p_ads1115_data, ADS1115_REG_CONVERSION, &p_ads1115_data->ain_value[i]);
+				LOG_DBG("salver_addr 0x%02x get ain%d value 0x%04x",p_ads1115_data->i2c_slave_addr,i,p_ads1115_data->ain_value[i]);
+			}
+			else
+			{
+				p_ads1115_data->ain_value[i] = NULL;
+				LOG_DBG("salver_addr 0x%02x Can't get ain%d",p_ads1115_data->i2c_slave_addr,i);
+			}
+			k_msleep(5);
+		}
+	}
+	else
+	{
+		if(p_ads1115_data->ch_index > ADS1115_AIN_INDEX_MAX)
 		{
-			ads1115_reg_read(p_ads1115_data, ADS1115_REG_CONVERSION, &p_ads1115_data->ain_value[i]);
-			LOG_INF("salver_addr 0x%02x get ain%d value 0x%04x",p_ads1115_data->i2c_slave_addr,i,p_ads1115_data->ain_value[i]);
+			LOG_WRN("Invalid sampling channle. Please set a valid sampling channle");
 		}
 		else
 		{
-			p_ads1115_data->ain_value[i] = NULL;
-			LOG_INF("salver_addr 0x%02x Can't get ain%d",p_ads1115_data->i2c_slave_addr,i);
+			ads1115_chan_change_with_start_conversion(p_ads1115_data, p_ads1115_data->ch_index);
+			do
+			{
+				k_msleep(1);
+				ads1115_once_conversion_status_get(p_ads1115_data , &status);
+				LOG_DBG("try %d to get conversion status is 0x%04x",rty,status);
+			}while( (!status) && (rty++ < 3) );
+
+			rty = 0;
+			if(status)
+			{
+				ads1115_reg_read(p_ads1115_data, ADS1115_REG_CONVERSION, &p_ads1115_data->ain_value[i]);
+				LOG_DBG("salver_addr 0x%02x get ain%d value 0x%04x",p_ads1115_data->i2c_slave_addr,i,p_ads1115_data->ain_value[i]);
+			}
+			else
+			{
+				p_ads1115_data->ain_value[i] = NULL;
+				LOG_WRN("salver_addr 0x%02x Can't get ain%d",p_ads1115_data->i2c_slave_addr,i);
+			}
 		}
 	}
 
-   return 0;
+   	return 0;
+}
+
+static int ads1115_attr_set(const struct device *dev,
+				enum sensor_channel chan,
+				enum sensor_attribute attr,
+				const struct sensor_value *val)
+{
+	struct ads1115_data *p_ads1115_data = dev->data;
+	struct sensor_value *p_val = val;
+
+	if(attr == SENSOR_ATTR_FULL_SCALE)
+	{
+		//full channel
+		if(p_val->val1)
+		{
+			p_ads1115_data->single_mode = false;
+		}
+		//single channel
+		else
+		{
+			p_ads1115_data->single_mode = true;
+			p_ads1115_data->ch_index = (uint16_t)chan;
+		}
+	}
+	else
+	{
+		LOG_WRN("Invalid attribute to set");
+	}
+
+	return 0;
 }
 
 static int ads1115_init(const struct device *dev)
@@ -299,21 +367,31 @@ static int ads1115_init(const struct device *dev)
 		LOG_ERR("ads1115_init err!");
 		return -EINVAL;
 	}
-
 	/* FSR = 6.144 */
-	config &= 0xf1ff;
+	config &= 0xf11f;
 	wr_value = 0;
 	wr_value <<= 9;
-	wr_value |= config;
-	wr_value &= 0x7fff;
-	err = ads1115_reg_write(p_ads1115_data, ADS1115_REG_CONFIG, &wr_value);
+	config |= wr_value;
+	/* DR = 860 SPS */
+	config &= 0xff1f;
+	wr_value = 7;
+	wr_value <<= 5;
+	config |= wr_value;
+#if 0
+	/* Continuous-conversion mode */
+	config &= 0xfeff;
+	/* Assert after four conversions */
+	config &= 0xfffc;
+	config |= 0x02;
+#endif
+	err = ads1115_reg_write(p_ads1115_data, ADS1115_REG_CONFIG, &config);
 	if(err < 0)
 	{
 		LOG_ERR("ads1115_init err!");
 		return -EINVAL;
 	}
-
-	LOG_INF("ads1115_init 0x%04x finsh",p_ads1115_data->i2c_slave_addr);
+	ads1115_reg_read(p_ads1115_data, ADS1115_REG_CONFIG, &config);
+	LOG_INF("ads1115_init 0x%04x finsh , config reg is 0x%04x",p_ads1115_data->i2c_slave_addr,config);
 	return err;
 }
 
@@ -337,3 +415,4 @@ CREATE_COLLECTOR_DEVICE(1)
 #if DT_NODE_HAS_STATUS(ADS1115_DEV(2), okay)
 CREATE_COLLECTOR_DEVICE(2)
 #endif
+

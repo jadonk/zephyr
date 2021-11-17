@@ -20,6 +20,8 @@
 #include <sys/util.h>
 #include <random/rand32.h>
 
+#include <math.h>
+
 #define LOG_LEVEL LOG_LEVEL_INF
 #include <logging/log.h>
 LOG_MODULE_REGISTER(sensortest);
@@ -32,6 +34,7 @@ static char outstr[MAX_STR_LEN];
 enum api {
 	BUTTON_API,
 	SENSOR_API,
+	SW_API,
 };
 
 enum edev {
@@ -42,6 +45,10 @@ enum edev {
 	ENVIRONMENT,
 	AIRQUALITY,
 	PARTICULATE,
+	ADC_0,
+	ADC_1,
+	ADC_2,
+	I2C_SW,
 	NUM_DEVICES,
 };
 
@@ -60,6 +67,10 @@ static const char *device_labels[NUM_DEVICES] = {
 	[ENVIRONMENT] = "ENVIRONMENT",
 	[AIRQUALITY] = "AIRQUALITY",
 	[PARTICULATE] = "PARTICULATE",
+	[ADC_0] = "ADC_0",
+	[ADC_1] = "ADC_1",
+	[ADC_2] = "ADC_2",
+	[I2C_SW] = "I2C_SW",
 };
 
 static const char *device_names[NUM_DEVICES] = {
@@ -70,6 +81,10 @@ static const char *device_names[NUM_DEVICES] = {
 	[ENVIRONMENT] = "BME680-ENVIRONMENT",
 	[AIRQUALITY] = "SGP30-AIRQUALITY",
 	[PARTICULATE] = "HM3301-PARTICULATE",
+	[ADC_0] = "ADS-ADC0",
+	[ADC_1] = "ADS-ADC1",
+	[ADC_2] = "ADS-ADC2",
+	[I2C_SW] = "I2C_0S",
 };
 
 static const uint8_t device_pins[NUM_DEVICES] = {
@@ -84,10 +99,15 @@ static const enum api apis[NUM_DEVICES] = {
 	SENSOR_API, /* ENVIRONMENT */
 	SENSOR_API, /* AIRQUALITY */
 	SENSOR_API, /* PARTICULATE */
+	SENSOR_API, /* ADC_0 */
+	SENSOR_API, /* ADC_1 */
+	SENSOR_API, /* ADC_2 */
+	SW_API,
 };
 
 static struct device *devices[NUM_DEVICES];
 
+static struct k_delayed_work adc_dwork;
 static struct led_work led_work;
 K_WORK_DEFINE(sensor_work, sensor_work_handler);
 static struct gpio_callback button_callback;
@@ -146,14 +166,6 @@ static void led_work_handler(struct k_work *work)
 	}
 }
 
-/* Sampling frequency: 200Hz, 5ms
- * Sample window: 16 samples, 80ms, 12.5Hz
- * Data window: 32 RMS samples, 2.5s of data
- */
-static void adc_work_handler(struct k_work *work)
-{
-}
-
 static void print_sensor_value(size_t idx, const char *chan,
 			       struct sensor_value *val)
 {
@@ -178,6 +190,46 @@ static void send_sensor_value()
 	}
 
 	outstr[0] = '\0';
+}
+
+/* Sampling frequency: 200Hz, 5ms
+ * Sample window: 16 samples, 80ms, 12.5Hz
+ * Data window: 32 RMS samples, 2.5s of data
+ */
+static void adc_work_handler(struct k_work *work)
+{
+	#define ADC_SAMPLING_CNT_MAX	16
+
+	uint8_t count = 0;
+	struct sensor_value val[ADC_SAMPLING_CNT_MAX];
+	struct sensor_value val_rms = {0};
+	uint64_t sum_square = 0;
+	int r = 0;
+	uint8_t valid_data_cnt = 0;
+
+	// Sampling
+	for(count = 0; count < ADC_SAMPLING_CNT_MAX; count++)
+	{
+		sensor_sample_fetch(devices[ADC_0]);
+
+		sensor_channel_get(devices[ADC_0], SENSOR_CHAN_VOLTAGE, &val[count]);
+
+		//	valid_data_cnt
+		if(val[count].val1 != 0xffff)
+		{
+			valid_data_cnt++;
+			sum_square += val[count].val1 * val[count].val1;
+		}
+	}
+
+	//data_handler
+	val_rms.val1 = sqrt(sum_square/valid_data_cnt);
+
+	print_sensor_value(ADC_0, "ADC_0: ", &val_rms);
+	send_sensor_value();
+
+	r = k_delayed_work_submit(&adc_dwork, K_MSEC(2500));
+	__ASSERT(r == 0, "k_delayed_work_submit() failed for adc_dwork: %d", r);
 }
 
 static void sensor_work_handler(struct k_work *work)
@@ -270,6 +322,27 @@ static void sensor_work_handler(struct k_work *work)
 			send_sensor_value();
 			continue;
 		}
+
+		if(i == ADC_0) {
+			sensor_channel_get(devices[i], SENSOR_CHAN_VOLTAGE, &val);
+			print_sensor_value(i, "ADC_0: ", &val);
+			send_sensor_value();
+			continue;
+		};
+
+		if(i == ADC_1) {
+			sensor_channel_get(devices[i], SENSOR_CHAN_VOLTAGE, &val);
+			print_sensor_value(i, "ADC_1: ", &val);
+			send_sensor_value();
+			continue;
+		};
+
+		if(i == ADC_2) {
+			sensor_channel_get(devices[i], SENSOR_CHAN_VOLTAGE, &val);
+			print_sensor_value(i, "ADC_2: ", &val);
+			send_sensor_value();
+			continue;
+		};
 	}
 }
 
@@ -305,6 +378,12 @@ void main(void)
 		GPIO_OUTPUT_HIGH); /* Enable SubG TX/RX 0dB */
 	r = gpio_pin_configure(rf_sw_dev, DT_GPIO_PIN_BY_IDX(DT_NODELABEL(rf_sw), gpios, 2),
 		GPIO_OUTPUT_LOW);  /* Disable 2.4GHz TX/RX */
+
+	const struct device *i2c_ctrl_dev;
+	/* Force I2C_CTRL to HIGH */
+	i2c_ctrl_dev = device_get_binding(DT_GPIO_LABEL(DT_NODELABEL(i2c_ctrl), gpios));
+	r = gpio_pin_configure(i2c_ctrl_dev, DT_GPIO_PIN(DT_NODELABEL(i2c_ctrl), gpios),
+			DT_GPIO_FLAGS(DT_NODELABEL(i2c_ctrl), gpios) | GPIO_OUTPUT_HIGH);
 
 	fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	if (fd < 0) {
@@ -359,6 +438,9 @@ void main(void)
 			break;
 		case SENSOR_API:
 			break;
+
+		case SW_API:
+			break;
 		default:
 			break;
 		}
@@ -371,6 +453,12 @@ void main(void)
 	__ASSERT(r == 0, "k_delayed_work_submit() failed for LED %u work: %d",
 		 LED_SUBG, r);
 
+	/* setup timer-driven LED event */
+	k_delayed_work_init(&adc_dwork, adc_work_handler);
+	r = k_delayed_work_submit(&adc_dwork, K_MSEC(2500));
+	__ASSERT(r == 0, "k_delayed_work_submit() failed for adc_dwork: %d", r);
+
+
 	/* setup input-driven button event */
 	gpio_init_callback(
 		&button_callback, (gpio_callback_handler_t)button_handler,
@@ -382,3 +470,4 @@ void main(void)
 		k_sleep(K_MSEC(1000));
 	}
 }
+

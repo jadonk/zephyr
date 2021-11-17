@@ -34,7 +34,6 @@ static char outstr[MAX_STR_LEN];
 enum api {
 	BUTTON_API,
 	SENSOR_API,
-	SW_API,
 };
 
 enum edev {
@@ -48,7 +47,6 @@ enum edev {
 	ADC_0,
 	ADC_1,
 	ADC_2,
-	I2C_SW,
 	NUM_DEVICES,
 };
 
@@ -70,7 +68,6 @@ static const char *device_labels[NUM_DEVICES] = {
 	[ADC_0] = "ADC_0",
 	[ADC_1] = "ADC_1",
 	[ADC_2] = "ADC_2",
-	[I2C_SW] = "I2C_SW",
 };
 
 static const char *device_names[NUM_DEVICES] = {
@@ -84,7 +81,6 @@ static const char *device_names[NUM_DEVICES] = {
 	[ADC_0] = "ADS-ADC0",
 	[ADC_1] = "ADS-ADC1",
 	[ADC_2] = "ADS-ADC2",
-	[I2C_SW] = "I2C_0S",
 };
 
 static const uint8_t device_pins[NUM_DEVICES] = {
@@ -102,7 +98,6 @@ static const enum api apis[NUM_DEVICES] = {
 	SENSOR_API, /* ADC_0 */
 	SENSOR_API, /* ADC_1 */
 	SENSOR_API, /* ADC_2 */
-	SW_API,
 };
 
 static struct device *devices[NUM_DEVICES];
@@ -379,12 +374,6 @@ void main(void)
 	r = gpio_pin_configure(rf_sw_dev, DT_GPIO_PIN_BY_IDX(DT_NODELABEL(rf_sw), gpios, 2),
 		GPIO_OUTPUT_LOW);  /* Disable 2.4GHz TX/RX */
 
-	const struct device *i2c_ctrl_dev;
-	/* Force I2C_CTRL to HIGH */
-	i2c_ctrl_dev = device_get_binding(DT_GPIO_LABEL(DT_NODELABEL(i2c_ctrl), gpios));
-	r = gpio_pin_configure(i2c_ctrl_dev, DT_GPIO_PIN(DT_NODELABEL(i2c_ctrl), gpios),
-			DT_GPIO_FLAGS(DT_NODELABEL(i2c_ctrl), gpios) | GPIO_OUTPUT_HIGH);
-
 	fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	if (fd < 0) {
 		LOG_ERR("failed to open socket");
@@ -436,11 +425,10 @@ void main(void)
 				device_labels[i], device_pins[i],
 				GPIO_INT_EDGE_TO_ACTIVE, r);
 			break;
+
 		case SENSOR_API:
 			break;
 
-		case SW_API:
-			break;
 		default:
 			break;
 		}

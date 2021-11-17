@@ -226,8 +226,10 @@ static int ads1115_channel_get(const struct device *dev,
 	switch (chan)
 	{
 		case SENSOR_CHAN_VOLTAGE:
-			val->val1 = p_ads1115_data->ain_value[0];
-			val->val2 = 0;
+			/* 0.25mV / LSB - 5x divider, 4.096V full-scale @ 16 bit */
+			val->val1 = p_ads1115_data->ain_value[0]/0x10;
+			val->val2 = (p_ads1115_data->ain_value[0]&0x8000)<<31 |
+				(p_ads1115_data->ain_value[0]&0xF;
 			break;
 
 		default:
@@ -300,12 +302,16 @@ static int ads1115_init(const struct device *dev)
 		return -EINVAL;
 	}
 
-	/* FSR = 6.144 */
-	config &= 0xf1ff;
-	wr_value = 0;
-	wr_value <<= 9;
-	wr_value |= config;
-	wr_value &= 0x7fff;
+	wr_value =
+		0 << 15			/* OS = No conversion start */
+		| 0x4 << 12		/* MUX = 100b: AINP = AIN0 and AINN = GND */
+	        | 1 << 9		/* FSR = 001b: 4.096V */
+	        | 0 << 8		/* MODE = 0: Continuous-conversion mode */
+	        | 0x5 << 5		/* DR = 101b: 250 samples per second */
+	        | 0 << 4		/* COMP_MODE = 0: Traditional comparator */
+	        | 1 << 3		/* COMP_POL = 1: Active high polarity */
+	        | 0 << 2		/* COMP_MODE = 0: Traditional comparator */
+	        | 3 << 0;		/* COMP_QUE = 11b: Disable comparator */
 	err = ads1115_reg_write(p_ads1115_data, ADS1115_REG_CONFIG, &wr_value);
 	if(err < 0)
 	{

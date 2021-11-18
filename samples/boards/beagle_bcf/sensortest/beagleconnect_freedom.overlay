@@ -29,18 +29,24 @@
 	adc0: ads1115_0@48 {
 		compatible = "ti,ads1115";
 		reg = <0x48>;
+		sampling_channel = <0>;
+		continuous_mode = <0>;
 		label = "ADS-ADC0";
 	};
 
 	adc1: ads1115_1@49 {
 		compatible = "ti,ads1115";
 		reg = <0x49>;
+		sampling_channel = <1>;
+		continuous_mode = <0>;
 		label = "ADS-ADC1";
 	};
 
 	adc2: ads1115_2@4b {
 		compatible = "ti,ads1115";
 		reg = <0x4b>;
+		sampling_channel = <2>;
+		continuous_mode = <0>;
 		label = "ADS-ADC2";
 	};
 };

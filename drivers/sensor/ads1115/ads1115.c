@@ -28,43 +28,15 @@ LOG_MODULE_REGISTER(ads1115, LOG_LEVEL_INF);
 #define ADS1115_AIN_INDEX_MAX	3
 
 struct ads1115_data {
-	struct k_timer *			timer;
-	struct k_work 				sample_worker;
+	struct k_timer *		timer;
+	struct k_work 			sample_worker;
 	const struct device *		i2c_master;
-	uint16_t 					i2c_slave_addr;
-	uint16_t 					ain_value[4];
-	uint16_t					ch_index;
-	bool						single_mode;
+	uint16_t 			i2c_slave_addr;
+	uint16_t 			ain_value[4];
+	uint16_t			ch_index;
+	bool				single_mode;
 };
 
-#define ADS1115_DEV(idx) DT_NODELABEL(adc ## idx)
-
-#define CREATE_COLLECTOR_DEVICE(idx)                                \
-     static struct ads1115_data ads1115_data_##idx = {				\
-			.i2c_slave_addr = DT_INST_REG_ADDR(idx),				\
-			.single_mode	= true,									\
-			.ch_index = 0,											\
-	 };																\
-     DEVICE_DT_DEFINE(ADS1115_DEV(idx),                             \
-                     ads1115_init,                           		\
-                     NULL,                                          \
-                     &ads1115_data_##idx,                           \
-                     NULL,                                  		\
-                     POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,      \
-                     &ads1115_api_funcs);
-
-#if DT_NODE_HAS_STATUS(ADS1115_DEV(0), okay)
-#define HAS_ADS1115
-#endif
-#if DT_NODE_HAS_STATUS(ADS1115_DEV(1), okay)
-#define HAS_ADS1115
-#endif
-#if DT_NODE_HAS_STATUS(ADS1115_DEV(2), okay)
-#define HAS_ADS1115
-#endif
-
-#ifdef HAS_ADS1115
-#warning "ADS1115 found in DT"
 static int ads1115_init(const struct device *dev);
 static int ads115_sample_fetch(const struct device *dev,enum sensor_channel chan);
 static int ads1115_channel_get(const struct device *dev,enum sensor_channel chan,struct sensor_value *val);
@@ -416,24 +388,15 @@ static int ads1115_init(const struct device *dev)
 	return err;
 }
 
-#endif
-
-#if 0
-static struct ads1115_data m_ads1115_data;
-
-DEVICE_AND_API_INIT(ads1115, DT_INST_LABEL(0), ads1115_init, &m_ads1115_data,
-		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
-		    &ads1115_api_funcs);
-
-#endif
-
-#if DT_NODE_HAS_STATUS(ADS1115_DEV(0), okay)
-CREATE_COLLECTOR_DEVICE(0)
-#endif
-#if DT_NODE_HAS_STATUS(ADS1115_DEV(1), okay)
-CREATE_COLLECTOR_DEVICE(1)
-#endif
-#if DT_NODE_HAS_STATUS(ADS1115_DEV(2), okay)
-CREATE_COLLECTOR_DEVICE(2)
-#endif
-
+#define DEFINE_ADS1115(inst)						\
+									\
+static struct ads1115_data m_ads1115_data_##inst;			\
+									\
+DEVICE_DT_INST_DEFINE(inst,						\
+		ads1115_init,						\
+		device_pm_control_nop,					\
+		&m_ads1115_data_##inst,					\
+		NULL,							\
+		POST_KERNEL,						\
+		CONFIG_SENSOR_INIT_PRIORITY,				\
+		&ads1115_api_funcs);

@@ -18,7 +18,7 @@ properties:
       required: true
       description: if continuous_mode equal to zero, the device is in single mode. Other value is in continuous_mode.
 
-    int_gpio:
+    int_gpios:
       type: phandle-array
       required: false
       description: DRDY/INT pin.

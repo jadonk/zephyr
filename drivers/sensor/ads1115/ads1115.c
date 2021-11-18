@@ -43,7 +43,7 @@ struct ads1115_data {
 };
 
 static int ads1115_init(const struct device *dev);
-static int ads115_sample_fetch(const struct device *dev,enum sensor_channel chan);
+static int ads1115_sample_fetch(const struct device *dev,enum sensor_channel chan);
 static int ads1115_channel_get(const struct device *dev,enum sensor_channel chan,struct sensor_value *val);
 static int ads1115_attr_set(const struct device *dev,enum sensor_channel chan,enum sensor_attribute attr,const struct sensor_value *val);
 

@@ -78,9 +78,9 @@ static const char *device_names[NUM_DEVICES] = {
 	[ENVIRONMENT] = "BME680-ENVIRONMENT",
 	[AIRQUALITY] = "SGP30-AIRQUALITY",
 	[PARTICULATE] = "HM3301-PARTICULATE",
-	[ADC_0] = "ADS-ADC0",
-	[ADC_1] = "ADS-ADC1",
-	[ADC_2] = "ADS-ADC2",
+	[ADC_0] = "ADS1115-ADC0",
+	[ADC_1] = "ADS1115-ADC1",
+	[ADC_2] = "ADS1115-ADC2",
 };
 
 static const uint8_t device_pins[NUM_DEVICES] = {
@@ -144,8 +144,8 @@ static void led_work_handler(struct k_work *work)
 		led_work.active_led = LED_SUBG;
 	}
 
-	r = k_delayed_work_submit(&led_work.dwork, K_MSEC(BLINK_MS));
-	__ASSERT(r == 0, "k_delayed_work_submit() failed for LED %u work: %d",
+	r = k_work_schedule(&led_work.dwork, K_MSEC(BLINK_MS));
+	__ASSERT(r == 0, "k_work_schedule() failed for LED %u work: %d",
 		 led_work.active_led, r);
 	*/
 
@@ -223,8 +223,8 @@ static void adc_work_handler(struct k_work *work)
 	print_sensor_value(ADC_0, "ADC_0: ", &val_rms);
 	send_sensor_value();
 
-	r = k_delayed_work_submit(&adc_dwork, K_MSEC(2500));
-	__ASSERT(r == 0, "k_delayed_work_submit() failed for adc_dwork: %d", r);
+	r = k_work_schedule(&adc_dwork, K_MSEC(2500));
+	__ASSERT(r == 0, "k_work_schedule() failed for adc_dwork: %d", r);
 }
 
 static void sensor_work_handler(struct k_work *work)
@@ -437,14 +437,14 @@ void main(void)
 	/* setup timer-driven LED event */
 	k_delayed_work_init(&led_work.dwork, led_work_handler);
 	//led_work.active_led = LED_SUBG;
-	r = k_delayed_work_submit(&led_work.dwork, K_MSEC(BLINK_MS));
-	__ASSERT(r == 0, "k_delayed_work_submit() failed for LED %u work: %d",
+	r = k_work_schedule(&led_work.dwork, K_MSEC(BLINK_MS));
+	__ASSERT(r == 0, "k_work_schedule() failed for LED %u work: %d",
 		 LED_SUBG, r);
 
-	/* setup timer-driven LED event */
+	/* setup timer-driven ADC event */
 	k_delayed_work_init(&adc_dwork, adc_work_handler);
-	r = k_delayed_work_submit(&adc_dwork, K_MSEC(2500));
-	__ASSERT(r == 0, "k_delayed_work_submit() failed for adc_dwork: %d", r);
+	r = k_work_schedule(&adc_dwork, K_MSEC(2500));
+	__ASSERT(r == 0, "k_work_schedule() failed for adc_dwork: %d", r);
 
 
 	/* setup input-driven button event */

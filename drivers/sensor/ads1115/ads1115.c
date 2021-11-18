@@ -420,7 +420,7 @@ static struct ads1115_data m_ads1115_data_##inst;			\
 	.i2c_slave_addr = DT_INST_REG_ADDR(inst),			\
 	.continuous_mode = ADS1115_PROP(inst,continuous_mode),		\
 	.ch_index = ADS1115_PROP(inst,sampling_channel),		\
-	.int_gpio = GPIO_DT_SPEC_GET_OR(ADS1115_PROP(inst, int_gpio), { NULL, 0, 0 }),	\
+	.int_gpio = GPIO_DT_SPEC_GET_OR(ADS1115_PROP(inst, int_gpios), { NULL, 0, 0 }),	\
 };									\
 									\
 DEVICE_DT_INST_DEFINE(inst,						\

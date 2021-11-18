@@ -7,6 +7,7 @@
 #define DT_DRV_COMPAT ti_ads1115
 
 #include <drivers/i2c.h>
+#include <drivers/gpio.h>
 #include <init.h>
 #include <kernel.h>
 #include <sys/byteorder.h>
@@ -59,7 +60,7 @@ static void ads1115_gpio_callback(const struct device *dev,
 
 	ARG_UNUSED(pins);
 
-	gpio_pin_interrupt_configure_dt(p_ads1115_data->int_gpio, GPIO_INT_DISABLE);
+	gpio_pin_interrupt_configure_dt(&p_ads1115_data->int_gpio, GPIO_INT_DISABLE);
 	k_sem_give(&p_ads1115_data->data_sem);
 }
 
@@ -250,7 +251,7 @@ static int ads1115_sample_fetch(const struct device *dev,
 	if(p_ads1115_data->continuous_mode)
 	{
 		if(p_ads1115_data->int_gpio.port != NULL) {
-			gpio_pin_interrupt_configure_dt(p_ads1115_data->int_gpio,
+			gpio_pin_interrupt_configure_dt(&p_ads1115_data->int_gpio,
 						GPIO_INT_EDGE_TO_ACTIVE);
 
 			k_sem_take(&p_ads1115_data->data_sem, K_FOREVER);
@@ -377,7 +378,7 @@ static int ads1115_init(const struct device *dev)
 			k_sem_init(&p_ads1115_data->data_sem, 0, K_SEM_MAX_LIMIT);
 
 			/* setup data ready gpio interrupt */
-			gpio_pin_configure_dt(p_ads1115_data->int_gpio, GPIO_INPUT);
+			gpio_pin_configure_dt(&p_ads1115_data->int_gpio, GPIO_INPUT);
 
 			gpio_init_callback(&p_ads1115_data->gpio_cb,
 				ads1115_gpio_callback,
@@ -388,7 +389,7 @@ static int ads1115_init(const struct device *dev)
 				return -EIO;
 			}
 
-			gpio_pin_interrupt_configure_dt(p_ads1115_data->int_gpio,
+			gpio_pin_interrupt_configure_dt(&p_ads1115_data->int_gpio,
 						GPIO_INT_EDGE_TO_ACTIVE);
 
 			/* Continuous-conversion mode */

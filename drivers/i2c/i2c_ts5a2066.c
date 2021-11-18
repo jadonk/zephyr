@@ -103,12 +103,9 @@ static int ts5a2066_init(const struct device *dev)
 									\
 static struct ts5a2066_data ts5a2066_dev_data_##inst;			\
 									\
-extern struct device __device_DT_N_S_soc_S_i2c_40002000;		\
-extern struct device __device_DT_N_S_soc_S_gpio_40022000;		\
-									\
 static const struct ts5a2066_config ts5a2066_dev_cfg_##inst = {		\
-	.bus		= &__device_DT_N_S_soc_S_i2c_40002000,		\
-	.gpiodev	= &__device_DT_N_S_soc_S_gpio_40022000,		\
+	.bus		= DEVICE_DT_GET(DT_PHANDLE(DT_INST(inst, DT_DRV_COMPAT), controller)),	\
+	.gpiodev	= DEVICE_DT_GET(DT_PHANDLE(DT_INST(inst, DT_DRV_COMPAT), gpios)),	\
 	.gpiopin	= DT_INST_GPIO_PIN(inst, gpios),		\
 	.gpioflags	= DT_INST_GPIO_FLAGS(inst, gpios),		\
 };									\
@@ -116,13 +113,8 @@ static const struct ts5a2066_config ts5a2066_dev_cfg_##inst = {		\
 DEVICE_DT_INST_DEFINE(inst,						\
 	    ts5a2066_init,						\
 	    device_pm_control_nop,					\
-	    &ts5a2066_dev_data_##inst,				\
-	    &ts5a2066_dev_cfg_##inst,				\
+	    &ts5a2066_dev_data_##inst,					\
+	    &ts5a2066_dev_cfg_##inst,					\
 	    POST_KERNEL, CONFIG_I2C_INIT_PRIORITY, &ts5a2066_api_funcs);
 
 DT_INST_FOREACH_STATUS_OKAY(DEFINE_TS5A2066)
-
-/*
-	DEVICE_DT_GET(DT_PHANDLE(DT_INST(inst, DT_DRV_COMPAT), controller)),	\
-	.gpiodev	= DT_GPIO_CTLR(DT_INST(inst, DT_DRV_COMPAT), gpios),		\
-*/

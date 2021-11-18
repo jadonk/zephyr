@@ -52,7 +52,7 @@ enum edev {
 
 struct led_work {
 	uint8_t active_led;
-	struct k_delayed_work dwork;
+	struct k_work_delayable dwork;
 };
 
 static void sensor_work_handler(struct k_work *work);
@@ -102,7 +102,7 @@ static const enum api apis[NUM_DEVICES] = {
 
 static struct device *devices[NUM_DEVICES];
 
-static struct k_delayed_work adc_dwork;
+static struct k_work_delayable adc_dwork;
 static struct led_work led_work;
 K_WORK_DEFINE(sensor_work, sensor_work_handler);
 static struct gpio_callback button_callback;
@@ -435,14 +435,14 @@ void main(void)
 	}
 
 	/* setup timer-driven LED event */
-	k_delayed_work_init(&led_work.dwork, led_work_handler);
+	k_work_init_delayable(&led_work.dwork, led_work_handler);
 	//led_work.active_led = LED_SUBG;
 	r = k_work_schedule(&led_work.dwork, K_MSEC(BLINK_MS));
 	__ASSERT(r == 0, "k_work_schedule() failed for LED %u work: %d",
 		 LED_SUBG, r);
 
 	/* setup timer-driven ADC event */
-	k_delayed_work_init(&adc_dwork, adc_work_handler);
+	k_work_init_delayable(&adc_dwork, adc_work_handler);
 	r = k_work_schedule(&adc_dwork, K_MSEC(2500));
 	__ASSERT(r == 0, "k_work_schedule() failed for adc_dwork: %d", r);
 

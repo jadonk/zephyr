@@ -369,6 +369,11 @@ static int ads1115_init(const struct device *dev)
 	wr_value = 7;
 	wr_value <<= 5;
 	config |= wr_value;
+	/* Set the sampling channel */
+	config &= 0x8fff;
+	wr_value = 0x04 + p_ads1115_data->ch_index;
+	wr_value <<= 12;
+	config |= wr_value;
 
 	/* if device in continuous_mode */
 	if(p_ads1115_data->continuous_mode)

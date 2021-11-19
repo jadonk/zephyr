@@ -106,6 +106,7 @@ static int ads1115_reg_read(struct ads1115_data *p_data, uint8_t reg, uint16_t *
 	return 0;
 }
 
+/*
 static int ads1115_ainx_chan_change(struct ads1115_data *p_data, uint8_t ainx_index)
 {
 	int err = 0;
@@ -159,6 +160,7 @@ static int ads1115_once_conversion_start(struct ads1115_data *p_data)
 
 	return 0;
 }
+*/
 
 static int ads1115_chan_change_with_start_conversion(struct ads1115_data *p_data,uint8_t ainx_index)
 {
@@ -245,8 +247,6 @@ static int ads1115_sample_fetch(const struct device *dev,
 	uint8_t i = 0;
 	uint16_t status = 0;
 	uint8_t rty = 0;
-	int err = 0;
-
 
 	if(p_ads1115_data->continuous_mode)
 	{
@@ -284,7 +284,7 @@ static int ads1115_sample_fetch(const struct device *dev,
 			}
 			else
 			{
-				p_ads1115_data->ain_value[i] = NULL;
+				p_ads1115_data->ain_value[i] = 0;
 				LOG_WRN("salver_addr 0x%02x Can't get ain%d",p_ads1115_data->i2c_slave_addr,i);
 			}
 		}
@@ -292,13 +292,12 @@ static int ads1115_sample_fetch(const struct device *dev,
    	return 0;
 }
 
-static int ads1115_attr_set(const struct device *dev,
+static int ads1115_attr_set(const struct device * dev,
 				enum sensor_channel chan,
 				enum sensor_attribute attr,
-				const struct sensor_value *val)
+				const struct sensor_value * p_val)
 {
 	struct ads1115_data *p_ads1115_data = dev->data;
-	struct sensor_value *p_val = val;
 
 	if(attr == SENSOR_ATTR_FULL_SCALE)
 	{
@@ -417,11 +416,11 @@ static int ads1115_init(const struct device *dev)
 
 #define DEFINE_ADS1115(inst)						\
 									\
-static struct ads1115_data m_ads1115_data_##inst;			\
+static struct ads1115_data m_ads1115_data_##inst = {			\
 	.i2c_slave_addr = DT_INST_REG_ADDR(inst),			\
 	.continuous_mode = ADS1115_PROP(inst,continuous_mode),		\
 	.ch_index = ADS1115_PROP(inst,sampling_channel),		\
-	.int_gpio = GPIO_DT_SPEC_GET_OR(ADS1115_PROP(inst, int_gpios), { NULL, 0, 0 }),	\
+	.int_gpio = GPIO_DT_SPEC_GET_OR(ADS1115_DEV(inst), int_gpios, {.port=NULL}),	\
 };									\
 									\
 DEVICE_DT_INST_DEFINE(inst,						\
@@ -432,3 +431,5 @@ DEVICE_DT_INST_DEFINE(inst,						\
 		POST_KERNEL,						\
 		CONFIG_SENSOR_INIT_PRIORITY,				\
 		&ads1115_api_funcs);
+
+DT_INST_FOREACH_STATUS_OKAY(DEFINE_ADS1115)

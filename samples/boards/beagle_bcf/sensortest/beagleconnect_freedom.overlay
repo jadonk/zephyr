@@ -31,7 +31,7 @@
 		reg = <0x48>;
 		sampling_channel = <0>;
 		continuous_mode = <0>;
-		label = "ADS-ADC0";
+		label = "ADS1115-ADC0";
 	};
 
 	adc1: ads1115_1@49 {
@@ -39,7 +39,7 @@
 		reg = <0x49>;
 		sampling_channel = <1>;
 		continuous_mode = <0>;
-		label = "ADS-ADC1";
+		label = "ADS1115-ADC1";
 	};
 
 	adc2: ads1115_2@4b {
@@ -47,6 +47,6 @@
 		reg = <0x4b>;
 		sampling_channel = <2>;
 		continuous_mode = <0>;
-		label = "ADS-ADC2";
+		label = "ADS1115-ADC2";
 	};
 };

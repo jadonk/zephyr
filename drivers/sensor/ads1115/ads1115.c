@@ -1,56 +1,83 @@
 /*
  * Copyright (c) 2021 Jackychen
+ * Copyright (c) 2021 Jason Kridner, BeagleBoard.org Foundation
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #define DT_DRV_COMPAT ti_ads1115
 
-#include <drivers/i2c.h>
+#include <drivers/adc.h>
 #include <drivers/gpio.h>
-#include <init.h>
+#include <drivers/i2c.h>
 #include <kernel.h>
-#include <sys/byteorder.h>
-#include <sys/__assert.h>
-#include <drivers/sensor.h>
-#include <net/net_ip.h>
-
 #include <logging/log.h>
-LOG_MODULE_REGISTER(ads1115, LOG_LEVEL_INF);
-
+#include <sys/byteorder.h>
+#include <sys/util.h>
+#include <zephyr.h>
 #include <device.h>
-#include <zephyr/types.h>
+
+LOG_MODULE_REGISTER(ads1115, CONFIG_ADC_LOG_LEVEL);
+
+#define ADC_CONTEXT_USES_KERNEL_TIMER
+#include "adc_context.h"
+
+#define ADS1115_RESOLUTION 16U
 
 #define ADS1115_REG_CONVERSION	0x00
 #define ADS1115_REG_CONFIG		0x01
 #define ADS1115_REG_LO_TH		0x02
 #define ADS1115_REG_HI_TH		0x03
 
-#define ADS1115_AIN_INDEX_MAX	3
+#define ADS1115_NUM_CHANNELS	4
+
+enum average_method {
+	RMS = 0,
+	MEAN = 1,
+}
+
+struct ads1115_config {
+	struct i2c_dt_spec		bus;
+	struct gpio_dt_spec		int_gpio;
+	uint8_t				channels;
+	uint8_t				oversampling;
+	bool				continuous_mode;
+	enum average_method		avg_method;
+}
 
 struct ads1115_data {
-	struct k_timer *		timer;
-	struct k_work 			sample_worker;
-	const struct device *		i2c_master;
-	uint16_t 			i2c_slave_addr;
-	uint16_t 			ain_value[4];
-	uint16_t			ch_index;
-	uint8_t				continuous_mode;
-	uint8_t				device_index;
-	const struct gpio_dt_spec	int_gpio;
+	struct adc_context		ctx;
+	const struct device *		dev;
+	uint16_t *			buffer;
+	uint16_t *			repeat_buffer;
+	uint8_t				channels;
+	struct k_thread			thread;
+	struct k_sem			sem;
+	uint8_t				oversample_count;
+	uint8_t				oversample_valid;
+	uint32_t			accumulator;
+
 	struct gpio_callback		gpio_cb;
-	struct k_sem			data_sem;
+	struct k_work 			sample_worker;
+	uint16_t			channel_index;
+	uint16_t 			value[ADS1115_NUM_CHANNELS];
+	uint8_t				device_index;
+	uint8_t				sample_count[ADS1115_NUM_CHANNELS];
+	uint8_t				valid_count[ADS1115_NUM_CHANNELS];
+	uint32_t			sum;
 };
 
 static int ads1115_init(const struct device *dev);
 static int ads1115_sample_fetch(const struct device *dev,enum sensor_channel chan);
 static int ads1115_channel_get(const struct device *dev,enum sensor_channel chan,struct sensor_value *val);
 static int ads1115_attr_set(const struct device *dev,enum sensor_channel chan,enum sensor_attribute attr,const struct sensor_value *val);
+static int ads1115_trigger_set(const struct device *dev, const struct sensor_trigger *trig, sensor_trigger_handler_t handler);
 
 static const struct sensor_driver_api ads1115_api_funcs = {
 	.sample_fetch = ads1115_sample_fetch,
 	.channel_get = ads1115_channel_get,
 	.attr_set = ads1115_attr_set,
+	.trigger_set = ads1115_trigger_set,
 };
 
 static void ads1115_gpio_callback(const struct device *dev,
@@ -321,6 +348,11 @@ static int ads1115_attr_set(const struct device * dev,
 	return 0;
 }
 
+static int ads1115_trigger_set(const struct device *dev, const struct sensor_trigger *trig, sensor_trigger_handler_t handler)
+{
+	struct ads1115_data * data = dev->data;
+}
+
 static int ads1115_init(const struct device *dev)
 {
 	int err = 0;
@@ -328,6 +360,9 @@ static int ads1115_init(const struct device *dev)
 	uint16_t    wr_value = 0;
 
 	struct ads1115_data *p_ads1115_data = dev->data;
+
+	p_ads1115_data->sample_count = 0;
+	p_ads1115_data->valid_count = 0;
 
 	p_ads1115_data->i2c_master = device_get_binding(DT_INST_BUS_LABEL(0));
 	if(!p_ads1115_data->i2c_master)
@@ -426,6 +461,7 @@ static struct ads1115_data m_ads1115_data_##inst = {			\
 	.continuous_mode = ADS1115_PROP(inst,continuous_mode),		\
 	.ch_index = ADS1115_PROP(inst,sampling_channel),		\
 	.int_gpio = GPIO_DT_SPEC_GET_OR(ADS1115_DEV(inst), int_gpios, {.port=NULL}),	\
+	.oversampling = 16, \
 };									\
 									\
 DEVICE_DT_INST_DEFINE(inst,						\

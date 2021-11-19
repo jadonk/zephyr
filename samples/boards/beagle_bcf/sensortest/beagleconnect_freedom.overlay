@@ -30,6 +30,8 @@
 		compatible = "ti,ads1115";
 		reg = <0x48>;
 		sampling_channel = <0>;
+		/* sample_rate = <> */
+		/* oversampling = <> */
 		continuous_mode = <0>;
 		label = "ADS1115-ADC0";
 	};

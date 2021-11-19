@@ -441,11 +441,13 @@ void main(void)
 	__ASSERT(r == 0, "k_work_schedule() failed for LED %u work: %d",
 		 LED_SUBG, r);
 
-	/* setup timer-driven ADC event */
-	k_work_init_delayable(&adc_dwork, adc_work_handler);
-	r = k_work_schedule(&adc_dwork, K_MSEC(2500));
-	__ASSERT(r == 0, "k_work_schedule() failed for adc_dwork: %d", r);
-
+	if(devices[ADC_0])
+	{
+		/* setup timer-driven ADC event */
+		k_work_init_delayable(&adc_dwork, adc_work_handler);
+		r = k_work_schedule(&adc_dwork, K_MSEC(2500));
+		__ASSERT(r == 0, "k_work_schedule() failed for adc_dwork: %d", r);
+	}
 
 	/* setup input-driven button event */
 	gpio_init_callback(

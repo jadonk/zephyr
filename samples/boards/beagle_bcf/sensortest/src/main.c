@@ -34,7 +34,7 @@ LOG_MODULE_REGISTER(sensortest);
 #define ADC_NODE		DT_PHANDLE(DT_PATH(zephyr_user), io_channels)
 #define ADC_REFERENCE		ADC_REF_INTERNAL
 #define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
-#define ADC_REF_MV		24576  /* 2.048V * 12x divider * 1000mV/V */
+#define ADC_REF_MV		49152  /* 4.096V * 12x divider * 1000mV/V */
 
 #define MAX_STR_LEN 200
 static char outstr[MAX_STR_LEN];

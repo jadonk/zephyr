@@ -19,8 +19,8 @@
 #include <zephyr.h>
 #include <device.h>
 
-//LOG_MODULE_REGISTER(ads1115, CONFIG_ADC_LOG_LEVEL);
-LOG_MODULE_REGISTER(ads1115, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(ads1115, CONFIG_ADC_LOG_LEVEL);
+//LOG_MODULE_REGISTER(ads1115, LOG_LEVEL_DBG);
 
 /* TODO: this should change to use the interrupt line */
 #define ADC_CONTEXT_USES_KERNEL_TIMER
@@ -270,6 +270,7 @@ static int ads1115_read_channel(struct ads1115_data * data, uint8_t channel,
 	}
 
 	if(!data->active) {
+		//LOG_DBG("Starting fetching sample");
 		err = ads1115_chan_change_with_start_conversion(data, channel);
 		if(err) {
 			LOG_ERR("Error starting conversion");
@@ -301,6 +302,9 @@ static int ads1115_read_channel(struct ads1115_data * data, uint8_t channel,
 		LOG_ERR("Error fetching sample");
 		return err;
 	}
+
+	data->active = false;
+	//LOG_DBG("Completed fetching sample %d", *result);
 
 	return 0;
 }

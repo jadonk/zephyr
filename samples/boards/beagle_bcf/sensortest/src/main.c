@@ -235,19 +235,17 @@ static void adc_work_handler(struct k_work *work)
 
 	err = adc_read(dev, &sequence0);
 	if (err != 0) {
-		printk("ADC reading failed with error %d.\n", err);
+		LOG_ERR("ADC reading failed with error %d.", err);
 		return;
 	}
 
-	printk("ADC reading:");
+	LOG_INF("ADC reading:");
 	for (uint8_t i = 0; i < 2; i+=2) {
 		int32_t raw_value = ain0_buffer[i/2];
-		printk(" %d: %d", i/2, raw_value);
 		int32_t mv_value = raw_value;
 		adc_raw_to_millivolts(ADC_REF_MV, ADC_GAIN_1,
 			16, &mv_value);
-		printk(" = %d mV  ", mv_value);
-		printk("\n");
+		LOG_INF(" %d: %d = %d mV", i/2, raw_value, mv_value);
 	}
 
 	err = k_work_schedule(&adc_dwork, K_MSEC(2500));
@@ -505,6 +503,8 @@ void main(void)
 
 	if(devices[ADC_0])
 	{
+		LOG_INF("setting up device %s", device_labels[ADC_0]);
+
 		adc_channel_setup(devices[ADC_0], &ain0_channel_cfg);
 
 		/* setup timer-driven ADC event */

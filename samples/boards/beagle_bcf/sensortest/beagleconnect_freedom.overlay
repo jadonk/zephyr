@@ -37,7 +37,7 @@
 		#io-channel-cells = <1>;
 		reg = <0x48>;
 		/* sample_rate = <> */
-		continuous_mode = <1>;
+		continuous_mode = <0>;
 		/* avg_method = "rms"; */
 		label = "ADS1115-ADC0";
 	};

@@ -19,7 +19,8 @@
 #include <zephyr.h>
 #include <device.h>
 
-LOG_MODULE_REGISTER(ads1115, CONFIG_ADC_LOG_LEVEL);
+//LOG_MODULE_REGISTER(ads1115, CONFIG_ADC_LOG_LEVEL);
+LOG_MODULE_REGISTER(ads1115, LOG_LEVEL_DBG);
 
 /* TODO: this should change to use the interrupt line */
 #define ADC_CONTEXT_USES_KERNEL_TIMER
@@ -316,11 +317,11 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 		while (data->seq_channels) {
 			channel = find_lsb_set(data->seq_channels) - 1;
 
-			LOG_DBG("Reading channel %d", channel);
+			//LOG_DBG("Reading channel %d", channel);
 
 			err = ads1115_read_channel(data, channel, &result);
 			if (err == -EAGAIN) {
-				LOG_DBG("Channel %d not yet ready", channel);
+				//LOG_DBG("Channel %d not yet ready", channel);
 				/* Lie to adc_context_request_next_sampling to get back here */
 				atomic_set(&data->ctx.sampling_requested, 0);
 				k_sem_take(&data->sem, K_FOREVER);
@@ -413,6 +414,7 @@ static int ads1115_chan_change_with_start_conversion(struct ads1115_data * data,
 	ADS1115_CFG_MUX_SET(4 + channel);
 	ADS1115_CFG_OS_SET(1);
 
+	LOG_DBG("Writing to config reg 0x%02x", data->config_reg);
 	err = ads1115_reg_write(data, ADS1115_REG_CONFIG, &data->config_reg);
 	if(err < 0)
 	{

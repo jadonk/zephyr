@@ -7,6 +7,8 @@ compatible: "ti,ads1115"
 
 include: [adc-controller.yaml, i2c-device.yaml]
 
+# Ultimately, io-channel-cells should be either 1 (single-ended) or 2 (differential)
+
 properties:
     "#io-channel-cells":
       const: 1

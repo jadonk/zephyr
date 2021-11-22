@@ -34,7 +34,7 @@
 
 	adsadc0: ads1115_0@48 {
 		compatible = "ti,ads1115";
-		#io-channel-cells = <3>;
+		#io-channel-cells = <1>;
 		reg = <0x48>;
 		/* sample_rate = <> */
 		continuous_mode = <0>;

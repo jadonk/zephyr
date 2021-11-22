@@ -40,6 +40,7 @@ static char outstr[MAX_STR_LEN];
 enum api {
 	BUTTON_API,
 	SENSOR_API,
+	ADC_API,
 };
 
 enum edev {
@@ -215,14 +216,14 @@ const struct adc_sequence_options ain0_seq_options = {
 };
 
 struct adc_sequence sequence0 = {
-	.options = ain0_seq_options,
+	.options = &ain0_seq_options,
 	.channels = 1,
 	.buffer = ain0_buffer,
 	.buffer_size = sizeof(ain0_buffer),
 	.resolution = 16,
 	.oversampling = 4, /* 16 times */
 	.calibrate = false,
-}
+};
 
 static void adc_work_handler(struct k_work *work)
 {

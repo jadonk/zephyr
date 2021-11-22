@@ -21,7 +21,7 @@ properties:
         as pull-up, active low.
 
     continuous_mode:
-      type: bool
+      type: int
       required: true
       description: if continuous_mode equal to false, the device is in single mode. true is in continuous_mode.
 

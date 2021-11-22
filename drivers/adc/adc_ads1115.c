@@ -117,7 +117,7 @@ static const struct adc_driver_api ads1115_api_funcs = {
 #ifdef CONFIG_ADC_ASYNC
 	.read_async = ads1115_read_async,
 #endif
-	.ref_internal = 6114,
+	.ref_internal = 4096,
 };
 
 static int ads1115_channel_setup(const struct device * dev,
@@ -344,8 +344,6 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 			} else {
 				samples++;
 				acc += result*result;
-				//LOG_DBG("read channel %d, result = %d, acc = %lld", channel,
-				//	result, acc);
 				if (samples >= needed) {
 					LOG_DBG("read channel %d, result = %d, acc = %ld", channel,
 						result, (long)acc);

@@ -132,7 +132,7 @@ static int ads1115_channel_setup(const struct device * dev,
 		return -ENOTSUP;
 	}
 
-	if (channel_cfg->reference != ADC_REF_EXTERNAL0) {
+	if (channel_cfg->reference != ADC_REF_INTERNAL) {
 		LOG_ERR("unsupported channel reference '%d'",
 			channel_cfg->reference);
 		return -ENOTSUP;

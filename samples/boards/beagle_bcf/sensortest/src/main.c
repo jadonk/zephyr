@@ -253,39 +253,6 @@ static void adc_work_handler(struct k_work *work)
 	__ASSERT(err == 0, "k_work_schedule() failed for adc_dwork: %d", r);
 
 	return;
-
-	/*
-	uint8_t count = 0;
-	struct sensor_value val[ADC_SAMPLING_CNT_MAX];
-	struct sensor_value val_rms = {0};
-	uint64_t sum_square = 0;
-	int r = 0;
-	uint8_t valid_data_cnt = 0;
-
-	// Sampling
-	for(count = 0; count < ADC_SAMPLING_CNT_MAX; count++)
-	{
-		sensor_sample_fetch(devices[ADC_0]);
-
-		sensor_channel_get(devices[ADC_0], SENSOR_CHAN_VOLTAGE, &val[count]);
-
-		//	valid_data_cnt
-		if(val[count].val1 != 0xffff)
-		{
-			valid_data_cnt++;
-			sum_square += val[count].val1 * val[count].val1;
-		}
-	}
-
-	//data_handler
-	val_rms.val1 = sqrt(sum_square/valid_data_cnt);
-
-	print_sensor_value(ADC_0, "ADC_0: ", &val_rms);
-	send_sensor_value();
-
-	r = k_work_schedule(&adc_dwork, K_MSEC(2500));
-	__ASSERT(r == 0, "k_work_schedule() failed for adc_dwork: %d", r);
-	*/
 }
 
 static void sensor_work_handler(struct k_work *work)

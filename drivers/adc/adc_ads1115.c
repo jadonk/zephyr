@@ -18,6 +18,7 @@
 #include <sys/util.h>
 #include <zephyr.h>
 #include <device.h>
+#include <math.h>
 
 LOG_MODULE_REGISTER(ads1115, CONFIG_ADC_LOG_LEVEL);
 //LOG_MODULE_REGISTER(ads1115, LOG_LEVEL_DBG);
@@ -88,10 +89,7 @@ struct ads1115_data {
 	uint8_t				differential;
 	bool				active;
 	uint8_t				active_channel;
-
-	uint16_t			oversample_count;
-	uint16_t			oversample_valid;
-	uint32_t			accumulator;
+	uint16_t			oversampling;
 
 	struct gpio_callback		gpio_cb;
 
@@ -211,6 +209,7 @@ static int ads1115_start_read(const struct device * dev,
 	}
 
 	data->buffer = sequence->buffer;
+	data->oversampling = sequence->oversampling;
 	adc_context_start_read(&data->ctx, sequence);
 
 	return adc_context_wait_for_completion(&data->ctx);
@@ -314,9 +313,16 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 	uint16_t result = 0;
 	uint8_t channel;
 	int err;
+	uint16_t needed;
+	uint16_t samples;
+	uint64_t acc;
 
 	while (true) {
 		k_sem_take(&data->sem, K_FOREVER);
+
+		acc = 0;
+		samples = 0;
+		needed = 1 << data->oversampling;
 
 		while (data->seq_channels) {
 			channel = find_lsb_set(data->seq_channels) - 1;
@@ -336,11 +342,24 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 				adc_context_complete(&data->ctx, err);
 				break;
 			} else {
-				LOG_DBG("read channel %d, result = %d", channel,
-					result);
+				samples++;
+				acc += result*result;
+				//LOG_DBG("read channel %d, result = %d, acc = %lld", channel,
+				//	result, acc);
+				if (samples >= needed) {
+					LOG_DBG("read channel %d, result = %d, acc = %ld", channel,
+						result, (long)acc);
+					if (needed > 1) {
+						acc /= samples;
+						*data->buffer++ = sqrt(acc);
+					} else {
+						*data->buffer++ = result;
+					}
+					WRITE_BIT(data->seq_channels, channel, 0);
 
-				*data->buffer++ = result;
-				WRITE_BIT(data->seq_channels, channel, 0);
+					acc = 0;
+					samples = 0;
+				}
 			}
 		}
 
@@ -418,7 +437,7 @@ static int ads1115_chan_change_with_start_conversion(struct ads1115_data * data,
 	ADS1115_CFG_MUX_SET(4 + channel);
 	ADS1115_CFG_OS_SET(1);
 
-	LOG_DBG("Writing to config reg 0x%02x", data->config_reg);
+	//LOG_DBG("Writing to config reg 0x%02x", data->config_reg);
 	err = ads1115_reg_write(data, ADS1115_REG_CONFIG, &data->config_reg);
 	if(err < 0)
 	{

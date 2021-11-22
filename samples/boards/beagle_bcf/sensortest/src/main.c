@@ -196,11 +196,13 @@ static void send_sensor_value()
 	outstr[0] = '\0';
 }
 
-/* Sampling frequency: 200Hz, 5ms
- * Sample window: 16 samples, 80ms, 12.5Hz
- * Data window: 32 RMS samples, 2.5s of data
+/* Sampling frequency: 250Hz, 4ms
+ * Oversample window: 16 samples, 64ms, 15.6Hz
+ * Data window: 32 RMS samples, 2s of data
  */
-uint16_t ain0_buffer[32];
+
+#define NUM_SAMPLES 32
+uint16_t ain0_buffer[NUM_SAMPLES];
 
 struct adc_channel_cfg ain0_channel_cfg = {
 	.gain = ADC_GAIN_1,
@@ -212,8 +214,7 @@ struct adc_channel_cfg ain0_channel_cfg = {
 
 const struct adc_sequence_options ain0_seq_options = {
 	.interval_us = 1000,
-	.extra_samplings = 0,
-	//.extra_samplings = 31,
+	.extra_samplings = NUM_SAMPLES-1,
 	.callback = NULL,
 	.user_data = NULL,
 };
@@ -224,7 +225,7 @@ struct adc_sequence sequence0 = {
 	.buffer = ain0_buffer,
 	.buffer_size = sizeof(ain0_buffer),
 	.resolution = 16,
-	.oversampling = 0,
+	.oversampling = 4,
 	.calibrate = false,
 };
 
@@ -240,7 +241,7 @@ static void adc_work_handler(struct k_work *work)
 	}
 
 	LOG_INF("ADC reading:");
-	for (uint8_t i = 0; i < 2; i+=2) {
+	for (uint8_t i = 0; i < 2*NUM_SAMPLES; i+=2) {
 		int32_t raw_value = ain0_buffer[i/2];
 		int32_t mv_value = raw_value;
 		adc_raw_to_millivolts(ADC_REF_MV, ADC_GAIN_1,
@@ -248,7 +249,7 @@ static void adc_work_handler(struct k_work *work)
 		LOG_INF(" %d: %d = %d mV", i/2, raw_value, mv_value);
 	}
 
-	err = k_work_schedule(&adc_dwork, K_MSEC(2500));
+	err = k_work_schedule(&adc_dwork, K_MSEC(5000));
 	__ASSERT(err == 0, "k_work_schedule() failed for adc_dwork: %d", r);
 
 	return;

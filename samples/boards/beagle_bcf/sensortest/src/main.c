@@ -19,6 +19,8 @@
 #include <net/socket.h>
 #include <sys/util.h>
 #include <random/rand32.h>
+#include <devicetree.h>
+#include <devicetree/io-channels.h>
 
 #include <math.h>
 
@@ -204,13 +206,14 @@ struct adc_channel_cfg ain0_channel_cfg = {
 	.gain = ADC_GAIN_1,
 	.reference = ADC_REF_INTERNAL,
 	.acquisition_time = ADC_ACQ_TIME_DEFAULT,
-	.channel_id = 1,
+	.channel_id = DT_IO_CHANNELS_INPUT_BY_IDX(DT_PATH(zephyr_user), 0),
 	.differential = 0,
 };
 
 const struct adc_sequence_options ain0_seq_options = {
 	.interval_us = 1000,
-	.extra_samplings = 31,
+	.extra_samplings = 0,
+	//.extra_samplings = 31,
 	.callback = NULL,
 	.user_data = NULL,
 };
@@ -221,13 +224,38 @@ struct adc_sequence sequence0 = {
 	.buffer = ain0_buffer,
 	.buffer_size = sizeof(ain0_buffer),
 	.resolution = 16,
-	.oversampling = 4, /* 16 times */
+	.oversampling = 0,
 	.calibrate = false,
 };
 
 static void adc_work_handler(struct k_work *work)
 {
+	int err;
+	const struct device * dev = devices[ADC_0];
 
+	err = adc_read(dev, &sequence0);
+	if (err != 0) {
+		printk("ADC reading failed with error %d.\n", err);
+		return;
+	}
+
+	printk("ADC reading:");
+	for (uint8_t i = 0; i < 2; i+=2) {
+		int32_t raw_value = ain0_buffer[i/2];
+		printk(" %d: %d", i/2, raw_value);
+		int32_t mv_value = raw_value;
+		adc_raw_to_millivolts(ADC_REF_MV, ADC_GAIN_1,
+			16, &mv_value);
+		printk(" = %d mV  ", mv_value);
+		printk("\n");
+	}
+
+	err = k_work_schedule(&adc_dwork, K_MSEC(2500));
+	__ASSERT(err == 0, "k_work_schedule() failed for adc_dwork: %d", r);
+
+	return;
+
+	/*
 	uint8_t count = 0;
 	struct sensor_value val[ADC_SAMPLING_CNT_MAX];
 	struct sensor_value val_rms = {0};
@@ -258,6 +286,7 @@ static void adc_work_handler(struct k_work *work)
 
 	r = k_work_schedule(&adc_dwork, K_MSEC(2500));
 	__ASSERT(r == 0, "k_work_schedule() failed for adc_dwork: %d", r);
+	*/
 }
 
 static void sensor_work_handler(struct k_work *work)

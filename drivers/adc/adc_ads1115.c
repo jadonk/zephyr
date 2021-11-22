@@ -37,13 +37,13 @@ LOG_MODULE_REGISTER(ads1115, CONFIG_ADC_LOG_LEVEL);
 enum average_method {
 	RMS = 0,
 	MEAN = 1,
-}
+};
 
 #define _B(n)		( 1<<(n) )
 #define _M(l)		( _B(l)-1 )
 #define _BM(o, l)	( _M(l)<<(o) )
 #define _BP(x, o, l)	( ((x)&_M(l)) << (o) )
-#define _BG(x, o, l)	( ((x)>>(o) & _M(l) )
+#define _BG(x, o, l)	( ((x)>>(o)) & _M(l) )
 #define _BS(y, x, o, l) \
 	( y = ((y) &~ _BM(o,l)) | _BP(x,o,l) )
 
@@ -68,43 +68,37 @@ enum average_method {
 
 struct ads1115_config {
 	struct i2c_dt_spec		bus;
-	uint8_t				channels;
 	struct gpio_dt_spec		int_gpio;
 	bool				continuous_mode;
-	uint8_t				oversampling;
 	enum average_method		avg_method;
+	uint16_t			threshold;
 };
 
 struct ads1115_data {
+	const struct ads1115_config *	cfg;
 	struct adc_context		ctx;
 	const struct device *		dev;
 	uint16_t *			buffer;
 	uint16_t *			repeat_buffer;
-	uint8_t				channels;
 	struct k_thread			thread;
 	struct k_sem			sem;
 	uint16_t			config_reg;
+	uint8_t				seq_channels;
+	uint8_t				differential;
+	bool				active;
+	uint8_t				active_channel;
 
-	uint8_t				oversample_count;
-	uint8_t				oversample_valid;
+	uint16_t			oversample_count;
+	uint16_t			oversample_valid;
 	uint32_t			accumulator;
 
 	struct gpio_callback		gpio_cb;
-	struct k_work 			sample_worker;
-	uint16_t			channel_index;
-	uint16_t 			value[ADS1115_NUM_CHANNELS];
-	uint8_t				device_index;
-	uint8_t				sample_count[ADS1115_NUM_CHANNELS];
-	uint8_t				valid_count[ADS1115_NUM_CHANNELS];
-	uint32_t			sum;
 
 	K_KERNEL_STACK_MEMBER(stack,
 			CONFIG_ADC_ADS1115_ACQUISITION_THREAD_STACK_SIZE);
 };
 
 static int ads1115_init(const struct device *dev);
-static void ads1115_gpio_callback(const struct device *dev,
-				  struct gpio_callback *cb, uint32_t pins);
 static int ads1115_channel_setup(const struct device *dev,
 				 const struct adc_channel_cfg *channel_cfg);
 static int ads1115_read(const struct device *dev,
@@ -112,20 +106,25 @@ static int ads1115_read(const struct device *dev,
 static int ads1115_read_async(const struct device *dev,
 			      const struct adc_sequence *sequence,
 			      struct k_poll_signal *async);
-{
+
+static int ads1115_reg_write(struct ads1115_data * data, uint8_t reg, uint16_t * val);
+static int ads1115_reg_read(struct ads1115_data * data, uint8_t reg, uint16_t * val);
+static int ads1115_chan_change_with_start_conversion(struct ads1115_data * data, uint8_t channel);
+static int ads1115_once_conversion_status_get(struct ads1115_data * data, int * status);
 
 static const struct adc_driver_api ads1115_api_funcs = {
 	.channel_setup = ads1115_channel_setup,
 	.read = ads1115_read,
+#ifdef CONFIG_ADC_ASYNC
 	.read_async = ads1115_read_async,
-	.ref_internal = 6114;
+#endif
+	.ref_internal = 6114,
 };
 
 static int ads1115_channel_setup(const struct device * dev,
 				 const struct adc_channel_cfg * channel_cfg)
 {
-	const struct ads1115_config * config = dev->config;
-	struct ads1115_data * data = dev->data;
+	/* const struct ads1115_config * config = dev->config; */
 
 	/* TODO */
 	if (channel_cfg->gain != ADC_GAIN_1) {
@@ -154,7 +153,7 @@ static int ads1115_channel_setup(const struct device * dev,
 		return -ENOTSUP;
 	}
 
-	if (channel_cfg->channel_id >= config->channels) {
+	if (channel_cfg->channel_id >= ADS1115_NUM_CHANNELS) {
 		LOG_ERR("unsupported channel id '%d'", channel_cfg->channel_id);
 		return -ENOTSUP;
 	}
@@ -162,15 +161,14 @@ static int ads1115_channel_setup(const struct device * dev,
 	return 0;
 }
 
-static int adc1115_validate_buffer_size(const struct device * dev,
+static int ads1115_validate_buffer_size(const struct device * dev,
 					const struct adc_sequence * sequence)
 {
-	const struct adc1115_config * config = dev->config;
 	uint8_t channels = 0;
 	size_t needed;
 	uint32_t mask;
 
-	for (mask = BIT(config->channels - 1); mask != 0; mask >>= 1) {
+	for (mask = BIT(ADS1115_NUM_CHANNELS - 1); mask != 0; mask >>= 1) {
 		if (mask & sequence->channels) {
 			channels++;
 		}
@@ -188,11 +186,10 @@ static int adc1115_validate_buffer_size(const struct device * dev,
 	return 0;
 }
 
-static int adc1115_start_read(const struct device * dev,
+static int ads1115_start_read(const struct device * dev,
 			      const struct adc_sequence * sequence)
 {
-	const struct adc1115_config * config = dev->config;
-	struct adc1115_data * data = dev->data;
+	struct ads1115_data * data = dev->data;
 	int err;
 
 	if (sequence->resolution != 16) {
@@ -200,7 +197,7 @@ static int adc1115_start_read(const struct device * dev,
 		return -ENOTSUP;
 	}
 
-	if (find_msb_set(sequence->channels) > config->channels) {
+	if (find_msb_set(sequence->channels) > ADS1115_NUM_CHANNELS) {
 		LOG_ERR("unsupported channels in mask: 0x%08x",
 			sequence->channels);
 		return -ENOTSUP;
@@ -240,9 +237,9 @@ static int ads1115_read(const struct device * dev,
 
 static void adc_context_start_sampling(struct adc_context * ctx)
 {
-	struct ads1115_data *data = CONTAINER_OF(ctx, struct ads1115_data, ctx);
+	struct ads1115_data * data = CONTAINER_OF(ctx, struct ads1115_data, ctx);
 
-	data->channels = ctx->sequence.channels;
+	data->seq_channels = ctx->sequence.channels;
 	data->repeat_buffer = data->buffer;
 
 	k_sem_give(&data->sem);
@@ -263,9 +260,10 @@ static void adc_context_update_buffer_pointer(struct adc_context * ctx,
 static int ads1115_read_channel(struct ads1115_data * data, uint8_t channel,
 				uint16_t *result)
 {
-	bool status = false;
+	int status = false;
+	int err = 0;
 
-	if(channel > ADS1115_AIN_INDEX_MAX) {
+	if(channel >= ADS1115_NUM_CHANNELS) {
 		LOG_ERR("Invalid sampling channel");
 		return -EINVAL;
 	}
@@ -278,12 +276,12 @@ static int ads1115_read_channel(struct ads1115_data * data, uint8_t channel,
 		}
 
 		data->active = true;
-		data->channel = channel;
+		data->active_channel = channel;
 	}
 
-	if(channel != data->channel) {
+	if(channel != data->active_channel) {
 		LOG_ERR("Conversion active on channel %d, but requested on %d",
-			data->channel, channel);
+			data->active_channel, channel);
 		return -EBUSY;
 	}
 
@@ -297,7 +295,7 @@ static int ads1115_read_channel(struct ads1115_data * data, uint8_t channel,
 		return -EAGAIN;
 	}
 
-	err = ads1115_reg_read(data, ADS1115_REG_CONVERSION, &result);
+	err = ads1115_reg_read(data, ADS1115_REG_CONVERSION, result);
 	if(err) {
 		LOG_ERR("Error fetching sample");
 		return err;
@@ -315,8 +313,8 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 	while (true) {
 		k_sem_take(&data->sem, K_FOREVER);
 
-		while (data->channels) {
-			channel = find_lsb_set(data->channels) - 1;
+		while (data->seq_channels) {
+			channel = find_lsb_set(data->seq_channels) - 1;
 
 			LOG_DBG("Reading channel %d", channel);
 
@@ -337,7 +335,7 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 					result);
 
 				*data->buffer++ = result;
-				WRITE_BIT(data->channels, channel, 0);
+				WRITE_BIT(data->seq_channels, channel, 0);
 			}
 		}
 
@@ -371,10 +369,10 @@ static int ads1115_reg_write(struct ads1115_data * data, uint8_t reg, uint16_t *
 	wr_buff[1] = (wr_value >> 8) & 0xff;
 	wr_buff[2] = wr_value & 0xff;
 
-	err = i2c_write_dt(data->bus, wr_buff, 3);
+	err = i2c_write_dt(&data->cfg->bus, wr_buff, 3);
 
 	if (err < 0) {
-		LOG_ERR("0x%02x ads1115_reg_write reg 0x%02x error %d",p_data->i2c_slave_addr,reg,err);
+		LOG_ERR("Error writing %d to reg 0x%02x", err, reg);
 		return err;
 	}
 
@@ -390,9 +388,9 @@ static int ads1115_reg_read(struct ads1115_data * data, uint8_t reg, uint16_t * 
 
 	wr_buff[0] = reg;
 
-	err = i2c_write_read_dt(data->bus, wr_buff, 1, rd_buff, 2);
+	err = i2c_write_read_dt(&data->cfg->bus, wr_buff, 1, rd_buff, 2);
 	if (err < 0) {
-		LOG_ERR("0x%02x ads1115_reg_read reg 0x%02x error %d",p_data->i2c_slave_addr,reg,err);
+		LOG_ERR("Error writing %d to reg 0x%02x", err, reg);
 		return err;
 	}
 
@@ -406,9 +404,9 @@ static int ads1115_chan_change_with_start_conversion(struct ads1115_data * data,
 {
 	int err = 0;
 
-	if(ainx_index > ADS1115_AIN_INDEX_MAX)
+	if(channel >= ADS1115_NUM_CHANNELS)
 	{
-		LOG_ERR("unvalid ainx_index %d",ainx_index);
+		LOG_ERR("Invalid channel %d", channel);
 		return -EINVAL;
 	}
 
@@ -424,17 +422,17 @@ static int ads1115_chan_change_with_start_conversion(struct ads1115_data * data,
 	return 0;
 }
 
-static int ads1115_once_conversion_status_get(struct ads1115_data * data, bool * status)
+static int ads1115_once_conversion_status_get(struct ads1115_data * data, int * status)
 {
 	int err = 0;
 
-	err = ads1115_reg_read(p_data, ADS1115_REG_CONFIG, &data->config_reg);
+	err = ads1115_reg_read(data, ADS1115_REG_CONFIG, &data->config_reg);
 	if(err < 0)
 	{
 		return -EINVAL;
 	}
 
-	*status = (ADS1115_CFG_OS_GET() ? true : false);
+	*status = ADS1115_CFG_OS_GET();
 
 	return 0;
 }
@@ -443,12 +441,13 @@ static int ads1115_init(const struct device *dev)
 {
 	const struct ads1115_config * config = dev->config;
 	struct ads1115_data * data = dev->data;
-
 	int err = 0;
+
+	data->cfg = config;
 
 	k_sem_init(&data->sem, 0, 1);
 
-	if (!i2c_is_ready(&config->bus)) {
+	if (!device_is_ready(config->bus.bus)) {
 		LOG_ERR("I2C bus is not ready");
 		return -ENODEV;
 	}
@@ -456,7 +455,7 @@ static int ads1115_init(const struct device *dev)
 	/* Try 100ms delay at the start */
 	k_msleep(100);
 
-	err = ads1115_reg_read(p_ads1115_data, ADS1115_REG_CONFIG, &data->config_reg);
+	err = ads1115_reg_read(data, ADS1115_REG_CONFIG, &data->config_reg);
 	if(err < 0)
 	{
 		LOG_ERR("Unable to read config register");
@@ -466,13 +465,16 @@ static int ads1115_init(const struct device *dev)
 	ADS1115_CFG_OS_SET(0);		/* OS = No conversion start */
 	ADS1115_CFG_MUX_SET(4);		/* MUX = 100b: AINP = AIN0 and AINN = GND */
 	ADS1115_CFG_PGA_SET(0);		/* PGA = 000b: FSR = 6.144V */
-	ADS1115_CFG_MODE_SET(0);	/* MODE = 0: Continuous-conversion mode */
+	if(config->continuous_mode)
+		ADS1115_CFG_MODE_SET(0);/* MODE = 0: Continuous-conversion mode */
+	else
+		ADS1115_CFG_MODE_SET(1);/* MODE = 1: Single-shot mode or power-down state */
 	ADS1115_CFG_DR_SET(5);		/* DR = 101b: 250 samples per second */
 	ADS1115_CFG_CM_SET(0);		/* COMP_MODE = 0: Traditional comparator */
 	ADS1115_CFG_CP_SET(1);		/* COMP_POL = 1: Active high polarity */
 	ADS1115_CFG_CL_SET(0);		/* COMP_LAT = 0: Nonlatching comparator */
 	ADS1115_CFG_CQ_SET(3);		/* COMP_QUE = 11b: Disable comparator */
-	err = ads1115_reg_write(p_ads1115_data, ADS1115_REG_CONFIG, &data->config_reg);
+	err = ads1115_reg_write(data, ADS1115_REG_CONFIG, &data->config_reg);
 	if(err < 0)
 	{
 		LOG_ERR("Unable to write config register");
@@ -496,18 +498,18 @@ static int ads1115_init(const struct device *dev)
 
 #define DEFINE_ADS1115(inst)						\
 									\
-static struct ads1115_data ads1115_data_##inst = {			\
-	ADC_CONTEXT_INIT_TIMER(ads1115_data##inst, ctx), 		\
-	ADC_CONTEXT_INIT_LOCK(ads1115_data##inst, ctx),			\
-	ADC_CONTEXT_INIT_SYNC(ads1115_data##inst, ctx),			\
-};									\
-static const struct ads1115_config ads1115_data_##inst = {		\
+static const struct ads1115_config ads1115_config_##inst = {		\
 	.bus = I2C_DT_SPEC_INST_GET(inst),				\
-	.channels = 4							\
 	.continuous_mode = ADS1115_PROP(inst,continuous_mode),		\
-	.oversampling = ADS1115_PROP(inst,oversampling),		\
-	.avg_method = ADS1115_PROP(inst,avg_method),			\
 	.int_gpio = GPIO_DT_SPEC_GET_OR(ADS1115_DEV(inst), int_gpios, {.port=NULL}),	\
+};									\
+									\
+static struct ads1115_data ads1115_data_##inst = {			\
+	ADC_CONTEXT_INIT_TIMER(ads1115_data_##inst, ctx), 		\
+	ADC_CONTEXT_INIT_LOCK(ads1115_data_##inst, ctx),		\
+	ADC_CONTEXT_INIT_SYNC(ads1115_data_##inst, ctx),		\
+	.active = false,						\
+	.cfg = &ads1115_config_##inst,					\
 };									\
 									\
 DEVICE_DT_INST_DEFINE(inst,						\
@@ -518,5 +520,9 @@ DEVICE_DT_INST_DEFINE(inst,						\
 		POST_KERNEL,						\
 		CONFIG_SENSOR_INIT_PRIORITY,				\
 		&ads1115_api_funcs);
+
+/*
+	.avg_method = ADS1115_PROP(inst,avg_method),			\
+*/
 
 DT_INST_FOREACH_STATUS_OKAY(DEFINE_ADS1115)

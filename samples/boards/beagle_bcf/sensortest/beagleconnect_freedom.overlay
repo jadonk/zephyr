@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/ {
+	zephyr,user {
+		io-channels = <&adsadc0 0>;
+		io-channel-names = "AIN1";
+	};
+};
+
 &i2c0 {
 	// Grove module defaults to 0x76
 	// Environment Click defaults to 0x77
@@ -25,18 +32,19 @@
 		label = "HM3301-PARTICULATE";
 	};
 
-	//0x48,0x49,0x4b
-	adc0: ads1115_0@48 {
+	adsadc0: ads1115_0@48 {
 		compatible = "ti,ads1115";
+		#io-channel-cells = <3>;
 		reg = <0x48>;
-		sampling_channel = <0>;
 		/* sample_rate = <> */
-		/* oversampling = <> */
 		continuous_mode = <0>;
+		oversampling = <16>;
+		avg_method = "rms";
 		label = "ADS1115-ADC0";
 	};
 
-	adc1: ads1115_1@49 {
+/*
+	adsadc1: ads1115_1@49 {
 		compatible = "ti,ads1115";
 		reg = <0x49>;
 		sampling_channel = <1>;
@@ -44,11 +52,12 @@
 		label = "ADS1115-ADC1";
 	};
 
-	adc2: ads1115_2@4b {
+	adsadc2: ads1115_2@4b {
 		compatible = "ti,ads1115";
 		reg = <0x4b>;
 		sampling_channel = <2>;
 		continuous_mode = <0>;
 		label = "ADS1115-ADC2";
 	};
+*/
 };

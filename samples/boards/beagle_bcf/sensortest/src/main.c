@@ -10,7 +10,7 @@
 #include <drivers/gpio.h>
 #include <drivers/led.h>
 #include <drivers/sensor.h>
-#include <drivers/spi.h>
+#include <drivers/adc.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -27,6 +27,12 @@
 LOG_MODULE_REGISTER(sensortest);
 
 #define BLINK_MS 500
+
+#define ADC_NUM_CHANNELS	DT_PROP_LEN(DT_PATH(zephyr_user), io_channels)
+#define ADC_NODE		DT_PHANDLE(DT_PATH(zephyr_user), io_channels)
+#define ADC_REFERENCE		ADC_REF_INTERNAL
+#define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
+#define ADC_REF_MV		30720  /* 6.144V * 5x divider * 1000mV/V */
 
 #define MAX_STR_LEN 200
 static char outstr[MAX_STR_LEN];
@@ -95,9 +101,9 @@ static const enum api apis[NUM_DEVICES] = {
 	SENSOR_API, /* ENVIRONMENT */
 	SENSOR_API, /* AIRQUALITY */
 	SENSOR_API, /* PARTICULATE */
-	SENSOR_API, /* ADC_0 */
-	SENSOR_API, /* ADC_1 */
-	SENSOR_API, /* ADC_2 */
+	ADC_API, /* ADC_0 */
+	ADC_API, /* ADC_1 */
+	ADC_API, /* ADC_2 */
 };
 
 static struct device *devices[NUM_DEVICES];
@@ -191,9 +197,35 @@ static void send_sensor_value()
  * Sample window: 16 samples, 80ms, 12.5Hz
  * Data window: 32 RMS samples, 2.5s of data
  */
+uint16_t ain0_buffer[32];
+
+struct adc_channel_cfg ain0_channel_cfg = {
+	.gain = ADC_GAIN_1,
+	.reference = ADC_REF_INTERNAL,
+	.acquisition_time = ADC_ACQ_TIME_DEFAULT,
+	.channel_id = 1,
+	.differential = 0,
+};
+
+const struct adc_sequence_options ain0_seq_options = {
+	.interval_us = 1000,
+	.extra_samplings = 31,
+	.callback = NULL,
+	.user_data = NULL,
+};
+
+struct adc_sequence sequence0 = {
+	.options = ain0_seq_options,
+	.channels = 1,
+	.buffer = ain0_buffer,
+	.buffer_size = sizeof(ain0_buffer),
+	.resolution = 16,
+	.oversampling = 4, /* 16 times */
+	.calibrate = false,
+}
+
 static void adc_work_handler(struct k_work *work)
 {
-	#define ADC_SAMPLING_CNT_MAX	16
 
 	uint8_t count = 0;
 	struct sensor_value val[ADC_SAMPLING_CNT_MAX];
@@ -443,6 +475,8 @@ void main(void)
 
 	if(devices[ADC_0])
 	{
+		adc_channel_setup(devices[ADC_0], &ain0_channel_cfg);
+
 		/* setup timer-driven ADC event */
 		k_work_init_delayable(&adc_dwork, adc_work_handler);
 		r = k_work_schedule(&adc_dwork, K_MSEC(2500));

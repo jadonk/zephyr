@@ -11,11 +11,6 @@ properties:
     "#io-channel-cells":
       const: 1
 
-    continuous_mode:
-      type: bool
-      required: true
-      description: if continuous_mode equal to false, the device is in single mode. true is in continuous_mode.
-
     int_gpios:
       type: phandle-array
       required: false
@@ -25,10 +20,23 @@ properties:
         connected directly the MCU pin should be configured as pull-up
         as pull-up, active low.
 
+    continuous_mode:
+      type: bool
+      required: true
+      description: if continuous_mode equal to false, the device is in single mode. true is in continuous_mode.
+
     oversampling:
       type: int
       required: false
       description: number of samples to grab back-to-back and average
+
+    avg_method:
+      type: string
+      required: false
+      enum:
+        - "rms"
+        - "mean"
+      description: method for averaging oversamples
 
 io-channel-cells:
     - channel

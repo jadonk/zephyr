@@ -34,7 +34,7 @@ LOG_MODULE_REGISTER(sensortest);
 #define ADC_NODE		DT_PHANDLE(DT_PATH(zephyr_user), io_channels)
 #define ADC_REFERENCE		ADC_REF_INTERNAL
 #define ADC_ACQUISITION_TIME	ADC_ACQ_TIME_DEFAULT
-#define ADC_REF_MV		49152  /* 4.096V * 12x divider * 1000mV/V */
+#define ADC_REF_MV		4096	//49152  /* 4.096V * 12x divider * 1000mV/V */
 
 #define MAX_STR_LEN 200
 static char outstr[MAX_STR_LEN];
@@ -205,7 +205,7 @@ static void send_sensor_value()
 uint16_t ain0_buffer[NUM_SAMPLES];
 
 struct adc_channel_cfg ain0_channel_cfg = {
-	.gain = ADC_GAIN_1,
+	.gain = ADC_GAIN_1_6,
 	.reference = ADC_REF_INTERNAL,
 	.acquisition_time = ADC_ACQ_TIME_DEFAULT,
 	.channel_id = DT_IO_CHANNELS_INPUT_BY_IDX(DT_PATH(zephyr_user), 0),
@@ -244,8 +244,8 @@ static void adc_work_handler(struct k_work *work)
 	for (uint8_t i = 0; i < 2*NUM_SAMPLES; i+=2) {
 		int32_t raw_value = ain0_buffer[i/2];
 		int32_t mv_value = raw_value;
-		adc_raw_to_millivolts(ADC_REF_MV, ADC_GAIN_1,
-			16, &mv_value);
+		adc_raw_to_millivolts(ADC_REF_MV, ADC_GAIN_1_6,
+			15, &mv_value);
 		LOG_INF(" %d: %d = %d mV", i/2, raw_value, mv_value);
 	}
 

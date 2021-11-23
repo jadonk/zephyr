@@ -124,13 +124,13 @@ static int ads1115_channel_setup(const struct device * dev,
 				 const struct adc_channel_cfg * channel_cfg)
 {
 	/* const struct ads1115_config * config = dev->config; */
-
+#if 0
 	/* TODO */
 	if (channel_cfg->gain != ADC_GAIN_1) {
 		LOG_ERR("unsupported channel gain '%d'", channel_cfg->gain);
 		return -ENOTSUP;
 	}
-
+#endif
 	if (channel_cfg->reference != ADC_REF_INTERNAL) {
 		LOG_ERR("unsupported channel reference '%d'",
 			channel_cfg->reference);

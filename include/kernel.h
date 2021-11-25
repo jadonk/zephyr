@@ -5313,10 +5313,7 @@ extern void *k_aligned_alloc(size_t align, size_t size);
  *
  * @return Address of the allocated memory if successful; otherwise NULL.
  */
-static inline void *k_malloc(size_t size)
-{
-	return k_aligned_alloc(sizeof(void *), size);
-}
+extern void *k_malloc(size_t size);
 
 /**
  * @brief Free memory allocated from heap.

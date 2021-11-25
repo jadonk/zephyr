@@ -84,7 +84,6 @@ static uint32_t ieee802154_cc13xx_overrides_sub_ghz[] = {
 	ADI_REG_OVERRIDE(0, 12, 0xF8),
 	(uint32_t)0xFFFFFFFF
 };
-#endif
 
 /* Radio setup command for CC1312R / CC1352R */
 static volatile rfc_CMD_PROP_RADIO_DIV_SETUP_t iee802154_cc13xx_subg_radio_div_setup = {

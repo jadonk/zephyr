@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-add_subdirectory_ifdef(CONFIG_ADS1115		ads1115)
 add_subdirectory_ifdef(CONFIG_ADT7420		adt7420)
 add_subdirectory_ifdef(CONFIG_ADXL345		adxl345)
 add_subdirectory_ifdef(CONFIG_ADXL362		adxl362)
@@ -71,7 +70,6 @@ add_subdirectory_ifdef(CONFIG_MPU6050		mpu6050)
 add_subdirectory_ifdef(CONFIG_MS5607		ms5607)
 add_subdirectory_ifdef(CONFIG_MS5837		ms5837)
 add_subdirectory_ifdef(CONFIG_OPT3001		opt3001)
-add_subdirectory_ifdef(CONFIG_HDC20X0		hdc20x0)
 add_subdirectory_ifdef(CONFIG_PMS7003		pms7003)
 add_subdirectory_ifdef(CONFIG_QDEC_NRFX		qdec_nrfx)
 add_subdirectory_ifdef(CONFIG_QDEC_SAM		qdec_sam)

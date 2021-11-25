@@ -58,6 +58,13 @@ typedef void (*k_thread_entry_t)(void *p1, void *p2, void *p3);
  */
 static inline uint32_t arch_k_cycle_get_32(void);
 
+/**
+ * Obtain the current cycle count, in units that are hardware-specific
+ *
+ * @see k_cycle_get_64()
+ */
+static inline uint64_t arch_k_cycle_get_64(void);
+
 /** @} */
 
 
@@ -190,7 +197,7 @@ void arch_cpu_atomic_idle(unsigned int key);
 /**
  * Per-cpu entry function
  *
- * @param context parameter, implementation specific
+ * @param data context parameter, implementation specific
  */
 typedef FUNC_NORETURN void (*arch_cpustart_t)(void *data);
 
@@ -216,6 +223,14 @@ typedef FUNC_NORETURN void (*arch_cpustart_t)(void *data);
  */
 void arch_start_cpu(int cpu_num, k_thread_stack_t *stack, int sz,
 		    arch_cpustart_t fn, void *arg);
+
+/**
+ * @brief Return CPU power status
+ *
+ * @param cpu_num Integer number of the CPU
+ */
+bool arch_cpu_active(int cpu_num);
+
 /** @} */
 
 
@@ -249,6 +264,15 @@ static inline bool arch_irq_unlocked(unsigned int key);
 
 /**
  * Disable the specified interrupt line
+ *
+ * @note: The behavior of interrupts that arrive after this call
+ * returns and before the corresponding call to arch_irq_enable() is
+ * undefined.  The hardware is not required to latch and deliver such
+ * an interrupt, though on some architectures that may work.  Other
+ * architectures will simply lose such an interrupt and never deliver
+ * it.  Many drivers and subsystems are not tolerant of such dropped
+ * interrupts and it is the job of the application layer to ensure
+ * that behavior remains correct.
  *
  * @see irq_disable()
  */
@@ -600,19 +624,6 @@ void arch_mem_domain_partition_remove(struct k_mem_domain *domain,
  */
 void arch_mem_domain_partition_add(struct k_mem_domain *domain,
 				   uint32_t partition_id);
-
-/**
- * @brief Remove the memory domain
- *
- * Architecture-specific hook to manage internal data structures or hardware
- * state when a memory domain has been destroyed.
- *
- * Thread assignments to the memory domain are only cleared after this function
- * runs.
- *
- * @param domain The memory domain structure which needs to be deleted.
- */
-void arch_mem_domain_destroy(struct k_mem_domain *domain);
 #endif /* CONFIG_ARCH_MEM_DOMAIN_SYNCHRONOUS_API */
 
 /**
@@ -644,6 +655,21 @@ void arch_mem_domain_destroy(struct k_mem_domain *domain);
  * @return nonzero if the permissions don't match.
  */
 int arch_buffer_validate(void *addr, size_t size, int write);
+
+/**
+ * Get the optimal virtual region alignment to optimize the MMU table layout
+ *
+ * Some MMU HW requires some region to be aligned to some of the intermediate
+ * block alignment in order to reduce table usage.
+ * This call returns the optimal virtual address alignment in order to permit
+ * such optimization in the following MMU mapping call.
+ *
+ * @param[in] phys Physical address of region to be mapped, aligned to MMU_PAGE_SIZE
+ * @param[in] size Size of region to be mapped, aligned to MMU_PAGE_SIZE
+ *
+ * @retval alignment to apply on the virtual address of this region
+ */
+size_t arch_virt_region_align(uintptr_t phys, size_t size);
 
 /**
  * Perform a one-way transition from supervisor to kernel mode.
@@ -816,40 +842,101 @@ void arch_gdb_step(void);
  * @{
  */
 
-#ifdef CONFIG_CACHE_FLUSHING
+#if defined(CONFIG_CACHE_MANAGEMENT) && defined(CONFIG_HAS_ARCH_CACHE)
 /**
  *
- * @brief Flush d-cache lines to main memory
+ * @brief Enable d-cache
  *
- * @see sys_cache_flush
+ * @see arch_dcache_enable
  */
-void arch_dcache_flush(void *addr, size_t size);
+void arch_dcache_enable(void);
 
 /**
  *
- * @brief Invalidate d-cache lines
+ * @brief Disable d-cache
  *
- * @see sys_cache_invd
+ * @see arch_dcache_disable
  */
-void arch_dcache_invd(void *addr, size_t size);
+void arch_dcache_disable(void);
 
-#ifndef CONFIG_CACHE_LINE_SIZE
+/**
+ *
+ * @brief Enable i-cache
+ *
+ * @see arch_icache_enable
+ */
+void arch_icache_enable(void);
+
+/**
+ *
+ * @brief Enable i-cache
+ *
+ * @see arch_dcache_disable
+ */
+void arch_dcache_disable(void);
+
+/**
+ *
+ * @brief Write-back / Invalidate / Write-back + Invalidate all d-cache
+ *
+ * @see arch_dcache_all
+ */
+int arch_dcache_all(int op);
+
+/**
+ *
+ * @brief Write-back / Invalidate / Write-back + Invalidate d-cache lines
+ *
+ * @see arch_dcache_range
+ */
+int arch_dcache_range(void *addr, size_t size, int op);
+
+/**
+ *
+ * @brief Write-back / Invalidate / Write-back + Invalidate all i-cache
+ *
+ * @see arch_icache_all
+ */
+int arch_icache_all(int op);
+
+/**
+ *
+ * @brief Write-back / Invalidate / Write-back + Invalidate i-cache lines
+ *
+ * @see arch_icache_range
+ */
+int arch_icache_range(void *addr, size_t size, int op);
+
+#ifdef CONFIG_DCACHE_LINE_SIZE_DETECT
 /**
  *
  * @brief Get d-cache line size
  *
- * @see sys_cache_line_size_get
+ * @see sys_cache_data_line_size_get
  */
-size_t arch_cache_line_size_get(void);
-#endif
-#endif
+size_t arch_dcache_line_size_get(void);
+#endif /* CONFIG_DCACHE_LINE_SIZE_DETECT */
+
+#ifdef CONFIG_ICACHE_LINE_SIZE_DETECT
+/**
+ *
+ * @brief Get i-cache line size
+ *
+ * @see sys_cache_instr_line_size_get
+ */
+size_t arch_icache_line_size_get(void);
+#endif /* CONFIG_ICACHE_LINE_SIZE_DETECT */
+
+#endif /* CONFIG_CACHE_MANAGEMENT && CONFIG_HAS_ARCH_CACHE */
+
 /** @} */
 
 #ifdef CONFIG_TIMING_FUNCTIONS
 #include <timing/types.h>
 
 /**
- * @ingroup arch-interface timing_api
+ * @ingroup arch-timing
+ * @{
  */
 
 /**
@@ -944,7 +1031,7 @@ uint64_t arch_timing_cycles_to_ns_avg(uint64_t cycles, uint32_t count);
  */
 uint32_t arch_timing_freq_get_mhz(void);
 
-/* @} */
+/** @} */
 
 #endif /* CONFIG_TIMING_FUNCTIONS */
 

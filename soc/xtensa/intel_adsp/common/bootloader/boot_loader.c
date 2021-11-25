@@ -15,6 +15,7 @@
 #include <soc/shim.h>
 #include <adsp/io.h>
 #include <soc.h>
+#include <arch/xtensa/cache.h>
 #include "manifest.h"
 
 #if CONFIG_SOC_INTEL_S1000
@@ -27,6 +28,7 @@ extern void __start(void);
 
 #if !defined(CONFIG_SOC_INTEL_S1000)
 #define MANIFEST_SEGMENT_COUNT 3
+#undef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 
 static inline void idelay(int n)
 {
@@ -66,10 +68,11 @@ static inline void bmemcpy(void *dest, void *src, size_t bytes)
 	uint32_t *s = src;
 	int i;
 
+	z_xtensa_cache_inv(src, bytes);
 	for (i = 0; i < (bytes >> 2); i++)
 		d[i] = s[i];
 
-	SOC_DCACHE_FLUSH(dest, bytes);
+	z_xtensa_cache_flush(dest, bytes);
 }
 
 /* bzero used by bootloader */
@@ -81,7 +84,7 @@ static inline void bbzero(void *dest, size_t bytes)
 	for (i = 0; i < (bytes >> 2); i++)
 		d[i] = 0;
 
-	SOC_DCACHE_FLUSH(dest, bytes);
+	z_xtensa_cache_flush(dest, bytes);
 }
 
 static void parse_module(struct sof_man_fw_header *hdr,
@@ -96,12 +99,12 @@ static void parse_module(struct sof_man_fw_header *hdr,
 		switch (mod->segment[i].flags.r.type) {
 		case SOF_MAN_SEGMENT_TEXT:
 		case SOF_MAN_SEGMENT_DATA:
-			bias = (mod->segment[i].file_offset -
-				SOF_MAN_ELF_TEXT_OFFSET);
+			bias = mod->segment[i].file_offset -
+				SOF_MAN_ELF_TEXT_OFFSET;
 
 			/* copy from IMR to SRAM */
 			bmemcpy((void *)mod->segment[i].v_base_addr,
-				(void *)((int)hdr + bias),
+				(uint8_t *)hdr + bias,
 				mod->segment[i].flags.r.length *
 				HOST_PAGE_SIZE);
 			break;
@@ -125,6 +128,7 @@ static void parse_module(struct sof_man_fw_header *hdr,
 #define MAN_SKIP_ENTRIES 1
 #endif
 
+#ifdef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 static uint32_t get_fw_size_in_use(void)
 {
 	struct sof_man_fw_desc *desc =
@@ -136,8 +140,8 @@ static uint32_t get_fw_size_in_use(void)
 
 	/* Calculate fw size passed in BASEFW module in MANIFEST */
 	for (i = MAN_SKIP_ENTRIES; i < hdr->num_module_entries; i++) {
-		mod = (struct sof_man_module *)((char *)desc +
-						SOF_MAN_MODULE_OFFSET(i));
+		mod = desc->man_module + i;
+
 		if (strcmp((char *)mod->name, "BASEFW"))
 			continue;
 		for (i = 0; i < MANIFEST_SEGMENT_COUNT; i++) {
@@ -153,6 +157,7 @@ static uint32_t get_fw_size_in_use(void)
 
 	return fw_size_in_use;
 }
+#endif
 
 /* parse FW manifest and copy modules */
 static void parse_manifest(void)
@@ -163,10 +168,13 @@ static void parse_manifest(void)
 	struct sof_man_module *mod;
 	int i;
 
+	z_xtensa_cache_inv(hdr, sizeof(*hdr));
+
 	/* copy module to SRAM  - skip bootloader module */
 	for (i = MAN_SKIP_ENTRIES; i < hdr->num_module_entries; i++) {
+		mod = desc->man_module + i;
 
-		mod = (void *)((uintptr_t)desc + SOF_MAN_MODULE_OFFSET(i));
+		z_xtensa_cache_inv(mod, sizeof(*mod));
 		parse_module(hdr, mod);
 	}
 }
@@ -249,18 +257,18 @@ static uint32_t hp_sram_power_on_memory(uint32_t memory_size)
 	/* calculate total number of used SRAM banks (EBB)
 	 * to power up only necessary banks
 	 */
-	ebb_in_use = (!(memory_size % SRAM_BANK_SIZE)) ?
-	(memory_size / SRAM_BANK_SIZE) :
-	(memory_size / SRAM_BANK_SIZE) + 1;
+	ebb_in_use = ceiling_fraction(memory_size, SRAM_BANK_SIZE);
 
 	return hp_sram_pm_banks(ebb_in_use);
 }
 
+#ifdef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 static int32_t hp_sram_power_off_unused_banks(uint32_t memory_size)
 {
 	/* keep enabled only memory banks used by FW */
 	return hp_sram_power_on_memory(memory_size);
 }
+#endif
 
 static int32_t hp_sram_init(void)
 {
@@ -269,10 +277,12 @@ static int32_t hp_sram_init(void)
 
 #else
 
+#ifdef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 static int32_t hp_sram_power_off_unused_banks(uint32_t memory_size)
 {
 	return 0;
 }
+#endif
 
 static uint32_t hp_sram_init(void)
 {
@@ -294,8 +304,8 @@ static int32_t lp_sram_init(void)
 	/* add some delay before writing power registers */
 	idelay(delay_count);
 
-	lspgctl_value = shim_read(SHIM_LSPGISTS);
-	shim_write(SHIM_LSPGCTL, lspgctl_value & ~LPSRAM_MASK(0));
+	lspgctl_value = io_reg_read(LSPGISTS);
+	io_reg_write(LSPGCTL, lspgctl_value & ~LPSRAM_MASK(0));
 
 	/* add some delay before checking the status */
 	idelay(delay_count);
@@ -340,7 +350,9 @@ void boot_master_core(void)
 	/* parse manifest and copy modules */
 	parse_manifest();
 
+#ifdef UNUSED_MEMORY_CALCULATION_HAS_BEEN_FIXED
 	hp_sram_power_off_unused_banks(get_fw_size_in_use());
+#endif
 #endif
 	/* now call SOF entry */
 	__start();

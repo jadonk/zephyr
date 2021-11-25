@@ -10,6 +10,7 @@
 #include <stm32_ll_bus.h>
 #include <stm32_ll_rcc.h>
 #include <stm32_ll_pwr.h>
+#include <stm32_ll_system.h>
 #include <drivers/clock_control.h>
 #include <drivers/clock_control/stm32_clock_control.h>
 #include <drivers/timer/system_timer.h>
@@ -54,11 +55,11 @@ static void lptim_irq_handler(const struct device *unused)
 
 		k_spinlock_key_t key = k_spin_lock(&lock);
 
-		/* do not change ARR yet, z_clock_announce will do */
+		/* do not change ARR yet, sys_clock_announce will do */
 		LL_LPTIM_ClearFLAG_ARRM(LPTIM1);
 
 		/* increase the total nb of autoreload count
-		 * used in the z_timer_cycle_get_32() function.
+		 * used in the sys_clock_cycle_get_32() function.
 		 * Reading the CNT register gives a reliable value
 		 */
 		uint32_t autoreload = LL_LPTIM_GetAutoReload(LPTIM1) + 1;
@@ -72,18 +73,23 @@ static void lptim_irq_handler(const struct device *unused)
 				* CONFIG_SYS_CLOCK_TICKS_PER_SEC)
 				/ LPTIM_CLOCK;
 
-		z_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL)
+		sys_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL)
 				? dticks : (dticks > 0));
 	}
 }
 
-int z_clock_driver_init(const struct device *device)
+int sys_clock_driver_init(const struct device *dev)
 {
-	ARG_UNUSED(device);
+	ARG_UNUSED(dev);
 
 	/* enable LPTIM clock source */
+#if defined(LL_APB1_GRP1_PERIPH_LPTIM1)
 	LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_LPTIM1);
 	LL_APB1_GRP1_ReleaseReset(LL_APB1_GRP1_PERIPH_LPTIM1);
+#elif defined(LL_APB3_GRP1_PERIPH_LPTIM1)
+	LL_APB3_GRP1_EnableClock(LL_APB3_GRP1_PERIPH_LPTIM1);
+	LL_SRDAMR_GRP1_EnableAutonomousClock(LL_SRDAMR_GRP1_PERIPH_LPTIM1AMEN);
+#endif
 
 #if defined(CONFIG_STM32_LPTIM_CLOCK_LSI)
 	/* enable LSI clock */
@@ -104,6 +110,7 @@ int z_clock_driver_init(const struct device *device)
 	/* Enable the power interface clock */
 	LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
 #endif /* LL_APB1_GRP1_PERIPH_PWR */
+
 	/* enable backup domain */
 	LL_PWR_EnableBkUpAccess();
 
@@ -113,6 +120,9 @@ int z_clock_driver_init(const struct device *device)
 	while (!LL_RCC_LSE_IsReady()) {
 		/* Wait for LSE ready */
 	}
+#ifdef RCC_BDCR_LSESYSEN
+	LL_RCC_LSE_EnablePropagation();
+#endif /* RCC_BDCR_LSESYSEN */
 	LL_RCC_SetLPTIMClockSource(LL_RCC_LPTIM1_CLKSOURCE_LSE);
 
 #endif /* CONFIG_STM32_LPTIM_CLOCK_LSI */
@@ -123,32 +133,60 @@ int z_clock_driver_init(const struct device *device)
 		    lptim_irq_handler, 0, 0);
 	irq_enable(DT_IRQN(DT_NODELABEL(lptim1)));
 
+#ifdef CONFIG_SOC_SERIES_STM32WLX
+	/* Enable the LPTIM1 wakeup EXTI line */
+	LL_EXTI_EnableIT_0_31(LL_EXTI_LINE_29);
+#endif
+
 	/* configure the LPTIM1 counter */
 	LL_LPTIM_SetClockSource(LPTIM1, LL_LPTIM_CLK_SOURCE_INTERNAL);
 	/* configure the LPTIM1 prescaler with 1 */
 	LL_LPTIM_SetPrescaler(LPTIM1, LL_LPTIM_PRESCALER_DIV1);
+#ifdef CONFIG_SOC_SERIES_STM32U5X
+	LL_LPTIM_OC_SetPolarity(LPTIM1, LL_LPTIM_CHANNEL_CH1,
+				LL_LPTIM_OUTPUT_POLARITY_REGULAR);
+#else
 	LL_LPTIM_SetPolarity(LPTIM1, LL_LPTIM_OUTPUT_POLARITY_REGULAR);
+#endif
 	LL_LPTIM_SetUpdateMode(LPTIM1, LL_LPTIM_UPDATE_MODE_IMMEDIATE);
 	LL_LPTIM_SetCounterMode(LPTIM1, LL_LPTIM_COUNTER_MODE_INTERNAL);
 	LL_LPTIM_DisableTimeout(LPTIM1);
 	/* counting start is initiated by software */
 	LL_LPTIM_TrigSw(LPTIM1);
 
+#ifdef CONFIG_SOC_SERIES_STM32U5X
+	/* Enable the LPTIM1 before proceeding with configuration */
+	LL_LPTIM_Enable(LPTIM1);
+
+	LL_LPTIM_DisableIT_CC1(LPTIM1);
+	while (LL_LPTIM_IsActiveFlag_DIEROK(LPTIM1) == 0) {
+	}
+	LL_LPTIM_ClearFlag_DIEROK(LPTIM1);
+	LL_LPTIM_ClearFLAG_CC1(LPTIM1);
+#else
 	/* LPTIM1 interrupt set-up before enabling */
 	/* no Compare match Interrupt */
 	LL_LPTIM_DisableIT_CMPM(LPTIM1);
 	LL_LPTIM_ClearFLAG_CMPM(LPTIM1);
+#endif
 
 	/* Autoreload match Interrupt */
 	LL_LPTIM_EnableIT_ARRM(LPTIM1);
+#ifdef CONFIG_SOC_SERIES_STM32U5X
+	while (LL_LPTIM_IsActiveFlag_DIEROK(LPTIM1) == 0) {
+	}
+	LL_LPTIM_ClearFlag_DIEROK(LPTIM1);
+#endif
 	LL_LPTIM_ClearFLAG_ARRM(LPTIM1);
 	/* ARROK bit validates the write operation to ARR register */
 	LL_LPTIM_ClearFlag_ARROK(LPTIM1);
 
 	accumulated_lptim_cnt = 0;
 
+#ifndef CONFIG_SOC_SERIES_STM32U5X
 	/* Enable the LPTIM1 counter */
 	LL_LPTIM_Enable(LPTIM1);
+#endif
 
 	/* Set the Autoreload value once the timer is enabled */
 	if (IS_ENABLED(CONFIG_TICKLESS_KERNEL)) {
@@ -165,7 +203,12 @@ int z_clock_driver_init(const struct device *device)
 
 #ifdef CONFIG_DEBUG
 	/* stop LPTIM1 during DEBUG */
+#if defined(LL_DBGMCU_APB1_GRP1_LPTIM1_STOP)
 	LL_DBGMCU_APB1_GRP1_FreezePeriph(LL_DBGMCU_APB1_GRP1_LPTIM1_STOP);
+#elif defined(LL_DBGMCU_APB3_GRP1_LPTIM1_STOP)
+	LL_DBGMCU_APB3_GRP1_FreezePeriph(LL_DBGMCU_APB3_GRP1_LPTIM1_STOP);
+#endif
+
 #endif
 	return 0;
 }
@@ -187,7 +230,7 @@ static inline uint32_t z_clock_lptim_getcounter(void)
 	return lp_time;
 }
 
-void z_clock_set_timeout(int32_t ticks, bool idle)
+void sys_clock_set_timeout(int32_t ticks, bool idle)
 {
 	/* new LPTIM1 AutoReload value to set (aligned on Kernel ticks) */
 	uint32_t next_arr = 0;
@@ -200,14 +243,24 @@ void z_clock_set_timeout(int32_t ticks, bool idle)
 
 	if (ticks == K_TICKS_FOREVER) {
 		/* disable LPTIM clock to avoid counting */
+#if defined(LL_APB1_GRP1_PERIPH_LPTIM1)
 		LL_APB1_GRP1_DisableClock(LL_APB1_GRP1_PERIPH_LPTIM1);
+#elif defined(LL_APB3_GRP1_PERIPH_LPTIM1)
+		LL_APB3_GRP1_DisableClock(LL_APB3_GRP1_PERIPH_LPTIM1);
+#endif
 		return;
 	}
 
 	/* if LPTIM clock was previously stopped, it must now be restored */
+#if defined(LL_APB1_GRP1_PERIPH_LPTIM1)
 	if (!LL_APB1_GRP1_IsEnabledClock(LL_APB1_GRP1_PERIPH_LPTIM1)) {
 		LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_LPTIM1);
 	}
+#elif defined(LL_APB3_GRP1_PERIPH_LPTIM1)
+	if (!LL_APB3_GRP1_IsEnabledClock(LL_APB3_GRP1_PERIPH_LPTIM1)) {
+		LL_APB3_GRP1_EnableClock(LL_APB3_GRP1_PERIPH_LPTIM1);
+	}
+#endif
 
 	/* passing ticks==1 means "announce the next tick",
 	 * ticks value of zero (or even negative) is legal and
@@ -267,7 +320,7 @@ void z_clock_set_timeout(int32_t ticks, bool idle)
 	k_spin_unlock(&lock, key);
 }
 
-uint32_t z_clock_elapsed(void)
+uint32_t sys_clock_elapsed(void)
 {
 	if (!IS_ENABLED(CONFIG_TICKLESS_KERNEL)) {
 		return 0;
@@ -290,12 +343,12 @@ uint32_t z_clock_elapsed(void)
 	/* gives the value of LPTIM1 counter (ms)
 	 * since the previous 'announce'
 	 */
-	uint64_t ret = (lp_time * CONFIG_SYS_CLOCK_TICKS_PER_SEC) / LPTIM_CLOCK;
+	uint64_t ret = ((uint64_t)lp_time * CONFIG_SYS_CLOCK_TICKS_PER_SEC) / LPTIM_CLOCK;
 
 	return (uint32_t)(ret);
 }
 
-uint32_t z_timer_cycle_get_32(void)
+uint32_t sys_clock_cycle_get_32(void)
 {
 	/* just gives the accumulated count in a number of hw cycles */
 
@@ -314,7 +367,7 @@ uint32_t z_timer_cycle_get_32(void)
 	lp_time += accumulated_lptim_cnt;
 
 	/* convert lptim count in a nb of hw cycles with precision */
-	uint64_t ret = lp_time * (sys_clock_hw_cycles_per_sec() / LPTIM_CLOCK);
+	uint64_t ret = ((uint64_t)lp_time * sys_clock_hw_cycles_per_sec()) / LPTIM_CLOCK;
 
 	k_spin_unlock(&lock, key);
 

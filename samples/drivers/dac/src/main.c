@@ -8,28 +8,22 @@
 #include <sys/printk.h>
 #include <drivers/dac.h>
 
-#if defined(CONFIG_BOARD_NUCLEO_F091RC) || \
-	defined(CONFIG_BOARD_NUCLEO_G431RB) || \
-	defined(CONFIG_BOARD_NUCLEO_L073RZ) || \
-	defined(CONFIG_BOARD_NUCLEO_L152RE)
-#define DAC_DEVICE_NAME		DT_LABEL(DT_NODELABEL(dac1))
-#define DAC_CHANNEL_ID		1
-#define DAC_RESOLUTION		12
-#elif defined(CONFIG_BOARD_TWR_KE18F)
-#define DAC_DEVICE_NAME		DT_LABEL(DT_NODELABEL(dac0))
-#define DAC_CHANNEL_ID		0
-#define DAC_RESOLUTION		12
-#elif defined(CONFIG_BOARD_FRDM_K64F)
-#define DAC_DEVICE_NAME		DT_LABEL(DT_NODELABEL(dac0))
-#define DAC_CHANNEL_ID		0
-#define DAC_RESOLUTION		12
-#elif defined(CONFIG_BOARD_ARDUINO_ZERO)
-#define DAC_DEVICE_NAME		DT_LABEL(DT_NODELABEL(dac0))
-#define DAC_CHANNEL_ID		0
-#define DAC_RESOLUTION		10
+#define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
+
+#if (DT_NODE_HAS_PROP(ZEPHYR_USER_NODE, dac) && \
+	DT_NODE_HAS_PROP(ZEPHYR_USER_NODE, dac_channel_id) && \
+	DT_NODE_HAS_PROP(ZEPHYR_USER_NODE, dac_resolution))
+#define DAC_NODE DT_PHANDLE(ZEPHYR_USER_NODE, dac)
+#define DAC_CHANNEL_ID DT_PROP(ZEPHYR_USER_NODE, dac_channel_id)
+#define DAC_RESOLUTION DT_PROP(ZEPHYR_USER_NODE, dac_resolution)
 #else
-#error "Unsupported board."
+#error "Unsupported board: see README and check /zephyr,user node"
+#define DAC_NODE DT_INVALID_NODE
+#define DAC_CHANNEL_ID 0
+#define DAC_RESOLUTION 0
 #endif
+
+static const struct device *dac_dev = DEVICE_DT_GET(DAC_NODE);
 
 static const struct dac_channel_cfg dac_ch_cfg = {
 	.channel_id  = DAC_CHANNEL_ID,
@@ -38,10 +32,8 @@ static const struct dac_channel_cfg dac_ch_cfg = {
 
 void main(void)
 {
-	const struct device *dac_dev = device_get_binding(DAC_DEVICE_NAME);
-
-	if (!dac_dev) {
-		printk("Cannot get DAC device\n");
+	if (!device_is_ready(dac_dev)) {
+		printk("DAC device %s is not ready\n", dac_dev->name);
 		return;
 	}
 
@@ -69,7 +61,11 @@ void main(void)
 			4096 / dac_values : 1;
 
 		for (int i = 0; i < dac_values; i++) {
-			dac_write_value(dac_dev, DAC_CHANNEL_ID, i);
+			ret = dac_write_value(dac_dev, DAC_CHANNEL_ID, i);
+			if (ret != 0) {
+				printk("dac_write_value() failed with code %d\n", ret);
+				return;
+			}
 			k_sleep(K_MSEC(sleep_time));
 		}
 	}

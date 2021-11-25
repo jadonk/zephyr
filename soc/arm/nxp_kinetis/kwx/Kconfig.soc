@@ -19,6 +19,7 @@ config SOC_MKW22D5
 	select HAS_MCUX_SIM
 	select HAS_OSC
 	select HAS_MCG
+	select HAS_MCUX_RCM
 
 config SOC_MKW24D5
 	bool "SOC_MKW24D5"
@@ -32,6 +33,7 @@ config SOC_MKW24D5
 	select HAS_MCUX_SIM
 	select HAS_OSC
 	select HAS_MCG
+	select HAS_MCUX_RCM
 
 config SOC_MKW40Z4
 	bool "SOC_MKW40Z4"
@@ -43,6 +45,7 @@ config SOC_MKW40Z4
 	select HAS_MCUX_TRNG
 	select HAS_OSC
 	select HAS_MCG
+	select HAS_MCUX_RCM
 
 config SOC_MKW41Z4
 	bool "SOC_MKW41Z4"
@@ -57,6 +60,7 @@ config SOC_MKW41Z4
 	select HAS_MCUX_TRNG
 	select HAS_OSC
 	select HAS_MCG
+	select HAS_MCUX_RCM
 
 endchoice
 
@@ -88,30 +92,5 @@ config SOC_PART_NUMBER_KINETIS_KWX
 	  This string holds the full part number of the SoC. It is a hidden option
 	  that you should not set directly. The part number selection choice defines
 	  the default value for this string.
-
-if SOC_MKW24D5 || SOC_MKW22D5
-
-config KW2XD_CORE_CLOCK_DIVIDER
-	int "KW2xD core clock divider"
-	default 1
-	help
-	  This option specifies the divide value for the KW2xD processor core
-	  clock from the system clock.
-
-config KW2XD_BUS_CLOCK_DIVIDER
-	int "KW2xD bus clock divider"
-	default 1
-	help
-	  This option specifies the divide value for the KW2xD bus clock from
-	  the system clock.
-
-config KW2XD_FLASH_CLOCK_DIVIDER
-	int "KW2xD flash clock divider"
-	default 2
-	help
-	  This option specifies the divide value for the KW2xD flash clock from
-	  the system clock.
-
-endif # SOC_MKW24D5 || SOC_MKW22D5
 
 endif # SOC_SERIES_KINETIS_KWX

@@ -5,7 +5,7 @@
  */
 #include <zephyr.h>
 #include <init.h>
-#include <power/power.h>
+#include <pm/pm.h>
 
 #include <driverlib/pwr_ctrl.h>
 #include <driverlib/sys_ctrl.h>
@@ -48,22 +48,21 @@ const PowerCC26X2_Config PowerCC26X2_config = {
 
 extern PowerCC26X2_ModuleState PowerCC26X2_module;
 
+#ifdef CONFIG_PM
 /*
  * Power state mapping:
- * POWER_STATE_SLEEP_1: Idle
- * POWER_STATE_SLEEP_2: Standby
- * POWER_STATE_DEEP_SLEEP_1: Shutdown
+ * PM_STATE_SUSPEND_TO_IDLE: Idle
+ * PM_STATE_STANDBY: Standby
+ * PM_STATE_SUSPEND_TO_RAM | PM_STATE_SUSPEND_TO_DISK: Shutdown
  */
 
 /* Invoke Low Power/System Off specific Tasks */
-void pm_power_state_set(enum power_states state)
+__weak void pm_power_state_set(struct pm_state_info info)
 {
-#ifdef CONFIG_PM_SLEEP_STATES
 	uint32_t modeVIMS;
 	uint32_t constraints;
-#endif
 
-	LOG_DBG("SoC entering power state %d", state);
+	LOG_DBG("SoC entering power state %d", info.state);
 
 	/* Switch to using PRIMASK instead of BASEPRI register, since
 	 * we are only able to wake up from standby while using PRIMASK.
@@ -73,9 +72,8 @@ void pm_power_state_set(enum power_states state)
 	/* Set BASEPRI to 0 */
 	irq_unlock(0);
 
-	switch (state) {
-#ifdef CONFIG_PM_SLEEP_STATES
-	case POWER_STATE_SLEEP_1:
+	switch (info.state) {
+	case PM_STATE_SUSPEND_TO_IDLE:
 		/* query the declared constraints */
 		constraints = Power_getConstraintMask();
 		/* 1. Get the current VIMS mode */
@@ -101,33 +99,27 @@ void pm_power_state_set(enum power_states state)
 		SysCtrlAonUpdate();
 		break;
 
-	case POWER_STATE_SLEEP_2:
-		/* schedule the wakeup event */
-		ClockP_start(ClockP_handle((ClockP_Struct *)
-			&PowerCC26X2_module.clockObj));
-
+	case PM_STATE_STANDBY:
 		/* go to standby mode */
 		Power_sleep(PowerCC26XX_STANDBY);
-		ClockP_stop(ClockP_handle((ClockP_Struct *)
-			&PowerCC26X2_module.clockObj));
 		break;
-#endif
-
-#ifdef CONFIG_PM_DEEP_SLEEP_STATES
-	case POWER_STATE_DEEP_SLEEP_1:
+	case PM_STATE_SUSPEND_TO_RAM:
+		__fallthrough;
+	case PM_STATE_SUSPEND_TO_DISK:
+		__fallthrough;
+	case PM_STATE_SOFT_OFF:
 		Power_shutdown(0, 0);
 		break;
-#endif
 	default:
-		LOG_DBG("Unsupported power state %u", state);
+		LOG_DBG("Unsupported power state %u", info.state);
 		break;
 	}
 
-	LOG_DBG("SoC leaving power state %d", state);
+	LOG_DBG("SoC leaving power state %d", info.state);
 }
 
 /* Handle SOC specific activity after Low Power Mode Exit */
-void _pm_power_state_exit_post_ops(enum power_states state)
+__weak void pm_power_state_exit_post_ops(struct pm_state_info info)
 {
 	/*
 	 * System is now in active mode. Reenable interrupts which were disabled
@@ -135,6 +127,7 @@ void _pm_power_state_exit_post_ops(enum power_states state)
 	 */
 	CPUcpsie();
 }
+#endif /* CONFIG_PM */
 
 /* Initialize TI Power module */
 static int power_initialize(const struct device *dev)
@@ -190,6 +183,58 @@ void PowerCC26XX_schedulerRestore(void)
 	 * in the context of Power_sleep() in any case.
 	 */
 }
+
+#ifdef CONFIG_PM
+/* Constraint API hooks */
+
+void pm_constraint_set(enum pm_state state)
+{
+	switch (state) {
+	case PM_STATE_RUNTIME_IDLE:
+		Power_setConstraint(PowerCC26XX_DISALLOW_IDLE);
+		break;
+	case PM_STATE_STANDBY:
+		Power_setConstraint(PowerCC26XX_DISALLOW_STANDBY);
+		break;
+	default:
+		break;
+	}
+}
+
+void pm_constraint_release(enum pm_state state)
+{
+	switch (state) {
+	case PM_STATE_RUNTIME_IDLE:
+		Power_releaseConstraint(PowerCC26XX_DISALLOW_IDLE);
+		break;
+	case PM_STATE_STANDBY:
+		Power_releaseConstraint(PowerCC26XX_DISALLOW_STANDBY);
+		break;
+	default:
+		break;
+	}
+}
+
+bool pm_constraint_get(enum pm_state state)
+{
+	bool ret = true;
+	uint32_t constraints;
+
+	constraints = Power_getConstraintMask();
+	switch (state) {
+	case PM_STATE_RUNTIME_IDLE:
+		ret = (constraints & (1 << PowerCC26XX_DISALLOW_IDLE)) == 0;
+		break;
+	case PM_STATE_STANDBY:
+		ret = (constraints & (1 << PowerCC26XX_DISALLOW_STANDBY)) == 0;
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+#endif /* CONFIG_PM */
 
 SYS_INIT(power_initialize, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
 SYS_INIT(unlatch_pins, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);

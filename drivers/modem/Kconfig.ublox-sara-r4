@@ -11,7 +11,6 @@ config MODEM_UBLOX_SARA
 	select MODEM_SOCKET
 	select NET_OFFLOAD
 	select NET_SOCKETS_OFFLOAD
-	imply GPIO
 	help
 	  Choose this setting to enable u-blox SARA-R4 LTE-CatM1/NB-IoT modem
 	  driver.
@@ -38,10 +37,6 @@ config MODEM_UBLOX_SARA_AUTODETECT_VARIANT
 	  Enable automatic detection of modem variant (SARA-R4 or SARA-U2)
 
 endchoice
-
-config MODEM_UBLOX_SARA_R4_NAME
-	string "Driver name"
-	default "MODEM_SARA"
 
 config MODEM_UBLOX_SARA_R4_RX_STACK_SIZE
 	int "Stack size for the u-blox SARA-R4 modem driver RX thread"

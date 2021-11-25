@@ -122,6 +122,9 @@ features:
 +-----------+------------+-------------------------------------+
 | RNG       | on-chip    | True Random number generator        |
 +-----------+------------+-------------------------------------+
+| DAC       | on-chip    | DAC Controller                      |
++-----------+------------+-------------------------------------+
+
 
 (*) nucleo_f767zi with soc cut-A (Device marking A) has some ethernet
     instability (https://github.com/zephyrproject-rtos/zephyr/issues/26519).
@@ -154,7 +157,7 @@ and a ST morpho connector. Board is configured as follows:
 - USB DP : PA12
 - I2C : PB8, PB9
 - PWM : PE13
-- SPI : PA4, PA5, PA6, PA7
+- SPI : PD14, PA5, PA6, PA7
 
 .. note::
    The Arduino Uno v3 specified SPI device conflicts with the on-board ETH

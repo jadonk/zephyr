@@ -97,34 +97,6 @@ static inline int find_len(char *data)
 	return ATOI(buf, 0, "rx_buf");
 }
 
-/* Func: modem_at
- * Desc: Send "AT" command to the modem and wait for it to
- * respond. If the modem doesn't respond after some time, give
- * up and kill the driver.
- */
-static int modem_at(struct modem_context *mctx, struct modem_data *mdata)
-{
-	int counter = 0, ret = -1;
-
-	do {
-
-		/* Send "AT" command to the modem. */
-		ret = modem_cmd_send(&mctx->iface, &mctx->cmd_handler,
-				     NULL, 0, "AT", &mdata->sem_response,
-				     MDM_CMD_TIMEOUT);
-
-		/* Check the response from the Modem. */
-		if (ret < 0 && ret != -ETIMEDOUT) {
-			return ret;
-		}
-
-		counter++;
-		k_sleep(K_SECONDS(2));
-	} while (counter < MDM_MAX_AT_RETRIES && ret < 0);
-
-	return ret;
-}
-
 /* Func: on_cmd_sockread_common
  * Desc: Function to successfully read data from the modem on a given socket.
  */
@@ -135,7 +107,7 @@ static int on_cmd_sockread_common(int socket_fd,
 	struct modem_socket	 *sock = NULL;
 	struct socket_read_data	 *sock_data;
 	int ret, i;
-	int socket_data_length = find_len(data->rx_buf->data);
+	int socket_data_length;
 	int bytes_to_skip;
 
 	if (!len) {
@@ -148,6 +120,8 @@ static int on_cmd_sockread_common(int socket_fd,
 		LOG_ERR("Incorrect format! Ignoring data!");
 		return -EINVAL;
 	}
+
+	socket_data_length = find_len(data->rx_buf->data);
 
 	/* No (or not enough) data available on the socket. */
 	bytes_to_skip = digits(socket_data_length) + 2 + 4;
@@ -257,14 +231,14 @@ MODEM_CMD_DEFINE(on_cmd_atcmdinfo_rssi_csq)
 
 	/* Check the RSSI value. */
 	if (rssi == 31) {
-		mctx.data_rssi = -51;
+		mdata.mdm_rssi = -51;
 	} else if (rssi >= 0 && rssi <= 31) {
-		mctx.data_rssi = -114 + ((rssi * 2) + 1);
+		mdata.mdm_rssi = -114 + ((rssi * 2) + 1);
 	} else {
-		mctx.data_rssi = -1000;
+		mdata.mdm_rssi = -1000;
 	}
 
-	LOG_INF("RSSI: %d", mctx.data_rssi);
+	LOG_INF("RSSI: %d", mdata.mdm_rssi);
 	return 0;
 }
 
@@ -441,6 +415,13 @@ MODEM_CMD_DEFINE(on_cmd_unsol_close)
 	return 0;
 }
 
+/* Handler: Modem initialization ready. */
+MODEM_CMD_DEFINE(on_cmd_unsol_rdy)
+{
+	k_sem_give(&mdata.sem_response);
+	return 0;
+}
+
 /* Func: send_socket_data
  * Desc: This function will send "binary" data over the socket object.
  */
@@ -556,7 +537,7 @@ static ssize_t offload_sendto(void *obj, const void *buf, size_t len,
 	}
 
 	/* UDP is not supported. */
-	if (sock->ip_proto != IPPROTO_UDP) {
+	if (sock->ip_proto == IPPROTO_UDP) {
 		errno = ENOTSUP;
 		return -1;
 	}
@@ -603,7 +584,7 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 		return -1;
 	}
 
-	snprintk(sendbuf, sizeof(sendbuf), "AT+QIRD=%d,%d", sock->sock_fd, len);
+	snprintk(sendbuf, sizeof(sendbuf), "AT+QIRD=%d,%zd", sock->sock_fd, len);
 
 	/* Socket read settings */
 	(void) memset(&sock_data, 0, sizeof(sock_data));
@@ -655,55 +636,31 @@ static ssize_t offload_write(void *obj, const void *buffer, size_t count)
 	return offload_sendto(obj, buffer, count, 0, NULL, 0);
 }
 
-/* Func: offload_poll
- * Desc: This function polls on a given socket object.
- */
-static int offload_poll(struct zsock_pollfd *fds, int nfds, int msecs)
-{
-	int i;
-	void *obj;
-
-	/* Only accept modem sockets. */
-	for (i = 0; i < nfds; i++) {
-		if (fds[i].fd < 0) {
-			continue;
-		}
-
-		/* If vtable matches, then it's modem socket. */
-		obj = z_get_fd_obj(fds[i].fd,
-				   (const struct fd_op_vtable *) &offload_socket_fd_op_vtable,
-				   EINVAL);
-		if (obj == NULL) {
-			return -1;
-		}
-	}
-
-	return modem_socket_poll(&mdata.socket_config, fds, nfds, msecs);
-}
-
 /* Func: offload_ioctl
  * Desc: Function call to handle various misc requests.
  */
 static int offload_ioctl(void *obj, unsigned int request, va_list args)
 {
 	switch (request) {
-	case ZFD_IOCTL_POLL_PREPARE:
-		return -EXDEV;
+	case ZFD_IOCTL_POLL_PREPARE: {
+		struct zsock_pollfd *pfd;
+		struct k_poll_event **pev;
+		struct k_poll_event *pev_end;
 
-	case ZFD_IOCTL_POLL_UPDATE:
-		return -EOPNOTSUPP;
+		pfd = va_arg(args, struct zsock_pollfd *);
+		pev = va_arg(args, struct k_poll_event **);
+		pev_end = va_arg(args, struct k_poll_event *);
 
-	case ZFD_IOCTL_POLL_OFFLOAD:
-	{
-		/* Poll on the given socket. */
-		struct zsock_pollfd *fds;
-		int nfds, timeout;
+		return modem_socket_poll_prepare(&mdata.socket_config, obj, pfd, pev, pev_end);
+	}
+	case ZFD_IOCTL_POLL_UPDATE: {
+		struct zsock_pollfd *pfd;
+		struct k_poll_event **pev;
 
-		fds = va_arg(args, struct zsock_pollfd *);
-		nfds = va_arg(args, int);
-		timeout = va_arg(args, int);
+		pfd = va_arg(args, struct zsock_pollfd *);
+		pev = va_arg(args, struct k_poll_event **);
 
-		return offload_poll(fds, nfds, timeout);
+		return modem_socket_poll_update(obj, pfd, pev);
 	}
 
 	default:
@@ -724,6 +681,7 @@ static int offload_connect(void *obj, const struct sockaddr *addr,
 	struct modem_cmd    cmd[]     = { MODEM_CMD("+QIOPEN: ", on_cmd_atcmdinfo_sockopen, 2U, ",") };
 	char		    buf[sizeof("AT+QIOPEN=#,##,###,####.####.####.####,######")] = {0};
 	int		    ret;
+	char		    ip_str[NET_IPV6_ADDR_LEN];
 
 	if (sock->id < mdata.socket_config.base_socket_num - 1) {
 		LOG_ERR("Invalid socket_id(%d) from fd:%d",
@@ -747,16 +705,25 @@ static int offload_connect(void *obj, const struct sockaddr *addr,
 	}
 
 	/* UDP is not supported. */
-	if (sock->ip_proto != IPPROTO_UDP) {
+	if (sock->ip_proto == IPPROTO_UDP) {
 		errno = ENOTSUP;
 		return -1;
 	}
 
 	k_sem_reset(&mdata.sem_sock_conn);
 
+	ret = modem_context_sprint_ip_addr(addr, ip_str, sizeof(ip_str));
+	if (ret != 0) {
+		LOG_ERR("Error formatting IP string %d", ret);
+		LOG_ERR("Closing the socket!!!");
+		socket_close(sock);
+		errno = -ret;
+		return -1;
+	}
+
 	/* Formulate the complete string. */
 	snprintk(buf, sizeof(buf), "AT+QIOPEN=%d,%d,\"%s\",\"%s\",%d,0,0", 1, sock->sock_fd, protocol,
-		 modem_context_sprint_ip_addr(addr), dst_port);
+		ip_str, dst_port);
 
 	/* Send out the command. */
 	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
@@ -834,7 +801,7 @@ static ssize_t offload_sendmsg(void *obj, const struct msghdr *msg, int flags)
 	ssize_t sent = 0;
 	int rc;
 
-	LOG_DBG("msg_iovlen:%d flags:%d", msg->msg_iovlen, flags);
+	LOG_DBG("msg_iovlen:%zd flags:%d", msg->msg_iovlen, flags);
 
 	for (int i = 0; i < msg->msg_iovlen; i++) {
 		const char *buf = msg->msg_iov[i].iov_base;
@@ -894,9 +861,9 @@ static void modem_rssi_query_work(struct k_work *work)
 
 	/* Re-start RSSI query work */
 	if (work) {
-		k_delayed_work_submit_to_queue(&modem_workq,
-					       &mdata.rssi_query_work,
-					       K_SECONDS(RSSI_TIMEOUT_SECS));
+		k_work_reschedule_for_queue(&modem_workq,
+					    &mdata.rssi_query_work,
+					    K_SECONDS(RSSI_TIMEOUT_SECS));
 	}
 }
 
@@ -906,6 +873,12 @@ static void modem_rssi_query_work(struct k_work *work)
 static void pin_init(void)
 {
 	LOG_INF("Setting Modem Pins");
+
+#if DT_INST_NODE_HAS_PROP(0, mdm_wdisable_gpios)
+	LOG_INF("Deactivate W Disable");
+	modem_pin_write(&mctx, MDM_WDISABLE, 0);
+	k_sleep(K_MSEC(250));
+#endif
 
 	/* NOTE: Per the BG95 document, the Reset pin is internally connected to the
 	 * Power key pin.
@@ -933,6 +906,7 @@ static const struct modem_cmd response_cmds[] = {
 static const struct modem_cmd unsol_cmds[] = {
 	MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  1U, ""),
 	MODEM_CMD("+QIURC: \"closed\",",   on_cmd_unsol_close, 1U, ""),
+	MODEM_CMD("RDY", on_cmd_unsol_rdy, 0U, ""),
 };
 
 /* Commands sent to the modem to set it up at boot time. */
@@ -953,6 +927,46 @@ static const struct setup_cmd setup_cmds[] = {
 	SETUP_CMD_NOHANDLE("AT+QICSGP=1,1,\"" MDM_APN "\",\"" MDM_USERNAME "\", \"" MDM_PASSWORD "\",1"),
 };
 
+/* Func: modem_pdp_context_active
+ * Desc: This helper function is called from modem_setup, and is
+ * used to open the PDP context. If there is trouble activating the
+ * PDP context, we try to deactive and reactive MDM_PDP_ACT_RETRY_COUNT times.
+ * If it fails, we return an error.
+ */
+static int modem_pdp_context_activate(void)
+{
+	int ret;
+	int retry_count = 0;
+
+	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
+			     NULL, 0U, "AT+QIACT=1", &mdata.sem_response,
+			     MDM_CMD_TIMEOUT);
+
+	/* If there is trouble activating the PDP context, we try to deactivate/reactive it. */
+	while (ret == -EIO && retry_count < MDM_PDP_ACT_RETRY_COUNT) {
+		ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
+			     NULL, 0U, "AT+QIDEACT=1", &mdata.sem_response,
+			     MDM_CMD_TIMEOUT);
+
+		/* If there's any error for AT+QIDEACT, restart the module. */
+		if (ret != 0) {
+			return ret;
+		}
+
+		ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
+			     NULL, 0U, "AT+QIACT=1", &mdata.sem_response,
+			     MDM_CMD_TIMEOUT);
+
+		retry_count++;
+	}
+
+	if (ret == -EIO && retry_count >= MDM_PDP_ACT_RETRY_COUNT) {
+		LOG_ERR("Retried activating/deactivating too many times.");
+	}
+
+	return ret;
+}
+
 /* Func: modem_setup
  * Desc: This function is used to setup the modem from zero. The idea
  * is that this function will be called right after the modem is
@@ -971,13 +985,13 @@ restart:
 	counter = 0;
 
 	/* stop RSSI delay work */
-	k_delayed_work_cancel(&mdata.rssi_query_work);
+	k_work_cancel_delayable(&mdata.rssi_query_work);
 
 	/* Let the modem respond. */
 	LOG_INF("Waiting for modem to respond");
-	ret = modem_at(&mctx, &mdata);
+	ret = k_sem_take(&mdata.sem_response, MDM_MAX_BOOT_TIME);
 	if (ret < 0) {
-		LOG_ERR("MODEM WAIT LOOP ERROR: %d", ret);
+		LOG_ERR("Timeout waiting for RDY");
 		goto error;
 	}
 
@@ -997,13 +1011,13 @@ restart_rssi:
 
 	/* Keep trying to read RSSI until we get a valid value - Eventually, exit. */
 	while (counter++ < MDM_WAIT_FOR_RSSI_COUNT &&
-	      (mctx.data_rssi >= 0 || mctx.data_rssi <= -1000)) {
+	      (mdata.mdm_rssi >= 0 || mdata.mdm_rssi <= -1000)) {
 		modem_rssi_query_work(NULL);
 		k_sleep(MDM_WAIT_FOR_RSSI_DELAY);
 	}
 
 	/* Is the RSSI invalid ? */
-	if (mctx.data_rssi >= 0 || mctx.data_rssi <= -1000) {
+	if (mdata.mdm_rssi >= 0 || mdata.mdm_rssi <= -1000) {
 		rssi_retry_count++;
 
 		if (rssi_retry_count >= MDM_NETWORK_RETRY_COUNT) {
@@ -1020,17 +1034,13 @@ restart_rssi:
 
 	/* Network is ready - Start RSSI work in the background. */
 	LOG_INF("Network is ready.");
-	k_delayed_work_submit_to_queue(&modem_workq,
-				       &mdata.rssi_query_work,
-				       K_SECONDS(RSSI_TIMEOUT_SECS));
+	k_work_reschedule_for_queue(&modem_workq, &mdata.rssi_query_work,
+				    K_SECONDS(RSSI_TIMEOUT_SECS));
 
-	/* Once the network is ready, activate PDP context. */
-	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
-			     NULL, 0U, "AT+QIACT=1", &mdata.sem_response,
-			     MDM_CMD_TIMEOUT);
-
-	/* Retry or Possibly Exit. */
+	/* Once the network is ready, we try to activate the PDP context. */
+	ret = modem_pdp_context_activate();
 	if (ret < 0 && init_retry_count++ < MDM_INIT_RETRY_COUNT) {
+		LOG_ERR("Error activating modem with pdp context");
 		goto restart;
 	}
 
@@ -1100,9 +1110,9 @@ static int modem_init(const struct device *dev)
 	k_sem_init(&mdata.sem_response,	 0, 1);
 	k_sem_init(&mdata.sem_tx_ready,	 0, 1);
 	k_sem_init(&mdata.sem_sock_conn, 0, 1);
-	k_work_q_start(&modem_workq, modem_workq_stack,
-		       K_KERNEL_STACK_SIZEOF(modem_workq_stack),
-		       K_PRIO_COOP(7));
+	k_work_queue_start(&modem_workq, modem_workq_stack,
+			   K_KERNEL_STACK_SIZEOF(modem_workq_stack),
+			   K_PRIO_COOP(7), NULL);
 
 	/* socket config */
 	mdata.socket_config.sockets	    = &mdata.sockets[0];
@@ -1132,7 +1142,7 @@ static int modem_init(const struct device *dev)
 	mdata.iface_data.rx_rb_buf     = &mdata.iface_rb_buf[0];
 	mdata.iface_data.rx_rb_buf_len = sizeof(mdata.iface_rb_buf);
 	ret = modem_iface_uart_init(&mctx.iface, &mdata.iface_data,
-				    MDM_UART_DEV_NAME);
+				    MDM_UART_DEV);
 	if (ret < 0) {
 		goto error;
 	}
@@ -1146,6 +1156,7 @@ static int modem_init(const struct device *dev)
 	mctx.data_imsi	       = mdata.mdm_imsi;
 	mctx.data_iccid	       = mdata.mdm_iccid;
 #endif /* #if defined(CONFIG_MODEM_SIM_NUMBERS) */
+	mctx.data_rssi = &mdata.mdm_rssi;
 
 	/* pin setup */
 	mctx.pins	       = modem_pins;
@@ -1165,7 +1176,7 @@ static int modem_init(const struct device *dev)
 			NULL, NULL, NULL, K_PRIO_COOP(7), 0, K_NO_WAIT);
 
 	/* Init RSSI query */
-	k_delayed_work_init(&mdata.rssi_query_work, modem_rssi_query_work);
+	k_work_init_delayable(&mdata.rssi_query_work, modem_rssi_query_work);
 	return modem_setup();
 
 error:
@@ -1173,10 +1184,11 @@ error:
 }
 
 /* Register the device with the Networking stack. */
-NET_DEVICE_OFFLOAD_INIT(modem_gb9x, DT_INST_LABEL(0),
-			modem_init, device_pm_control_nop, &mdata, NULL,
-			CONFIG_MODEM_QUECTEL_BG9X_INIT_PRIORITY, &api_funcs,
-			MDM_MAX_DATA_LENGTH);
+NET_DEVICE_DT_INST_OFFLOAD_DEFINE(0, modem_init, NULL,
+				  &mdata, NULL,
+				  CONFIG_MODEM_QUECTEL_BG9X_INIT_PRIORITY,
+				  &api_funcs, MDM_MAX_DATA_LENGTH);
 
 /* Register NET sockets. */
-NET_SOCKET_REGISTER(quectel_bg9x, AF_UNSPEC, offload_is_supported, offload_socket);
+NET_SOCKET_REGISTER(quectel_bg9x, NET_SOCKET_DEFAULT_PRIO, AF_UNSPEC,
+		    offload_is_supported, offload_socket);

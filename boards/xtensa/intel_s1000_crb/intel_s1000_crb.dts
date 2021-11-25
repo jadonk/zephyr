@@ -19,6 +19,16 @@
 		zephyr,flash = &flash0;
 		zephyr,flash-controller = &flash0;
 	};
+
+	dmic: dmic {
+		compatible = "intel,dmic";
+		label = "PDM";
+
+		status = "okay";
+		dmas = <&dma0 0
+			&dma0 1>;
+		dma-names = "rx-a", "rx-b";
+	};
 };
 
 &cpu0 {
@@ -97,6 +107,6 @@
 	};
 };
 
-&usb {
+zephyr_udc0: &usb {
 	status = "okay";
 };

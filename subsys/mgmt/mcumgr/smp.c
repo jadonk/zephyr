@@ -1,5 +1,6 @@
 /*
  * Copyright Runtime.io 2018. All rights reserved.
+ * Copyright (c) 2021 Nordic Semiconductor ASA
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,26 +12,9 @@
 #include "smp/smp.h"
 #include "mgmt/mcumgr/smp.h"
 
-static mgmt_alloc_rsp_fn zephyr_smp_alloc_rsp;
-static mgmt_trim_front_fn zephyr_smp_trim_front;
-static mgmt_reset_buf_fn zephyr_smp_reset_buf;
-static mgmt_write_at_fn zephyr_smp_write_at;
-static mgmt_init_reader_fn zephyr_smp_init_reader;
-static mgmt_init_writer_fn zephyr_smp_init_writer;
-static mgmt_free_buf_fn zephyr_smp_free_buf;
-static smp_tx_rsp_fn zephyr_smp_tx_rsp;
+static const struct mgmt_streamer_cfg zephyr_smp_cbor_cfg;
 
-static const struct mgmt_streamer_cfg zephyr_smp_cbor_cfg = {
-	.alloc_rsp = zephyr_smp_alloc_rsp,
-	.trim_front = zephyr_smp_trim_front,
-	.reset_buf = zephyr_smp_reset_buf,
-	.write_at = zephyr_smp_write_at,
-	.init_reader = zephyr_smp_init_reader,
-	.init_writer = zephyr_smp_init_writer,
-	.free_buf = zephyr_smp_free_buf,
-};
-
-void *
+static void *
 zephyr_smp_alloc_rsp(const void *req, void *arg)
 {
 	const struct net_buf_pool *pool;
@@ -117,6 +101,9 @@ zephyr_smp_split_frag(struct net_buf **nb, void *arg, uint16_t mtu)
 		frag = src;
 	} else {
 		frag = zephyr_smp_alloc_rsp(src, arg);
+		if (!frag) {
+			return NULL;
+		}
 
 		/* Copy fragment payload into new buffer. */
 		net_buf_add_mem(frag, src->data, mtu);
@@ -161,6 +148,22 @@ zephyr_smp_write_at(struct cbor_encoder_writer *writer, size_t offset,
 	return 0;
 }
 
+static void
+zephyr_smp_free_buf(void *buf, void *arg)
+{
+	struct zephyr_smp_transport *zst = arg;
+
+	if (!buf) {
+		return;
+	}
+
+	if (zst->zst_ud_free) {
+		zst->zst_ud_free(net_buf_user_data((struct net_buf *)buf));
+	}
+
+	mcumgr_buf_free(buf);
+}
+
 static int
 zephyr_smp_tx_rsp(struct smp_streamer *ns, void *rsp, void *arg)
 {
@@ -184,6 +187,7 @@ zephyr_smp_tx_rsp(struct smp_streamer *ns, void *rsp, void *arg)
 	while (nb != NULL) {
 		frag = zephyr_smp_split_frag(&nb, zst, mtu);
 		if (frag == NULL) {
+			zephyr_smp_free_buf(nb, zst);
 			return MGMT_ERR_ENOMEM;
 		}
 
@@ -194,22 +198,6 @@ zephyr_smp_tx_rsp(struct smp_streamer *ns, void *rsp, void *arg)
 	}
 
 	return 0;
-}
-
-static void
-zephyr_smp_free_buf(void *buf, void *arg)
-{
-	struct zephyr_smp_transport *zst = arg;
-
-	if (!buf) {
-		return;
-	}
-
-	if (zst->zst_ud_free) {
-		zst->zst_ud_free(net_buf_user_data((struct net_buf *)buf));
-	}
-
-	mcumgr_buf_free(buf);
 }
 
 static int
@@ -273,10 +261,20 @@ zephyr_smp_handle_reqs(struct k_work *work)
 
 	zst = (void *)work;
 
-	while ((nb = k_fifo_get(&zst->zst_fifo, K_NO_WAIT)) != NULL) {
+	while ((nb = net_buf_get(&zst->zst_fifo, K_NO_WAIT)) != NULL) {
 		zephyr_smp_process_packet(zst, nb);
 	}
 }
+
+static const struct mgmt_streamer_cfg zephyr_smp_cbor_cfg = {
+	.alloc_rsp = zephyr_smp_alloc_rsp,
+	.trim_front = zephyr_smp_trim_front,
+	.reset_buf = zephyr_smp_reset_buf,
+	.write_at = zephyr_smp_write_at,
+	.init_reader = zephyr_smp_init_reader,
+	.init_writer = zephyr_smp_init_writer,
+	.free_buf = zephyr_smp_free_buf,
+};
 
 void
 zephyr_smp_transport_init(struct zephyr_smp_transport *zst,
@@ -299,6 +297,6 @@ zephyr_smp_transport_init(struct zephyr_smp_transport *zst,
 void
 zephyr_smp_rx_req(struct zephyr_smp_transport *zst, struct net_buf *nb)
 {
-	k_fifo_put(&zst->zst_fifo, nb);
+	net_buf_put(&zst->zst_fifo, nb);
 	k_work_submit(&zst->zst_work);
 }

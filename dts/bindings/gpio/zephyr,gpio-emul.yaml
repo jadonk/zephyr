@@ -15,21 +15,19 @@ properties:
       required: true
 
     rising-edge:
+      description: Enables support for rising edge interrupt detection
       type: boolean
 
     falling-edge:
-      type: boolean
-
-    dual-edge:
+      description: Enables support for falling edge interrupt detection
       type: boolean
 
     high-level:
+      description: Enables support for high level interrupt detection
       type: boolean
 
     low-level:
-      type: boolean
-
-    dual-level:
+      description: Enables support for low level interrupt detection
       type: boolean
 
     "#gpio-cells":

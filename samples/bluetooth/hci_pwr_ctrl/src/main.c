@@ -34,7 +34,7 @@ static const struct bt_data ad[] = {
 #define DEVICE_BEACON_TXPOWER_NUM  8
 
 static struct k_thread pwr_thread_data;
-static K_THREAD_STACK_DEFINE(pwr_thread_stack, 320);
+static K_THREAD_STACK_DEFINE(pwr_thread_stack, 512);
 
 static const int8_t txp[DEVICE_BEACON_TXPOWER_NUM] = {4, 0, -3, -8,
 						    -15, -18, -23, -30};
@@ -190,7 +190,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	}
 }
 
-static struct bt_conn_cb conn_callbacks = {
+BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.connected = connected,
 	.disconnected = disconnected,
 };
@@ -294,8 +294,6 @@ void main(void)
 	printk("Get Tx power level ->");
 	get_tx_power(BT_HCI_VS_LL_HANDLE_TYPE_ADV, 0, &txp_get);
 	printk("-> default TXP = %d\n", txp_get);
-
-	bt_conn_cb_register(&conn_callbacks);
 
 	/* Wait for 5 seconds to give a chance users/testers
 	 * to check that default Tx power is indeed the one

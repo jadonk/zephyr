@@ -1,4 +1,4 @@
-/* sgp30.c - Driver for Sensiron's SGP30 temperature, pressure,
+/* sgp30.c - Driver for Sensirion's SGP30 temperature, pressure,
  * humidity and gas sensor
  *
  * https://www.sensirion.com/en/environmental-sensors/gas-sensors/sgp30/
@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT sensiron_sgp30
+#define DT_DRV_COMPAT sensirion_sgp30
 
 #include <drivers/i2c.h>
 #include <init.h>
@@ -81,7 +81,7 @@ static int sgp30_cmd(struct sgp30_data *data, uint16_t command, uint16_t delay_m
 	LOG_DBG("Writing 0x%02x 0x%02x to 0x%02x", cmdp[0], cmdp[1], data->i2c_addr);
 	ret = i2c_write(data->i2c_ctrl, cmdp, 2, data->i2c_addr);
 	if (ret < 0) {
-		LOG_ERR("Failed to send command %04x: %d", command, ret);
+		LOG_ERR("Failed to send command %04x: %d", command_be, ret);
 		return ret;
 	}
 
@@ -219,6 +219,8 @@ static int sgp30_chip_init(const struct device *dev)
 	/* Clear absoluteHumidity */
 	data->absoluteHumidity = 0;
 
+	return -EINVAL;
+
 	/* Get Serial ID */
 	LOG_DBG("Fetching Serial ID");
 	err = sgp30_cmd(data, 0x3682, 1, data->serialid, 3);
@@ -283,6 +285,13 @@ static int sgp30_init(const struct device *dev)
 		return -EINVAL;
 	}
 
+	//uint32_t i2c_cfg = I2C_SPEED_SET(I2C_SPEED_STANDARD) | I2C_MODE_MASTER;
+	//if (i2c_configure(data->i2c_ctrl, i2c_cfg))
+	//{
+	//	LOG_ERR("I2C config failed");
+	//	goto recover;
+	//}
+
 	data->i2c_addr = DT_INST_REG_ADDR(0);
 
 	if (sgp30_chip_init(dev) < 0) {
@@ -336,6 +345,6 @@ static const struct sensor_driver_api sgp30_api_funcs = {
 
 static struct sgp30_data sgp30_data;
 
-DEVICE_AND_API_INIT(sgp30, DT_INST_LABEL(0), sgp30_init, &sgp30_data,
+DEVICE_DEFINE(sgp30, DT_INST_LABEL(0), sgp30_init, NULL, &sgp30_data,
 		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
 		    &sgp30_api_funcs);

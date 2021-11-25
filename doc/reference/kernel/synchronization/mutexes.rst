@@ -71,7 +71,7 @@ the unlocking thread resets its priority to the level it had before locking
 that mutex.
 
 .. note::
-    The :option:`CONFIG_PRIORITY_CEILING` configuration option limits
+    The :kconfig:`CONFIG_PRIORITY_CEILING` configuration option limits
     how high the kernel can raise a thread's priority due to priority
     inheritance. The default value of 0 permits unlimited elevation.
 
@@ -159,10 +159,29 @@ Configuration Options
 
 Related configuration options:
 
-* :option:`CONFIG_PRIORITY_CEILING`
+* :kconfig:`CONFIG_PRIORITY_CEILING`
 
 API Reference
 *************
 
 .. doxygengroup:: mutex_apis
-   :project: Zephyr
+
+Futex API Reference
+*******************
+
+k_futex is a lightweight mutual exclusion primitive designed to minimize
+kernel involvement. Uncontended operation relies only on atomic access
+to shared memory. k_futex are tracked as kernel objects and can live in
+user memory so that any access bypasses the kernel object permission
+management mechanism.
+
+.. doxygengroup:: futex_apis
+
+User Mode Mutex API Reference
+*****************************
+
+sys_mutex behaves almost exactly like k_mutex, with the added advantage
+that a sys_mutex instance can reside in user memory. When user mode isn't
+enabled, sys_mutex behaves like k_mutex.
+
+.. doxygengroup:: user_mutex_apis

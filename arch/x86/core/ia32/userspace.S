@@ -9,6 +9,7 @@
 #include <offsets_short.h>
 #include <syscall.h>
 #include <sys/mem_manage.h>
+#include <x86_mmu.h>
 
 /* Exports */
 GTEXT(z_x86_syscall_entry_stub)
@@ -38,7 +39,7 @@ GDATA(_k_syscall_table)
  *  4  isr or exc handler
  *  0  return address
  */
-SECTION_FUNC(TEXT, z_x86_trampoline_to_kernel)
+SECTION_FUNC(PINNED_TEXT, z_x86_trampoline_to_kernel)
 	/* Check interrupted code segment to see if we came from ring 3
 	 * and hence on the trampoline stack
 	 */
@@ -50,7 +51,7 @@ SECTION_FUNC(TEXT, z_x86_trampoline_to_kernel)
 	pushl	%edi
 
 	/* Switch to kernel page table */
-	movl	$z_x86_kernel_ptables, %esi
+	movl	$Z_MEM_PHYS_ADDR(z_x86_kernel_ptables), %esi
 	movl	%esi, %cr3
 
 	/* Save old trampoline stack pointer in %edi */
@@ -98,7 +99,7 @@ SECTION_FUNC(TEXT, z_x86_trampoline_to_kernel)
  *
  * This function is conditionally macroed to KPTI_IRET/KPTI_IRET_USER
  */
-SECTION_FUNC(TEXT, z_x86_trampoline_to_user)
+SECTION_FUNC(PINNED_TEXT, z_x86_trampoline_to_user)
 	/* Check interrupted code segment to see if we came from ring 3
 	 * and hence on the trampoline stack
 	 */
@@ -107,7 +108,7 @@ SECTION_FUNC(TEXT, z_x86_trampoline_to_user)
 
 	/* Otherwise, fall through ... */
 
-SECTION_FUNC(TEXT, z_x86_trampoline_to_user_always)
+SECTION_FUNC(PINNED_TEXT, z_x86_trampoline_to_user_always)
 	/* Stash EDI, need a free register */
 	pushl	%edi
 
@@ -155,7 +156,7 @@ SECTION_FUNC(TEXT, z_x86_syscall_entry_stub)
 	pushl	%edi
 
 	/* Switch to kernel page table */
-	movl	$z_x86_kernel_ptables, %esi
+	movl	$Z_MEM_PHYS_ADDR(z_x86_kernel_ptables), %esi
 	movl	%esi, %cr3
 
 	/* Save old trampoline stack pointer in %edi */

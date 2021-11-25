@@ -16,6 +16,7 @@
 #include <linker/sections.h>
 #include <arch/cpu.h>
 #include <offsets_short.h>
+#include <aarch32/cortex_a_r/tcm.h>
 #include "vector_table.h"
 
 _ASM_FILE_PROLOGUE
@@ -28,7 +29,7 @@ GDATA(z_arm_fiq_stack)
 GDATA(z_arm_abort_stack)
 GDATA(z_arm_undef_stack)
 #if defined(CONFIG_PLATFORM_SPECIFIC_INIT)
-GTEXT(z_platform_init)
+GTEXT(z_arm_platform_init)
 #endif
 
 /**
@@ -176,12 +177,16 @@ SECTION_SUBSEC_FUNC(TEXT, _reset_section, __start)
 
 #if defined(CONFIG_PLATFORM_SPECIFIC_INIT)
     /* Execute platform-specific initialisation if applicable */
-    bl z_platform_init
+    bl z_arm_platform_init
 #endif
 
 #if defined(CONFIG_WDOG_INIT)
     /* board-specific watchdog initialization is necessary */
     bl z_arm_watchdog_init
+#endif
+
+#if defined(CONFIG_DISABLE_TCM_ECC)
+    bl z_arm_tcm_disable_ecc
 #endif
 
     b z_arm_prep_c

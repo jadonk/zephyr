@@ -139,7 +139,9 @@ int net_ipv6_send_na(struct net_if *iface, const struct in6_addr *src,
 static inline bool net_ipv6_is_nexthdr_upper_layer(uint8_t nexthdr)
 {
 	return (nexthdr == IPPROTO_ICMPV6 || nexthdr == IPPROTO_UDP ||
-		nexthdr == IPPROTO_TCP);
+		nexthdr == IPPROTO_TCP ||
+		(IS_ENABLED(CONFIG_NET_L2_VIRTUAL) &&
+		 ((nexthdr == IPPROTO_IPV6) || (nexthdr == IPPROTO_IPIP))));
 }
 
 /**
@@ -382,14 +384,7 @@ static inline void net_ipv6_nbr_set_reachable_timer(struct net_if *iface,
 }
 #endif
 
-/* We do not have to accept larger than 1500 byte IPv6 packet (RFC 2460 ch 5).
- * This means that we should receive everything within first two fragments.
- * The first one being 1280 bytes and the second one 220 bytes.
- */
-#if !defined(NET_IPV6_FRAGMENTS_MAX_PKT)
-#define NET_IPV6_FRAGMENTS_MAX_PKT 2
-#endif
-
+#if defined(CONFIG_NET_IPV6_FRAGMENT)
 /** Store pending IPv6 fragment information that is needed for reassembly. */
 struct net_ipv6_reassembly {
 	/** IPv6 source address of the fragment */
@@ -402,14 +397,17 @@ struct net_ipv6_reassembly {
 	 * Timeout for cancelling the reassembly. The timer is used
 	 * also to detect if this reassembly slot is used or not.
 	 */
-	struct k_delayed_work timer;
+	struct k_work_delayable timer;
 
 	/** Pointers to pending fragments */
-	struct net_pkt *pkt[NET_IPV6_FRAGMENTS_MAX_PKT];
+	struct net_pkt *pkt[CONFIG_NET_IPV6_FRAGMENT_MAX_PKT];
 
 	/** IPv6 fragment identification */
 	uint32_t id;
 };
+#else
+struct net_ipv6_reassembly;
+#endif
 
 /**
  * @typedef net_ipv6_frag_cb_t

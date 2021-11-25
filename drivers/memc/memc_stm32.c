@@ -9,7 +9,7 @@
 #include <device.h>
 
 #include <drivers/clock_control/stm32_clock_control.h>
-#include <pinmux/stm32/pinmux_stm32.h>
+#include <pinmux/pinmux_stm32.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(memc_stm32, CONFIG_MEMC_LOG_LEVEL);
@@ -37,8 +37,7 @@ static int memc_stm32_init(const struct device *dev)
 	}
 
 	/* enable FMC peripheral clock */
-	clk = device_get_binding(STM32_CLOCK_CONTROL_NAME);
-	__ASSERT_NO_MSG(clk);
+	clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 
 	r = clock_control_on(clk, (clock_control_subsys_t *)&config->pclken);
 	if (r < 0) {
@@ -59,5 +58,5 @@ static const struct memc_stm32_config config = {
 	.pinctrl_len = ARRAY_SIZE(pinctrl),
 };
 
-DEVICE_DEFINE(memc_stm32, DT_INST_LABEL(0), memc_stm32_init, NULL, NULL,
+DEVICE_DT_INST_DEFINE(0, memc_stm32_init, NULL, NULL,
 	      &config, POST_KERNEL, CONFIG_MEMC_INIT_PRIORITY, NULL);

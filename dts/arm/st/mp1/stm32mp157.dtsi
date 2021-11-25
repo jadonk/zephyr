@@ -6,6 +6,7 @@
  */
 
 #include <mem.h>
+#include <freq.h>
 #include <arm/armv7-m.dtsi>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/clock/stm32_clock.h>
@@ -35,10 +36,16 @@
 
 	soc {
 		rcc: rcc@50000000 {
-			compatible = "st,stm32-rcc";
+			compatible = "st,stm32mp1-rcc";
 			reg = <0x50000000 0x1000>;
 			#clock-cells = <2>;
-			label = "STM32_CLK_RCC";
+		};
+
+		exti: interrupt-controller@5000d000 {
+			compatible = "st,stm32-exti";
+			interrupt-controller;
+			#interrupt-cells = <1>;
+			reg = <0x5000d000 0x400>;
 		};
 
 		pinctrl: pin-controller@50002000 {
@@ -166,9 +173,9 @@
 			label = "SPI_1";
 		};
 
-		spi2: spi@4400b000 {
+		spi2: spi@4000b000 {
 			compatible = "st,stm32-spi-fifo", "st,stm32-spi";
-			reg = <0x4400b000 0x400>;
+			reg = <0x4000b000 0x400>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x800>;
@@ -176,9 +183,9 @@
 			label = "SPI_2";
 		};
 
-		spi3: spi@4400c000 {
+		spi3: spi@4000c000 {
 			compatible = "st,stm32-spi-fifo", "st,stm32-spi";
-			reg = <0x4400c000 0x400>;
+			reg = <0x4000c000 0x400>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x1000>;

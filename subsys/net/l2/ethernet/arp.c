@@ -30,7 +30,7 @@ static sys_slist_t arp_free_entries;
 static sys_slist_t arp_pending_entries;
 static sys_slist_t arp_table;
 
-struct k_delayed_work arp_request_timer;
+struct k_work_delayable arp_request_timer;
 
 static void arp_entry_cleanup(struct arp_entry *entry, bool pending)
 {
@@ -122,7 +122,7 @@ static struct arp_entry *arp_entry_get_pending(struct net_if *iface,
 	}
 
 	if (sys_slist_is_empty(&arp_pending_entries)) {
-		k_delayed_work_cancel(&arp_request_timer);
+		k_work_cancel_delayable(&arp_request_timer);
 	}
 
 	return entry;
@@ -171,9 +171,9 @@ static void arp_entry_register_pending(struct arp_entry *entry)
 	entry->req_start = k_uptime_get_32();
 
 	/* Let's start the timer if necessary */
-	if (!k_delayed_work_remaining_get(&arp_request_timer)) {
-		k_delayed_work_submit(&arp_request_timer,
-				      K_MSEC(ARP_REQUEST_TIMEOUT));
+	if (!k_work_delayable_remaining_get(&arp_request_timer)) {
+		k_work_reschedule(&arp_request_timer,
+				  K_MSEC(ARP_REQUEST_TIMEOUT));
 	}
 }
 
@@ -200,9 +200,9 @@ static void arp_request_timeout(struct k_work *work)
 	}
 
 	if (entry) {
-		k_delayed_work_submit(&arp_request_timer,
-				      K_MSEC(entry->req_start +
-					     ARP_REQUEST_TIMEOUT - current));
+		k_work_reschedule(&arp_request_timer,
+				  K_MSEC(entry->req_start +
+					 ARP_REQUEST_TIMEOUT - current));
 	}
 }
 
@@ -252,6 +252,11 @@ static inline struct net_pkt *arp_prepare(struct net_if *iface,
 		if (!pkt) {
 			return NULL;
 		}
+
+		/* Avoid recursive loop with network packet capturing */
+		if (IS_ENABLED(CONFIG_NET_CAPTURE) && pending) {
+			net_pkt_set_captured(pkt, net_pkt_is_captured(pending));
+		}
 	}
 
 	net_pkt_set_vlan_tag(pkt, net_eth_get_vlan_tag(iface));
@@ -298,8 +303,10 @@ static inline struct net_pkt *arp_prepare(struct net_if *iface,
 	memcpy(hdr->src_hwaddr.addr, net_pkt_lladdr_src(pkt)->addr,
 	       sizeof(struct net_eth_addr));
 
-	if (!entry || net_pkt_ipv4_auto(pkt)) {
+	if (net_pkt_ipv4_auto(pkt)) {
 		my_addr = current_ip;
+	} else if (!entry) {
+		my_addr = &NET_IPV4_HDR(pending)->src;
 	} else {
 		my_addr = if_get_addr(entry->iface, current_ip);
 	}
@@ -704,7 +711,7 @@ void net_arp_clear_cache(struct net_if *iface)
 	}
 
 	if (sys_slist_is_empty(&arp_pending_entries)) {
-		k_delayed_work_cancel(&arp_request_timer);
+		k_work_cancel_delayable(&arp_request_timer);
 	}
 }
 
@@ -738,7 +745,7 @@ void net_arp_init(void)
 		sys_slist_prepend(&arp_free_entries, &arp_entries[i].node);
 	}
 
-	k_delayed_work_init(&arp_request_timer, arp_request_timeout);
+	k_work_init_delayable(&arp_request_timer, arp_request_timeout);
 
 	arp_cache_initialized = true;
 }

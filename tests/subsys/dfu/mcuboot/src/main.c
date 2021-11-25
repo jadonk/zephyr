@@ -77,7 +77,7 @@ void test_request_upgrade(void)
 	zassert(memcmp(expectation, readout, sizeof(expectation)) == 0,
 		"pass", "fail");
 
-	boot_erase_img_bank(FLASH_AREA_ID(image_1));
+	zassert(boot_erase_img_bank(FLASH_AREA_ID(image_1)) == 0, "pass", "fail");
 
 	zassert(boot_request_upgrade(true) == 0, "pass", "fail");
 
@@ -95,8 +95,12 @@ void test_write_confirm(void)
 {
 	const uint32_t img_magic[4] = BOOT_MAGIC_VALUES;
 	uint32_t readout[ARRAY_SIZE(img_magic)];
+	uint8_t flag[BOOT_MAX_ALIGN];
 	const struct flash_area *fa;
 	int ret;
+
+	flag[0] = 0x01;
+	memset(&flag[1], 0xff, sizeof(flag) - 1);
 
 	ret = flash_area_open(FLASH_AREA_ID(image_0), &fa);
 	if (ret) {
@@ -117,7 +121,12 @@ void test_write_confirm(void)
 		zassert_true(ret == 0, "Write to flash");
 	}
 
-	zassert(boot_write_img_confirmed() == 0, "pass", "fail");
+	/* set copy-done flag */
+	ret = flash_area_write(fa, fa->fa_size - 32, &flag, sizeof(flag));
+	zassert_true(ret == 0, "Write to flash");
+
+	ret = boot_write_img_confirmed();
+	zassert(ret == 0, "pass", "fail (%d)", ret);
 
 	ret = flash_area_read(fa, fa->fa_size - 24, readout,
 			      sizeof(readout[0]));

@@ -14,5 +14,5 @@ menuconfig I2C_DW
 
 config I2C_DW_CLOCK_SPEED
 	int "Set the clock speed for I2C"
-	default 32
 	depends on I2C_DW
+	default 32

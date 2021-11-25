@@ -17,6 +17,9 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include "lwm2m_object.h"
 #include "lwm2m_engine.h"
 
+#define FIRMWARE_VERSION_MAJOR 1
+#define FIRMWARE_VERSION_MINOR 0
+
 /* Firmware resource IDs */
 #define FIRMWARE_PACKAGE_ID			0
 #define FIRMWARE_PACKAGE_URI_ID			1
@@ -25,7 +28,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define FIRMWARE_UPDATE_RESULT_ID		5
 #define FIRMWARE_PACKAGE_NAME_ID		6
 #define FIRMWARE_PACKAGE_VERSION_ID		7
-#define FIRMWARE_UPDATE_PROTO_SUPPORT_ID	8 /* TODO */
+#define FIRMWARE_UPDATE_PROTO_SUPPORT_ID	8
 #define FIRMWARE_UPDATE_DELIV_METHOD_ID		9
 
 #define FIRMWARE_MAX_ID				10
@@ -46,6 +49,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 /* resource state variables */
 static uint8_t update_state;
 static uint8_t update_result;
+static uint8_t supported_protocol;
 static uint8_t delivery_method;
 static char package_uri[PACKAGE_URI_LEN];
 
@@ -319,16 +323,20 @@ static struct lwm2m_engine_obj_inst *firmware_create(uint16_t obj_inst_id)
 	init_res_instance(res_inst, ARRAY_SIZE(res_inst));
 
 	/* initialize instance resource data */
-	INIT_OBJ_RES_OPT(FIRMWARE_PACKAGE_ID, res, i, res_inst, j, 1, true,
-			 NULL, NULL, package_write_cb, NULL);
-	INIT_OBJ_RES(FIRMWARE_PACKAGE_URI_ID, res, i, res_inst, j, 1, true,
-		     package_uri, PACKAGE_URI_LEN,
-		     NULL, NULL, package_uri_write_cb, NULL);
+	INIT_OBJ_RES_OPT(FIRMWARE_PACKAGE_ID, res, i, res_inst, j, 1, false,
+			 true, NULL, NULL, NULL, package_write_cb, NULL);
+	INIT_OBJ_RES(FIRMWARE_PACKAGE_URI_ID, res, i, res_inst, j, 1, false,
+		     true, package_uri, PACKAGE_URI_LEN,
+		     NULL, NULL, NULL, package_uri_write_cb, NULL);
 	INIT_OBJ_RES_EXECUTE(FIRMWARE_UPDATE_ID, res, i, firmware_update_cb);
 	INIT_OBJ_RES_DATA(FIRMWARE_STATE_ID, res, i, res_inst, j,
 			  &update_state, sizeof(update_state));
 	INIT_OBJ_RES_DATA(FIRMWARE_UPDATE_RESULT_ID, res, i, res_inst, j,
 			  &update_result, sizeof(update_result));
+	INIT_OBJ_RES_OPTDATA(FIRMWARE_PACKAGE_NAME_ID, res, i, res_inst, j);
+	INIT_OBJ_RES_OPTDATA(FIRMWARE_PACKAGE_VERSION_ID, res, i, res_inst, j);
+	INIT_OBJ_RES_DATA(FIRMWARE_UPDATE_PROTO_SUPPORT_ID, res, i, res_inst, j,
+			  &supported_protocol, sizeof(supported_protocol));
 	INIT_OBJ_RES_DATA(FIRMWARE_UPDATE_DELIV_METHOD_ID, res, i, res_inst, j,
 			  &delivery_method, sizeof(delivery_method));
 
@@ -357,6 +365,9 @@ static int lwm2m_firmware_init(const struct device *dev)
 #endif
 
 	firmware.obj_id = LWM2M_OBJECT_FIRMWARE_ID;
+	firmware.version_major = FIRMWARE_VERSION_MAJOR;
+	firmware.version_minor = FIRMWARE_VERSION_MINOR;
+	firmware.is_core = true;
 	firmware.fields = fields;
 	firmware.field_count = ARRAY_SIZE(fields);
 	firmware.max_instance_count = 1U;

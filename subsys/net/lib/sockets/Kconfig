@@ -10,16 +10,34 @@ menuconfig NET_SOCKETS
 
 if NET_SOCKETS
 
+config NET_SOCKETS_PRIORITY_DEFAULT
+	int "Default processing priority for sockets"
+	default 50
+	help
+	  Default processing priority for socket implementations. This defines
+	  the order of processing of particular socket implementations when
+	  creating a new socket, lower value indicate earlier processing. This
+	  allows to for instance prioritize offloaded socket processing during
+	  socket creation over the native one, or vice versa.
+
 config NET_SOCKETS_POSIX_NAMES
-	bool "Standard POSIX names for Sockets API"
+	bool "POSIX names for Sockets API (without full POSIX API)"
+	default y if !POSIX_API
 	depends on !POSIX_API
 	help
-	  By default, Sockets API function are prefixed with ``zsock_`` to avoid
-	  namespacing issues. If this option is enabled, they will be provided
-	  with standard POSIX names like socket(), recv(), and close(), to help
-	  with porting existing code. Note that close() may require a special
-	  attention, as in POSIX it closes any file descriptor, while with this
-	  option enabled, it will still apply only to sockets.
+	  With this option, Socket API functions are available under the
+	  standard POSIX names like socket(), recv(), and close(), etc.,
+	  even if full POSIX API (CONFIG_POSIX_API) is not enabled. (Note
+	  that close() may require a special attention, as in POSIX it
+	  closes any file descriptor, while with this option enabled, it
+	  will apply only to sockets.)
+
+	  Various networking libraries require either
+	  CONFIG_NET_SOCKETS_POSIX_NAMES or CONFIG_POSIX_API to be set.
+	  If both are disabled, Zephyr's socket functions will be
+	  available (only) with ``zsock_`` prefix, (e.g. `zsock_socket`).
+	  This is useful only in peculiar cases, e.g. when integrating
+	  with 3rd-party socket libraries.
 
 config NET_SOCKETS_POLL_MAX
 	int "Max number of supported poll() entries"
@@ -50,9 +68,17 @@ config NET_SOCKETS_SOCKOPT_TLS
 	bool "Enable TCP TLS socket option support [EXPERIMENTAL]"
 	imply TLS_CREDENTIALS
 	select MBEDTLS if NET_NATIVE
+	select EXPERIMENTAL
 	help
 	  Enable TLS socket option support which automatically establishes
 	  a TLS connection to the remote host.
+
+config NET_SOCKETS_TLS_PRIORITY
+	int "Default processing priority for TLS sockets"
+	default 45
+	help
+	  Processing priority for TLS sockets. Should be lower than
+	  NET_SOCKETS_PRIORITY_DEFAULT in order to be processed correctly.
 
 config NET_SOCKETS_TLS_SET_MAX_FRAGMENT_LENGTH
 	bool "Set Maximum Fragment Length (MFL)"
@@ -74,6 +100,7 @@ config NET_SOCKETS_ENABLE_DTLS
 	bool "Enable DTLS socket support [EXPERIMENTAL]"
 	depends on NET_SOCKETS_SOCKOPT_TLS
 	select MBEDTLS_DTLS if NET_NATIVE
+	select EXPERIMENTAL
 	help
 	  Enable DTLS socket support. By default only TLS over TCP is supported.
 
@@ -127,6 +154,7 @@ config NET_SOCKETS_TLS_MAX_APP_PROTOCOLS
 
 config NET_SOCKETS_OFFLOAD
 	bool "Offload Socket APIs [EXPERIMENTAL]"
+	select EXPERIMENTAL
 	help
 	  Enables direct offloading of socket operations to dedicated TCP/IP
 	  hardware.
@@ -149,7 +177,6 @@ config NET_SOCKETS_OFFLOAD_TLS
 
 config NET_SOCKETS_PACKET
 	bool "Enable packet socket support"
-	depends on NET_L2_ETHERNET
 	help
 	  This is an initial version of packet socket support (special type
 	  raw socket). Packets are passed to and from the device driver
@@ -172,6 +199,7 @@ config NET_SOCKETS_PACKET_DGRAM
 config NET_SOCKETS_CAN
 	bool "Enable socket CAN support [EXPERIMENTAL]"
 	select NET_L2_CANBUS_RAW
+	select EXPERIMENTAL
 	help
 	  The value depends on your network needs.
 
@@ -185,6 +213,7 @@ config NET_SOCKETS_CAN_RECEIVERS
 
 config NET_SOCKETPAIR
 	bool "Support for the socketpair syscall [EXPERIMENTAL]"
+	select EXPERIMENTAL
 	depends on HEAP_MEM_POOL_SIZE != 0
 	help
 	  Choose y here if you would like to use the socketpair(2)
@@ -202,6 +231,7 @@ config NET_SOCKETS_NET_MGMT
 	bool "Enable network management socket support [EXPERIMENTAL]"
 	depends on NET_MGMT_EVENT
 	select NET_MGMT_EVENT_INFO
+	select EXPERIMENTAL
 	help
 	  Select this if you want to use socket API to get network
 	  managements events to your application.

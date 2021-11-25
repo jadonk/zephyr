@@ -1,7 +1,7 @@
 .. _tfm_integration-samples:
 
-TFM Integration Samples
-#######################
+TF-M Integration Samples
+########################
 
 .. toctree::
    :maxdepth: 1
@@ -43,7 +43,7 @@ supports firmware upgrade.
 
 The current TF-M implementation specifically targets TrustZone for ARMv8-M.
 
-Trusted Firmware M source code is available at
+Trusted Firmware-M source code is available at
 `git.trustedfirmware.org <https://git.trustedfirmware.org>`_, although a fork
 of this source code is maintained by the Zephyr Project as a module for
 convenience sake at
@@ -53,90 +53,3 @@ For further information consult the official `TF-M documentation`_
 
 .. _TF-M documentation:
    https://ci.trustedfirmware.org/job/tf-m-build-test-nightly/lastSuccessfulBuild/artifact/build-docs/tf-m_documents/install/doc/user_guide/html/index.html
-
-TF-M Requirements
-*****************
-
-The following Python modules are required when building TF-M binaries:
-
-* cryptography
-* pyasn1
-* pyyaml
-* cbor>=1.0.0
-* imgtool>=1.6.0
-* jinja2
-* click
-
-You can install them via:
-
-   .. code-block:: bash
-
-      $ pip3 install --user cryptography pyasn1 pyyaml cbor>=1.0.0 imgtool>=1.6.0 jinja2 click
-
-They are used by TF-M's signing utility to prepare firmware images for
-validation by the bootloader.
-
-Part of the process of generating binaries for QEMU and merging signed
-secure and non-secure binaries on certain platforms also requires the use of
-the ``srec_cat`` utility.
-
-This can be installed on Linux via:
-
-   .. code-block:: bash
-
-      $ sudo apt-get install srecord
-
-And on OS X via:
-
-   .. code-block:: bash
-
-      $ brew install srecord
-
-For Windows-based systems, please make sure you have a copy of the utility
-available on your system path. See, for example:
-`SRecord for Windows <http://srecord.sourceforge.net/windows.html>`_
-
-Signing Images
-==============
-
-TF-M uses a secure bootloader (BL2) and firmware images must be signed with a
-private key. The firmware image is validated by the bootloader at startup using
-the corresponding public key, which is stored inside the secure bootloader
-firmware image.
-
-By default, ``tfm/bl2/ext/mcuboot/root-rsa-3072.pem`` is used to sign secure
-images, and ``tfm/bl2/ext/mcuboot/root-rsa-3072_1.pem`` is used to sign
-non-secure images. Theses default .pem keys keys can be overridden using the
-``CONFIG_TFM_KEY_FILE_S`` and ``CONFIG_TFM_KEY_FILE_NS`` values.
-
-The ``wrapper.py`` script from TF-M signs the TF-M + Zephyr binary using the
-.pem private key..
-
-To satisfy `PSA Certified Level 1`_ requirements, **You MUST replace
-the default .pem file with a new key pair!**
-
-To generate a new public/private key pair, run the following commands:
-
-   .. code-block:: bash
-
-     $ cd $ZEPHYR_BASE/../modules/tee/tfm/trusted-firmware-m/bl2/ext/mcuboot/scripts
-     $ chmod +x imgtool.py
-     $ ./imgtool.py keygen -k root-rsa-3072.pem -t rsa-3072
-     $ ./imgtool.py keygen -k root-rsa-3072_1.pem -t rsa-3072
-
-You can then replace the .pem file in ``[TF-M_PATH]/bl2/ext/mcuboot/`` with
-the newly generated .pem files, and rebuild the bootloader so that it uses the
-public key extracted from this new key file when validating firmware images.
-
-Alternatively, place the new .pem files in an alternate location, such as your
-Zephyr application folder, and reference them in the ``prj.conf`` file via the
-``CONFIG_TFM_KEY_FILE_S`` and ``CONFIG_TFM_KEY_FILE_NS`` config values.
-
-   .. warning::
-
-     Be sure to keep your private key file in a safe, reliable location! If you
-     lose this key file, you will be unable to sign any future firmware images,
-     and it will no longer be possible to update your devices in the field!
-
-.. _PSA Certified Level 1:
-  https://www.psacertified.org/security-certification/psa-certified-level-1/

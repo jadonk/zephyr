@@ -76,6 +76,10 @@ static int gpio_mcux_configure(const struct device *dev,
 		return -ENOTSUP;
 	}
 
+	/* Set PCR mux to GPIO for the pin we are configuring */
+	mask |= PORT_PCR_MUX_MASK;
+	pcr |= PORT_PCR_MUX(kPORT_MuxAsGpio);
+
 	/* Now do the PORT module. Figure out the pullup/pulldown
 	 * configuration, but don't write it to the PCR register yet.
 	 */
@@ -91,6 +95,22 @@ static int gpio_mcux_configure(const struct device *dev,
 		 */
 		pcr |= PORT_PCR_PE_MASK;
 	}
+
+#if defined(FSL_FEATURE_PORT_HAS_DRIVE_STRENGTH) && FSL_FEATURE_PORT_HAS_DRIVE_STRENGTH
+	/* Determine the drive strength */
+	switch (flags & GPIO_DS_MASK) {
+	case GPIO_DS_DFLT:
+		/* Default is low drive strength */
+		mask |= PORT_PCR_DSE_MASK;
+		break;
+	case GPIO_DS_ALT:
+		/* Alternate is high drive strength */
+		pcr |= PORT_PCR_DSE_MASK;
+		break;
+	default:
+		return -ENOTSUP;
+	}
+#endif /* defined(FSL_FEATURE_PORT_HAS_DRIVE_STRENGTH) && FSL_FEATURE_PORT_HAS_DRIVE_STRENGTH */
 
 	/* Accessing by pin, we only need to write one PCR register. */
 	port_base->PCR[pin] = (port_base->PCR[pin] & ~mask) | pcr;
@@ -280,7 +300,7 @@ static const struct gpio_driver_api gpio_mcux_driver_api = {
 									\
 	DEVICE_DT_INST_DEFINE(n,					\
 			    gpio_mcux_port## n ##_init,			\
-			    device_pm_control_nop,			\
+			    NULL,					\
 			    &gpio_mcux_port## n ##_data,		\
 			    &gpio_mcux_port## n##_config,		\
 			    POST_KERNEL,				\

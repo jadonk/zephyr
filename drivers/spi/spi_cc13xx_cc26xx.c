@@ -11,7 +11,8 @@
 LOG_MODULE_REGISTER(spi_cc13xx_cc26xx);
 
 #include <drivers/spi.h>
-#include <power/power.h>
+#include <pm/device.h>
+#include <pm/pm.h>
 
 #include <driverlib/prcm.h>
 #include <driverlib/ssi.h>
@@ -32,9 +33,6 @@ struct spi_cc13xx_cc26xx_config {
 
 struct spi_cc13xx_cc26xx_data {
 	struct spi_context ctx;
-#ifdef CONFIG_PM_DEVICE
-	uint32_t pm_state;
-#endif
 };
 
 #define CPU_FREQ DT_PROP(DT_PATH(cpus, cpu_0), clock_frequency)
@@ -116,8 +114,6 @@ static int spi_cc13xx_cc26xx_configure(const struct device *dev,
 			    cfg->cs_pin, cfg->sck_pin);
 
 	ctx->config = config;
-	/* This will reconfigure the CS pin as GPIO if same as cfg->cs_pin. */
-	spi_context_cs_configure(ctx);
 
 	/* Disable SSI before making configuration changes */
 	SSIDisable(cfg->base);
@@ -148,9 +144,8 @@ static int spi_cc13xx_cc26xx_transceive(const struct device *dev,
 
 	spi_context_lock(ctx, false, NULL, config);
 
-#if defined(CONFIG_PM) && \
-	defined(CONFIG_PM_SLEEP_STATES)
-	pm_ctrl_disable_state(POWER_STATE_SLEEP_2);
+#ifdef CONFIG_PM
+	pm_constraint_set(PM_STATE_STANDBY);
 #endif
 
 	err = spi_cc13xx_cc26xx_configure(dev, config);
@@ -185,9 +180,8 @@ static int spi_cc13xx_cc26xx_transceive(const struct device *dev,
 	spi_context_cs_control(ctx, false);
 
 done:
-#if defined(CONFIG_PM) && \
-	defined(CONFIG_PM_SLEEP_STATES)
-	pm_ctrl_enable_state(POWER_STATE_SLEEP_2);
+#ifdef CONFIG_PM
+	pm_constraint_release(PM_STATE_STANDBY);
 #endif
 	spi_context_release(ctx, err);
 	return err;
@@ -212,69 +206,33 @@ static int spi_cc13xx_cc26xx_release(const struct device *dev,
 }
 
 #ifdef CONFIG_PM_DEVICE
-static int spi_cc13xx_cc26xx_set_power_state(const struct device *dev,
-					     uint32_t new_state)
+static int spi_cc13xx_cc26xx_pm_action(const struct device *dev,
+				       enum pm_device_action action)
 {
-	int ret = 0;
-
-	if ((new_state == DEVICE_PM_ACTIVE_STATE) &&
-		(new_state != get_dev_data(dev)->pm_state)) {
-		if (get_dev_config(dev)->base ==
-			DT_INST_REG_ADDR(0)) {
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+		if (get_dev_config(dev)->base == DT_INST_REG_ADDR(0)) {
 			Power_setDependency(PowerCC26XX_PERIPH_SSI0);
 		} else {
 			Power_setDependency(PowerCC26XX_PERIPH_SSI1);
 		}
-		get_dev_data(dev)->pm_state = new_state;
-	} else {
-		__ASSERT_NO_MSG(new_state == DEVICE_PM_LOW_POWER_STATE ||
-			new_state == DEVICE_PM_SUSPEND_STATE ||
-			new_state == DEVICE_PM_OFF_STATE);
-
-		if (get_dev_data(dev)->pm_state == DEVICE_PM_ACTIVE_STATE) {
-			SSIDisable(get_dev_config(dev)->base);
-			/*
-			 * Release power dependency
-			 */
-			if (get_dev_config(dev)->base ==
-				DT_INST_REG_ADDR(0)) {
-				Power_releaseDependency(
-					PowerCC26XX_PERIPH_SSI0);
-			} else {
-				Power_releaseDependency(
-					PowerCC26XX_PERIPH_SSI1);
-			}
-			get_dev_data(dev)->pm_state = new_state;
+		break;
+	case PM_DEVICE_ACTION_SUSPEND:
+		SSIDisable(get_dev_config(dev)->base);
+		/*
+		 * Release power dependency
+		 */
+		if (get_dev_config(dev)->base == DT_INST_REG_ADDR(0)) {
+			Power_releaseDependency(PowerCC26XX_PERIPH_SSI0);
+		} else {
+			Power_releaseDependency(PowerCC26XX_PERIPH_SSI1);
 		}
+		break;
+	default:
+		return -ENOTSUP;
 	}
 
-	return ret;
-}
-
-static int spi_cc13xx_cc26xx_pm_control(const struct device *dev,
-					uint32_t ctrl_command,
-					void *context, device_pm_cb cb,
-					void *arg)
-{
-	int ret = 0;
-
-	if (ctrl_command == DEVICE_PM_SET_POWER_STATE) {
-		uint32_t new_state = *((const uint32_t *)context);
-
-		if (new_state != get_dev_data(dev)->pm_state) {
-			ret = spi_cc13xx_cc26xx_set_power_state(dev,
-				new_state);
-		}
-	} else {
-		__ASSERT_NO_MSG(ctrl_command == DEVICE_PM_GET_POWER_STATE);
-		*((uint32_t *)context) = get_dev_data(dev)->pm_state;
-	}
-
-	if (cb) {
-		cb(dev, ret, context, arg);
-	}
-
-	return ret;
+	return 0;
 }
 #endif /* CONFIG_PM_DEVICE */
 
@@ -332,30 +290,25 @@ static const struct spi_driver_api spi_cc13xx_cc26xx_driver_api = {
 #define SPI_CC13XX_CC26XX_DEVICE_INIT(n)				    \
 	DEVICE_DT_INST_DEFINE(n,						    \
 		spi_cc13xx_cc26xx_init_##n,				    \
-		spi_cc13xx_cc26xx_pm_control,				    \
+		spi_cc13xx_cc26xx_pm_action,				    \
 		&spi_cc13xx_cc26xx_data_##n, &spi_cc13xx_cc26xx_config_##n, \
 		POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,			    \
 		&spi_cc13xx_cc26xx_driver_api)
 
-#ifdef CONFIG_PM_DEVICE
-#define SPI_CC13XX_CC26XX_INIT_PM_STATE					    \
-	do {								    \
-		get_dev_data(dev)->pm_state = DEVICE_PM_ACTIVE_STATE;	    \
-	} while (0)
-#else
-#define SPI_CC13XX_CC26XX_INIT_PM_STATE
-#endif
-
-#define SPI_CC13XX_CC26XX_INIT_FUNC(n)					    \
-	static int spi_cc13xx_cc26xx_init_##n(const struct device *dev)	    \
-	{								    \
-		SPI_CC13XX_CC26XX_INIT_PM_STATE;			    \
-									    \
-		SPI_CC13XX_CC26XX_POWER_SPI(n);				    \
-									    \
-		spi_context_unlock_unconditionally(&get_dev_data(dev)->ctx);\
-									    \
-		return 0;						    \
+#define SPI_CC13XX_CC26XX_INIT_FUNC(n)						\
+	static int spi_cc13xx_cc26xx_init_##n(const struct device *dev)		\
+	{									\
+		int err;							\
+		SPI_CC13XX_CC26XX_POWER_SPI(n);					\
+										\
+		err = spi_context_cs_configure_all(&get_dev_data(dev)->ctx);	\
+		if (err < 0) {							\
+			return err;						\
+		}								\
+										\
+		spi_context_unlock_unconditionally(&get_dev_data(dev)->ctx);	\
+										\
+		return 0;							\
 	}
 
 #define SPI_CC13XX_CC26XX_INIT(n)					\
@@ -373,10 +326,11 @@ static const struct spi_driver_api spi_cc13xx_cc26xx_driver_api = {
 									\
 	static struct spi_cc13xx_cc26xx_data				\
 		spi_cc13xx_cc26xx_data_##n = {				\
-		SPI_CONTEXT_INIT_LOCK(spi_cc13xx_cc26xx_data_##n, ctx),	  \
-		SPI_CONTEXT_INIT_SYNC(spi_cc13xx_cc26xx_data_##n, ctx),	  \
-	};								  \
-									  \
+		SPI_CONTEXT_INIT_LOCK(spi_cc13xx_cc26xx_data_##n, ctx),	\
+		SPI_CONTEXT_INIT_SYNC(spi_cc13xx_cc26xx_data_##n, ctx),	\
+		SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(n), ctx)	\
+	};								\
+									\
 	SPI_CC13XX_CC26XX_DEVICE_INIT(n);
 
 DT_INST_FOREACH_STATUS_OKAY(SPI_CC13XX_CC26XX_INIT)

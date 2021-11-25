@@ -119,7 +119,7 @@ static inline int gpio_emul_output_get(const struct device *port, gpio_pin_t pin
  * @return 0 on success
  * @return -EINVAL if an invalid argument is provided
  */
-int gpio_emul_flags_get(const struct device *port, gpio_pin_t pin, uint32_t *flags);
+int gpio_emul_flags_get(const struct device *port, gpio_pin_t pin, gpio_flags_t *flags);
 
 /**
  * @}

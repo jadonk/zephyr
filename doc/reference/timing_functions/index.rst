@@ -1,7 +1,7 @@
 .. _timing_functions:
 
-Timing Functions
-################
+Executing Time Functions
+########################
 
 The timing functions can be used to obtain execution time of
 a section of code to aid in analysis and optimization.
@@ -13,7 +13,7 @@ specified by architecture, SoC or board configuration.
 Configuration
 *************
 
-To allow using the timing functions, :option:`CONFIG_TIMING_FUNCTIONS`
+To allow using the timing functions, :kconfig:`CONFIG_TIMING_FUNCTIONS`
 needs to be enabled.
 
 Usage
@@ -78,4 +78,3 @@ API documentation
 *****************
 
 .. doxygengroup:: timing_api
-   :project: Zephyr

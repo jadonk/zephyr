@@ -10,10 +10,10 @@
 #ifndef __PLATFORM_LIB_SHIM_H__
 #define __PLATFORM_LIB_SHIM_H__
 
-#include <sys/util.h>
 #include <soc/memory.h>
 
 #ifndef ASSEMBLY
+#include <sys/util.h>
 #include <stdint.h>
 #endif
 
@@ -239,19 +239,15 @@
 #define LSRMCTL			0x71D54
 #define LSPGISTS		0x71D58
 
-#define SHIM_LSPGCTL		0x50
-#define SHIM_LSPGISTS		0x58
-
-
 #define SHIM_L2_MECS		(SHIM_BASE + 0xd0)
 
 /** \brief LDO Control */
 #define SHIM_LDOCTL		0xA4
-#define SHIM_LDOCTL_HPSRAM_MASK	(3 << 0)
+#define SHIM_LDOCTL_HPSRAM_MASK	(3 << 0 | 3 << 16)
 #define SHIM_LDOCTL_LPSRAM_MASK	(3 << 2)
-#define SHIM_LDOCTL_HPSRAM_LDO_ON	(3 << 0)
+#define SHIM_LDOCTL_HPSRAM_LDO_ON	(3 << 0 | 3 << 16)
 #define SHIM_LDOCTL_LPSRAM_LDO_ON	(3 << 2)
-#define SHIM_LDOCTL_HPSRAM_LDO_BYPASS	BIT(0)
+#define SHIM_LDOCTL_HPSRAM_LDO_BYPASS	(BIT(0) | BIT(16))
 #define SHIM_LDOCTL_LPSRAM_LDO_BYPASS	BIT(2)
 #define SHIM_LDOCTL_HPSRAM_LDO_OFF	(0 << 0)
 #define SHIM_LDOCTL_LPSRAM_LDO_OFF	(0 << 2)

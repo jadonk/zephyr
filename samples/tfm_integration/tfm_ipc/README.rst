@@ -20,6 +20,10 @@ non-secure configuration.
 The sample prints test info to the console either as a single-thread or
 multi-thread application.
 
+The sample reboots after 5 seconds to demonstrate rebooting with TF-M.
+The sys_reboot call is routed to TF-M, since the nonsecure app is not allowed
+to perform the reboot directly.
+
 Building and Running
 ********************
 
@@ -29,21 +33,21 @@ executed on MPS2+ AN521 and ST Nucleo L552ZE Q.
 On MPS2+ AN521:
 ===============
 
-#. Build Zephyr with a non-secure configuration (``-DBOARD=mps2_an521_nonsecure``).
+#. Build Zephyr with a non-secure configuration (``-DBOARD=mps2_an521_ns``).
 
    .. code-block:: bash
 
       cd $ZEPHYR_ROOT/samples/tfm_integration/tfm_ipc/
       mkdir build
       cd build
-      cmake -DBOARD=mps2_an521_nonsecure ..
+      cmake -DBOARD=mps2_an521_ns ..
       make
 
 You can also use west as follows:
 
    .. code-block:: bash
 
-      $ west build -p -b mps2_an521_nonsecure zephyr/samples/tfm_integration/tfm_ipc
+      $ west build -p -b mps2_an521_ns zephyr/samples/tfm_integration/tfm_ipc
 
 
 #. Copy application binary files (mcuboot.bin and tfm_sign.bin) to ``<MPS2 device name>/SOFTWARE/``.
@@ -78,7 +82,7 @@ folder to update the ``-DGNUARM_PATH=/opt/toolchain/arm-none-eabi`` path.
 On QEMU:
 ========
 
-The MPS2+ AN521 target (``mps2_an521_nonsecure``), which is based on a
+The MPS2+ AN521 target (``mps2_an521_ns``), which is based on a
 dual core ARM Cortex-M33 setup, also allows you to run TF-M tests using QEMU if
 you don't have access to a supported ARMv8-M development board.
 
@@ -87,7 +91,7 @@ be run via ``qemu-system-arm``. The binary can be executed as follows:
 
    .. code-block:: bash
 
-      qemu-system-arm -M mps2-an521 -device loader,file=tfm_qemu.hex -serial stdio
+      qemu-system-arm -M mps2-an521 -device loader,file=tfm_merged.hex -serial stdio
 
 You can also run the binary as part of the ``west`` build process by appending
 the ``-t run`` flag to the end of your build command, or in the case of
@@ -95,7 +99,7 @@ ninja or make, adding the ``run`` commands:
 
    .. code-block:: bash
 
-      $ west build -b mps2_an521_nonsecure zephyr/samples/tfm_integration/tfm_ipc -t run
+      $ west build -b mps2_an521_ns zephyr/samples/tfm_integration/tfm_ipc -t run
 
 Or, post build:
 
@@ -103,33 +107,38 @@ Or, post build:
 
       $ ninja run
 
-On ST Nucleo L552ZE Q:
-======================
+On ST Nucleo L552ZE Q or STM32L562E-DK Discovery:
+=================================================
 
 This sample was tested on Ubuntu 18.04 with Zephyr SDK 0.11.3.
 
 Build Zephyr with a non-secure configuration:
 
+   Example, for building non-secure configuration for Nucleo L552ZE Q
+
    .. code-block:: bash
 
       $ west build -b nucleo_l552ze_q_ns samples/tfm_integration/tfm_ipc/
 
-Two scripts are avalaible in the ``build/tfm`` folder:
+   Example, for building non-secure configuration for STM32L562E-DK Discovery
+
+   .. code-block:: bash
+
+      $ west build -b stm32l562e_dk_ns samples/tfm_integration/tfm_ipc/
+
+The script to initialize the device is avalaible in the ``build/tfm`` folder:
 
   - ``regression.sh``: Sets platform option bytes config and erase platform.
-  - ``TFM_UPDATE.sh``: Writes bl2, secure, and non secure image in target.
 
 Run them in the following order to flash the board:
 
    .. code-block:: bash
 
       $ ./build/tfm/regression.sh
-      $ ./build/tfm/TFM_UPDATE.sh
-
-Reset the board.
+      $ west flash --hex-file build/tfm_merged.hex
 
  .. note::
-      Note that ``arm-none-eabi-gcc`` should be available in the PATH variable and that ``STM32_Programmer_CLI`` is required to run ``regression.sh`` and ``TFM_UPDATE.sh`` (see https://www.st.com/en/development-tools/stm32cubeprog.html). If you are still having trouble running these scripts, check the Programming and Debugging section of the :ref:`nucleo_l552ze_q_board` documentation.
+      Note that ``arm-none-eabi-gcc`` should be available in the PATH variable and that ``STM32_Programmer_CLI`` is required to run ``regression.sh`` (see https://www.st.com/en/development-tools/stm32cubeprog.html). If you are still having trouble running these scripts, check the Programming and Debugging section of the :ref:`nucleo_l552ze_q_board` or :ref:`stm32l562e_dk_board` documentation.
 
 On LPCxpresso55S69:
 ===================
@@ -162,16 +171,16 @@ On nRF5340 and nRF9160:
 =======================
 
 Build Zephyr with a non-secure configuration
-(``-DBOARD=nrf5340pdk_nrf5340_cpuappns`` or ``-DBOARD=nrf9160dk_nrf9160ns``).
+(``-DBOARD=nrf5340dk_nrf5340_cpuapp_ns`` or ``-DBOARD=nrf9160dk_nrf9160_ns``).
 
    Example, for nRF9160, using ``cmake`` and ``ninja``
 
    .. code-block:: bash
 
-      cd <ZEPHYR_ROOT>/samples/tfm_integration/psa_level_1/
+      cd <ZEPHYR_ROOT>/samples/tfm_integration/tfm_ipc/
       rm -rf build
       mkdir build && cd build
-      cmake -GNinja -DBOARD=nrf9160dk_nrf9160ns ..
+      cmake -GNinja -DBOARD=nrf9160dk_nrf9160_ns ..
 
 If building with BL2 (MCUboot bootloader) enabled, manually flash
 the MCUboot bootloader image binary (``bl2.hex``).
@@ -190,6 +199,28 @@ Finally, flash the concatenated TF-M + Zephyr binary.
 
       ninja flash
 
+On BL5340:
+==========
+
+Build Zephyr with a non-secure configuration
+(``-DBOARD=bl5340_dvk_cpuapp_ns``).
+
+   Example using ``cmake`` and ``ninja``
+
+   .. code-block:: bash
+
+      cd <ZEPHYR_ROOT>/samples/tfm_integration/tfm_ipc/
+      rm -rf build
+      mkdir build && cd build
+      cmake -GNinja -DBOARD=bl5340_dvk_cpuapp_ns ..
+
+Flash the concatenated TF-M + Zephyr binary.
+
+   Example using ``west``
+
+   .. code-block:: bash
+
+      west flash --hex-file tfm_merged.hex
 
 Sample Output
 =============

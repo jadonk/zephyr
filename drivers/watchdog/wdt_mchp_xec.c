@@ -24,9 +24,6 @@ struct wdt_xec_data {
 	bool timeout_installed;
 };
 
-
-DEVICE_DT_INST_DECLARE(0);
-
 static int wdt_xec_setup(const struct device *dev, uint8_t options)
 {
 	WDT_Type *wdt_regs = WDT_XEC_REG_BASE;
@@ -178,7 +175,7 @@ static int wdt_xec_init(const struct device *dev)
 
 static struct wdt_xec_data wdt_xec_dev_data;
 
-DEVICE_DT_INST_DEFINE(0, wdt_xec_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, wdt_xec_init, NULL,
 		    &wdt_xec_dev_data, NULL,
 		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		    &wdt_xec_api);

@@ -149,8 +149,8 @@ static int hm3301_init(const struct device *dev)
 
 	data->i2c_addr = DT_INST_REG_ADDR(0);
 
-	// Try 100ms delay at the start
-	k_msleep(100);
+	// Try 500ms delay at the start
+	k_msleep(500);
 
 	err = hm3301_sample_fetch(dev, SENSOR_CHAN_ALL);
 	if (err < 0) {
@@ -172,6 +172,6 @@ static const struct sensor_driver_api hm3301_api_funcs = {
 
 static struct hm3301_data hm3301_data;
 
-DEVICE_AND_API_INIT(hm3301, DT_INST_LABEL(0), hm3301_init, &hm3301_data,
-		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
-		    &hm3301_api_funcs);
+DEVICE_DEFINE(hm3301, DT_INST_LABEL(0), hm3301_init,
+	      NULL, &hm3301_data, NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
+	      &hm3301_api_funcs);

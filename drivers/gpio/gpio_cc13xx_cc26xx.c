@@ -217,8 +217,6 @@ static uint32_t gpio_cc13xx_cc26xx_get_pending_int(const struct device *dev)
 	return GPIO_getEventMultiDio(GPIO_DIO_ALL_MASK);
 }
 
-DEVICE_DT_INST_DECLARE(0);
-
 static void gpio_cc13xx_cc26xx_isr(const struct device *dev)
 {
 	struct gpio_cc13xx_cc26xx_data *data = dev->data;
@@ -283,7 +281,7 @@ static const struct gpio_driver_api gpio_cc13xx_cc26xx_driver_api = {
 };
 
 DEVICE_DT_INST_DEFINE(0, gpio_cc13xx_cc26xx_init,
-		    device_pm_control_nop, &gpio_cc13xx_cc26xx_data_0,
+		    NULL, &gpio_cc13xx_cc26xx_data_0,
 		    &gpio_cc13xx_cc26xx_cfg_0,
 		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		    &gpio_cc13xx_cc26xx_driver_api);

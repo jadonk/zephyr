@@ -9,6 +9,7 @@ zephyr_library_sources(
     lwm2m_obj_security.c
     lwm2m_obj_server.c
     lwm2m_obj_device.c
+    lwm2m_rw_link_format.c
     lwm2m_rw_plain_text.c
     lwm2m_rw_oma_tlv.c
     lwm2m_util.c
@@ -68,6 +69,12 @@ zephyr_library_sources_ifdef(CONFIG_LWM2M_IPSO_ONOFF_SWITCH
     )
 zephyr_library_sources_ifdef(CONFIG_LWM2M_IPSO_PUSH_BUTTON
     ipso_push_button.c
+    )
+zephyr_library_sources_ifdef(CONFIG_LWM2M_IPSO_CURRENT_SENSOR
+    ipso_current_sensor.c
+    )
+zephyr_library_sources_ifdef(CONFIG_LWM2M_IPSO_FILLING_SENSOR
+    ipso_filling_sensor.c
     )
 
 zephyr_library_link_libraries_ifdef(CONFIG_MBEDTLS mbedTLS)

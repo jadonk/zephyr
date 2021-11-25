@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(spi_rv32m1_lpspi);
 
 struct spi_mcux_config {
 	LPSPI_Type *base;
-	char *clock_name;
+	const struct device *clock_dev;
 	clock_control_subsys_t clock_subsys;
 	clock_ip_name_t clock_ip_name;
 	uint32_t clock_ip_src;
@@ -132,7 +132,6 @@ static int spi_mcux_configure(const struct device *dev,
 	struct spi_mcux_data *data = dev->data;
 	LPSPI_Type *base = config->base;
 	lpspi_master_config_t master_config;
-	const struct device *clock_dev;
 	uint32_t clock_freq;
 	uint32_t word_size;
 
@@ -176,12 +175,7 @@ static int spi_mcux_configure(const struct device *dev,
 
 	master_config.baudRate = spi_cfg->frequency;
 
-	clock_dev = device_get_binding(config->clock_name);
-	if (clock_dev == NULL) {
-		return -EINVAL;
-	}
-
-	if (clock_control_get_rate(clock_dev, config->clock_subsys,
+	if (clock_control_get_rate(config->clock_dev, config->clock_subsys,
 				   &clock_freq)) {
 		return -EINVAL;
 	}
@@ -195,7 +189,6 @@ static int spi_mcux_configure(const struct device *dev,
 	LPSPI_SetDummyData(base, 0);
 
 	data->ctx.config = spi_cfg;
-	spi_context_cs_configure(&data->ctx);
 
 	return 0;
 }
@@ -261,6 +254,7 @@ static int spi_mcux_release(const struct device *dev,
 
 static int spi_mcux_init(const struct device *dev)
 {
+	int err;
 	const struct spi_mcux_config *config = dev->config;
 	struct spi_mcux_data *data = dev->data;
 
@@ -269,6 +263,11 @@ static int spi_mcux_init(const struct device *dev)
 	config->irq_config_func(dev);
 
 	data->dev = dev;
+
+	err = spi_context_cs_configure_all(&data->ctx);
+	if (err < 0) {
+		return err;
+	}
 
 	spi_context_unlock_unconditionally(&data->ctx);
 
@@ -288,7 +287,7 @@ static const struct spi_driver_api spi_mcux_driver_api = {
 									\
 	static const struct spi_mcux_config spi_mcux_config_##n = {	\
 		.base = (LPSPI_Type *) DT_INST_REG_ADDR(n),		\
-		.clock_name = DT_INST_CLOCKS_LABEL(n),			\
+		.clock_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(n)),	\
 		.clock_subsys = (clock_control_subsys_t)		\
 			DT_INST_CLOCKS_CELL(n, name),			\
 		.irq_config_func = spi_mcux_config_func_##n,		\
@@ -299,13 +298,14 @@ static const struct spi_driver_api spi_mcux_driver_api = {
 	static struct spi_mcux_data spi_mcux_data_##n = {		\
 		SPI_CONTEXT_INIT_LOCK(spi_mcux_data_##n, ctx),		\
 		SPI_CONTEXT_INIT_SYNC(spi_mcux_data_##n, ctx),		\
+		SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(n), ctx)	\
 	};								\
 									\
-	DEVICE_DT_INST_DEFINE(n, &spi_mcux_init, device_pm_control_nop,	\
+	DEVICE_DT_INST_DEFINE(n, &spi_mcux_init, NULL,			\
 			    &spi_mcux_data_##n,				\
 			    &spi_mcux_config_##n,			\
 			    POST_KERNEL,				\
-			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		\
+			    CONFIG_SPI_INIT_PRIORITY,			\
 			    &spi_mcux_driver_api);			\
 									\
 	static void spi_mcux_config_func_##n(const struct device *dev)	\

@@ -34,9 +34,17 @@ config ADC_ASYNC
 	help
 	  This option enables the asynchronous API calls.
 
+config ADC_INIT_PRIORITY
+	int "ADC init priority"
+	default KERNEL_INIT_PRIORITY_DEVICE
+	help
+	  ADC driver device initialization priority.
+
 module = ADC
 module-str = ADC
 source "subsys/logging/Kconfig.template.log_config"
+
+source "drivers/adc/Kconfig.it8xxx2"
 
 source "drivers/adc/Kconfig.mcux"
 
@@ -55,5 +63,11 @@ source "drivers/adc/Kconfig.lmp90xxx"
 source "drivers/adc/Kconfig.mcp320x"
 
 source "drivers/adc/Kconfig.npcx"
+
+source "drivers/adc/Kconfig.cc32xx"
+
+source "drivers/adc/Kconfig.ads1115"
+
+source "drivers/adc/Kconfig.adc_emul"
 
 endif # ADC

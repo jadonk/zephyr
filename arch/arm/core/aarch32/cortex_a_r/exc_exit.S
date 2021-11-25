@@ -26,6 +26,42 @@ GTEXT(z_arm_int_exit)
 GTEXT(z_arm_pendsv)
 GDATA(_kernel)
 
+.macro userspace_exc_exit
+#if defined(CONFIG_USERSPACE)
+	cps #MODE_SVC
+	sub sp, #8
+	push {r0-r1}
+
+	/*
+	 * Copy return state from sys/usr state onto the svc stack.
+	 * We have to put $sp_usr back into $sp since we switched to
+	 * the privileged stack on exception entry.  The return state
+	 * is on the privileged stack so it needs to be copied to the
+	 * svc stack since we cannot trust the usr stack.
+	 */
+	cps #MODE_SYS
+	pop {r0-r1}
+
+	cps #MODE_SVC
+	str r0, [sp, #8]
+	str r1, [sp, #12]
+
+	/* Only switch the stacks if returning to a user thread */
+	and r1, #MODE_MASK
+	cmp r1, #MODE_USR
+	bne system_thread_exit\@
+
+	/* Restore user stack pointer */
+	ldr r0, =_kernel
+	ldr r0, [r0, #_kernel_offset_to_current]
+	cps #MODE_SYS
+	ldr sp, [r0, #_thread_offset_to_sp_usr] /* sp_usr */
+	cps #MODE_SVC
+system_thread_exit\@:
+	pop {r0-r1}
+#endif
+.endm
+
 /**
  * @brief Kernel housekeeping when exiting interrupt handler installed directly
  *        in the vector table
@@ -82,6 +118,13 @@ __EXIT_INT:
 	add sp, sp, r3
 
 	/*
+	 * Restore lr_svc stored into the SVC mode stack by the mode entry
+	 * function. This ensures that the return address of the interrupted
+	 * context is preserved in case of interrupt nesting.
+	 */
+	pop {lr}
+
+	/*
 	 * Restore r0-r3, r12 and lr_irq stored into the process stack by the
 	 * mode entry function. These registers are saved by _isr_wrapper for
 	 * IRQ mode and z_arm_svc for SVC mode.
@@ -91,6 +134,7 @@ __EXIT_INT:
 	 */
 	cps #MODE_SYS
 	pop {r0-r3, r12, lr}
+	userspace_exc_exit
 	rfeia sp!
 
 /**
@@ -131,10 +175,18 @@ SECTION_SUBSEC_FUNC(TEXT, _HandlerModeExit, z_arm_exc_exit)
 	/* Clean up exception stack frame */
 	add sp, #32
 
-	/* Switch in the next scheduled thread */
+	/*
+	 * Switch in the next scheduled thread.
+	 *
+	 * Note that z_arm_pendsv must be called in the SVC mode because it
+	 * switches to the SVC mode during context switch and returns to the
+	 * caller using lr_svc.
+	 */
+	cps #MODE_SVC
 	bl z_arm_pendsv
 
 	/* Decrement exception nesting count */
+	ldr r3, =_kernel
 	ldr r0, [r3, #_kernel_offset_to_nested]
 	sub r0, r0, #1
 	str r0, [r3, #_kernel_offset_to_nested]
@@ -142,6 +194,7 @@ SECTION_SUBSEC_FUNC(TEXT, _HandlerModeExit, z_arm_exc_exit)
 	/* Return to the switched thread */
 	cps #MODE_SYS
 	pop {r0-r3, r12, lr}
+	userspace_exc_exit
 	rfeia sp!
 
 __EXIT_EXC:

@@ -47,7 +47,7 @@ config LWM2M_COAP_BLOCK_SIZE
 	range 64 1024
 	help
 	  CoAP block size used by LWM2M when performing block-wise
-	  transfers. Possible values: 16, 32, 64, 128, 256, 512 and 1024.
+	  transfers. Possible values: 64, 128, 256, 512 and 1024.
 
 config LWM2M_ENGINE_MESSAGE_HEADER_SIZE
 	int "Room for CoAP header data"
@@ -55,6 +55,24 @@ config LWM2M_ENGINE_MESSAGE_HEADER_SIZE
 	range 24 128
 	help
 	  Extra room allocated to handle CoAP header data
+
+config LWM2M_COAP_MAX_MSG_SIZE
+	int "LWM2M CoAP maximum message size"
+	default LWM2M_COAP_BLOCK_SIZE
+	help
+	  CoAP message size used by LWM2M. Minimum is the block size used
+	  in blockwise transfers.
+
+config LWM2M_ENGINE_VALIDATION_BUFFER_SIZE
+	int "Size of the validation buffer for the incoming data"
+	default 64
+	help
+	  LwM2M will use the validation buffer during the write operation, to
+	  decode the resource value before validating it (applies for resources
+	  for which validation callback has been registered). Set this value to
+	  the maximum expected size of the resources that need to be validated
+	  (and thus have validation callback registered).
+	  Setting the validation buffer size to 0 disables validation support.
 
 config LWM2M_ENGINE_MAX_PENDING
 	int "LWM2M engine max. pending objects"
@@ -75,6 +93,15 @@ config LWM2M_ENGINE_MAX_OBSERVER
 	help
 	  This value sets the maximum number of resources which can be
 	  added to the observe notification list.
+
+config LWM2M_CANCEL_OBSERVE_BY_PATH
+	bool "Use path matching as fallback for cancel-observe"
+	help
+	  Some ambiguous language in the LwM2M spec causes some LwM2M server
+	  implementations to implement cancel-observe by specifying the resource
+	  path rather than the token of the original observe request. Without
+	  this option, cancel-observe may not work properly when connecting to
+	  those servers.
 
 config LWM2M_ENGINE_DEFAULT_LIFETIME
 	int "LWM2M engine default server connection lifetime"
@@ -142,7 +169,19 @@ config LWM2M_PEER_PORT
 	depends on LWM2M_RD_CLIENT_SUPPORT
 	default 5683
 	help
-	  This is the default server port to connect to for LWM2M communication
+	  This is the default server port to connect to for LWM2M communication.
+
+config LWM2M_FIRMWARE_PORT_NONSECURE
+	int "LWM2M firmware server port non-secure"
+	default 5683
+	help
+	  This is the default server port to connect to for LwM2M firmware downloads over coap.
+
+config LWM2M_FIRMWARE_PORT_SECURE
+	int "LWM2M firmware server port secure"
+	default 5684
+	help
+	  This is the default server port to connect to for LwM2M firmware downloads over coaps.
 
 config LWM2M_SECURITY_INSTANCE_COUNT
 	int "Maximum # of LWM2M Security object instances"
@@ -163,7 +202,7 @@ config LWM2M_SECURITY_KEY_SIZE
 
 config LWM2M_SERVER_DEFAULT_PMIN
 	int "Default server record PMIN"
-	default 10
+	default 0
 	help
 	  Default minimum amount of time in seconds the client must wait
 	  between notifications.  If a resource has to be notified during this
@@ -172,7 +211,7 @@ config LWM2M_SERVER_DEFAULT_PMIN
 
 config LWM2M_SERVER_DEFAULT_PMAX
 	int "Default server record PMAX"
-	default 60
+	default 0
 	help
 	  Default maximum amount of time in seconds the client may wait
 	  between notifications.  When this time period expires a notification

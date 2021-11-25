@@ -7,6 +7,7 @@
 /dts-v1/;
 #include <st/l4/stm32l496Xg.dtsi>
 #include <st/l4/stm32l496a(e-g)ix-pinctrl.dtsi>
+#include "arduino_r3_connector.dtsi"
 
 / {
 	model = "STMicroelectronics STM32L496G-DISCO board";
@@ -54,12 +55,35 @@
 	aliases {
 		led0 = &green_led_2;
 		sw0 = &joy_sel;
+		sw1 = &joy_down;
+		sw2 = &joy_right;
+		sw3 = &joy_up;
+		sw4 = &joy_left;
 	};
+
 };
 
-arduino_i2c: &i2c1 {};
-arduino_spi: &spi1 {};
-arduino_serial: &lpuart1 {};
+&clk_hsi {
+	status = "okay";
+};
+
+&pll {
+	div-m = <1>;
+	mul-n = <20>;
+	div-p = <7>;
+	div-q = <2>;
+	div-r = <4>;
+	clocks = <&clk_hsi>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(80)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <1>;
+	apb2-prescaler = <1>;
+};
 
 &usart1 {
 	pinctrl-0 = <&usart1_tx_pb6 &usart1_rx_pg10>;
@@ -96,6 +120,7 @@ arduino_serial: &lpuart1 {};
 
 &spi1 {
 	pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pb4 &spi1_mosi_pb5>;
+	cs-gpios = <&gpioa 15 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 	status = "okay";
 };
 
@@ -107,5 +132,10 @@ arduino_serial: &lpuart1 {};
 	pinctrl-0 = <&sdmmc1_d0_pc8 &sdmmc1_d1_pc9
 		     &sdmmc1_d2_pc10 &sdmmc1_d3_pc11
 		     &sdmmc1_ck_pc12 &sdmmc1_cmd_pd2>;
+	status = "okay";
+};
+
+&adc1 {
+	pinctrl-0 = < &adc1_in2_pc1>;
 	status = "okay";
 };

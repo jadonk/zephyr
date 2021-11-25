@@ -25,13 +25,6 @@ struct mcp2515_tx_cb {
 };
 
 struct mcp2515_data {
-	/* spi device data */
-	const struct device *spi;
-	struct spi_config spi_cfg;
-#if DT_INST_SPI_DEV_HAS_CS_GPIOS(0)
-	struct spi_cs_control spi_cs_ctrl;
-#endif /* DT_INST_SPI_DEV_HAS_CS_GPIOS(0) */
-
 	/* interrupt data */
 	const struct device *int_gpio;
 	struct gpio_callback int_gpio_cb;
@@ -46,24 +39,20 @@ struct mcp2515_data {
 
 	/* filter data */
 	uint32_t filter_usage;
-	can_rx_callback_t rx_cb[CONFIG_CAN_MCP2515_MAX_FILTER];
-	void *cb_arg[CONFIG_CAN_MCP2515_MAX_FILTER];
-	struct zcan_filter filter[CONFIG_CAN_MCP2515_MAX_FILTER];
+	can_rx_callback_t rx_cb[CONFIG_CAN_MAX_FILTER];
+	void *cb_arg[CONFIG_CAN_MAX_FILTER];
+	struct zcan_filter filter[CONFIG_CAN_MAX_FILTER];
 	can_state_change_isr_t state_change_isr;
 
 	/* general data */
 	struct k_mutex mutex;
 	enum can_state old_state;
+	uint8_t sjw;
 };
 
 struct mcp2515_config {
 	/* spi configuration */
-	const char *spi_port;
-	uint8_t spi_cs_pin;
-	uint8_t spi_cs_flags;
-	const char *spi_cs_port;
-	uint32_t spi_freq;
-	uint8_t spi_slave;
+	struct spi_dt_spec bus;
 
 	/* interrupt configuration */
 	uint8_t int_pin;
@@ -78,7 +67,14 @@ struct mcp2515_config {
 	uint8_t tq_bs2;
 	uint32_t bus_speed;
 	uint32_t osc_freq;
+	uint16_t sample_point;
 };
+
+/*
+ * Startup time of 128 OSC1 clock cycles at 1MHz (minimum clock in frequency)
+ * see MCP2515 datasheet section 8.1 Oscillator Start-up Timer
+ */
+#define MCP2515_OSC_STARTUP_US		128U
 
 /* MCP2515 Opcodes */
 #define MCP2515_OPCODE_WRITE            0x02

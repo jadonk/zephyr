@@ -1,5 +1,5 @@
 /** @file
- *  @brief Bluetooth Mesh Profile APIs.
+ *  @brief Bluetooth mesh Profile APIs.
  */
 
 /*
@@ -14,6 +14,7 @@
 #include <stddef.h>
 #include <net/buf.h>
 
+#include <bluetooth/mesh/msg.h>
 #include <bluetooth/mesh/access.h>
 #include <bluetooth/mesh/main.h>
 #include <bluetooth/mesh/cfg.h>

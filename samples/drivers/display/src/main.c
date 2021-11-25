@@ -22,12 +22,16 @@ LOG_MODULE_REGISTER(sample, LOG_LEVEL_INF);
 #define DISPLAY_DEV_NAME DT_LABEL(DT_INST(0, solomon_ssd1306fb))
 #endif
 
-#if DT_NODE_HAS_STATUS(DT_INST(0, gooddisplay_gdeh0213b1), okay)
-#define DISPLAY_DEV_NAME DT_LABEL(DT_INST(0, gooddisplay_gdeh0213b1))
+#if DT_NODE_HAS_STATUS(DT_INST(0, solomon_ssd16xxfb), okay)
+#define DISPLAY_DEV_NAME DT_LABEL(DT_INST(0, solomon_ssd16xxfb))
 #endif
 
 #if DT_NODE_HAS_STATUS(DT_INST(0, sitronix_st7789v), okay)
 #define DISPLAY_DEV_NAME DT_LABEL(DT_INST(0, sitronix_st7789v))
+#endif
+
+#if DT_NODE_HAS_STATUS(DT_INST(0, sitronix_st7735r), okay)
+#define DISPLAY_DEV_NAME DT_LABEL(DT_INST(0, sitronix_st7735r))
 #endif
 
 #if DT_NODE_HAS_STATUS(DT_INST(0, fsl_imx6sx_lcdif), okay)
@@ -77,7 +81,7 @@ static void posix_exit_main(int exit_code)
 #endif
 
 static void fill_buffer_argb8888(enum corner corner, uint8_t grey, uint8_t *buf,
-			       size_t buf_size)
+				 size_t buf_size)
 {
 	uint32_t color = 0;
 
@@ -219,7 +223,7 @@ void main(void)
 
 	display_get_capabilities(display_dev, &capabilities);
 
-	if (capabilities.screen_info & SCREEN_INFO_MONO_VTILED)  {
+	if (capabilities.screen_info & SCREEN_INFO_MONO_VTILED) {
 		rect_w = 16;
 		rect_h = 8;
 	} else {

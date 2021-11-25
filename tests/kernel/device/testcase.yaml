@@ -4,9 +4,10 @@ common:
     - native_posix
 tests:
   kernel.device:
-    tags: device
+    tags: kernel device
+    platform_exclude: beaglev_starlight_jh7100
   kernel.device.pm:
-    tags: device
-    platform_exclude: mec15xxevb_assy6853
+    tags: kernel device
+    platform_exclude: mec15xxevb_assy6853 beaglev_starlight_jh7100
     extra_configs:
       - CONFIG_PM_DEVICE=y

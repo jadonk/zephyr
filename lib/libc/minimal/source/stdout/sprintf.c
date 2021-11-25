@@ -25,8 +25,8 @@ static int sprintf_out(int c, struct emitter *p)
 	return 0; /* indicate keep going so we get the total count */
 }
 
-int snprintf(char *_MLIBC_RESTRICT s, size_t len,
-	     const char *_MLIBC_RESTRICT format, ...)
+int snprintf(char *ZRESTRICT str, size_t len,
+	     const char *ZRESTRICT format, ...)
 {
 	va_list vargs;
 
@@ -35,10 +35,10 @@ int snprintf(char *_MLIBC_RESTRICT s, size_t len,
 	char    dummy;
 
 	if (len == 0) {
-		s = &dummy; /* write final NUL to dummy, can't change *s */
+		str = &dummy; /* write final NUL to dummy, can't change *s */
 	}
 
-	p.ptr = s;
+	p.ptr = str;
 	p.len = (int) len;
 
 	va_start(vargs, format);
@@ -49,14 +49,14 @@ int snprintf(char *_MLIBC_RESTRICT s, size_t len,
 	return r;
 }
 
-int sprintf(char *_MLIBC_RESTRICT s, const char *_MLIBC_RESTRICT format, ...)
+int sprintf(char *ZRESTRICT str, const char *ZRESTRICT format, ...)
 {
 	va_list vargs;
 
 	struct emitter p;
 	int     r;
 
-	p.ptr = s;
+	p.ptr = str;
 	p.len = (int) 0x7fffffff; /* allow up to "maxint" characters */
 
 	va_start(vargs, format);
@@ -67,18 +67,18 @@ int sprintf(char *_MLIBC_RESTRICT s, const char *_MLIBC_RESTRICT format, ...)
 	return r;
 }
 
-int vsnprintf(char *_MLIBC_RESTRICT s, size_t len,
-	      const char *_MLIBC_RESTRICT format, va_list vargs)
+int vsnprintf(char *ZRESTRICT str, size_t len,
+	      const char *ZRESTRICT format, va_list vargs)
 {
 	struct emitter p;
 	int     r;
 	char    dummy;
 
 	if (len == 0) {
-		s = &dummy; /* write final NUL to dummy, can't change * *s */
+		str = &dummy; /* write final NUL to dummy, can't change * *s */
 	}
 
-	p.ptr = s;
+	p.ptr = str;
 	p.len = (int) len;
 
 	r = cbvprintf(sprintf_out, (void *) (&p), format, vargs);
@@ -87,13 +87,13 @@ int vsnprintf(char *_MLIBC_RESTRICT s, size_t len,
 	return r;
 }
 
-int vsprintf(char *_MLIBC_RESTRICT s, const char *_MLIBC_RESTRICT format,
+int vsprintf(char *ZRESTRICT str, const char *ZRESTRICT format,
 	     va_list vargs)
 {
 	struct emitter p;
 	int     r;
 
-	p.ptr = s;
+	p.ptr = str;
 	p.len = (int) 0x7fffffff; /* allow up to "maxint" characters */
 
 	r = cbvprintf(sprintf_out, (void *) (&p), format, vargs);

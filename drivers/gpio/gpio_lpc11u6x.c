@@ -418,16 +418,6 @@ static uint32_t gpio_lpc11u6x_get_pending_int(const struct device *dev)
 	return -ENOTSUP;
 }
 
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(gpio0), okay)
-DEVICE_DT_DECLARE(DT_NODELABEL(gpio0));
-#endif
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(gpio1), okay)
-DEVICE_DT_DECLARE(DT_NODELABEL(gpio1));
-#endif
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(gpio2), okay)
-DEVICE_DT_DECLARE(DT_NODELABEL(gpio2));
-#endif
-
 static void gpio_lpc11u6x_isr(const void *arg)
 {
 	struct gpio_lpc11u6x_shared *shared =
@@ -600,7 +590,7 @@ static struct gpio_lpc11u6x_data gpio_lpc11u6x_data_##id;		\
 									\
 DEVICE_DT_DEFINE(DT_NODELABEL(gpio##id),				\
 		    &gpio_lpc11u6x_init,				\
-		    device_pm_control_nop,				\
+		    NULL,						\
 		    &gpio_lpc11u6x_data_##id,				\
 		    &gpio_lpc11u6x_config_##id,				\
 		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,	\

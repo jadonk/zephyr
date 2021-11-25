@@ -36,121 +36,222 @@ static void ieee802154_cc13xx_cc26xx_subg_data_init(
 	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data);
 static int ieee802154_cc13xx_cc26xx_subg_stop(
 	const struct device *dev);
+static int ieee802154_cc13xx_cc26xx_subg_stop_if(
+	const struct device *dev);
 static int ieee802154_cc13xx_cc26xx_subg_rx(
 	const struct device *dev);
 static void ieee802154_cc13xx_cc26xx_subg_setup_rx_buffers(
 	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data);
 
 DEVICE_DECLARE(ieee802154_cc13xx_cc26xx_subg);
-#if CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_DIV_SETUP_PA
-/* Overrides from SmartRF Studio 7 2.18.0 */
-static uint32_t overrides_sub_ghz[] = {
-       // override_tc746.json
-       // Tx: Configure PA ramp time, PACTL2.RC=0x3 (in ADI0, set PACTL2[4:3]=0x1)
-       ADI_2HALFREG_OVERRIDE(0,16,0x8,0x8,17,0x1,0x0),
-       // Rx: Set AGC reference level to 0x16 (default: 0x2E)
-       HW_REG_OVERRIDE(0x609C,0x0016),
-       // Rx: Set RSSI offset to adjust reported RSSI by -1 dB (default: -2), trimmed for external bias and differential configuration
-       (uint32_t)0x000188A3,
-       // Rx: Set anti-aliasing filter bandwidth to 0x6 (in ADI0, set IFAMPCTL3[7:4]=0x8)
-       ADI_HALFREG_OVERRIDE(0,61,0xF,0x8),
-       // override_prop_common_sub1g.json
-       // Set RF_FSCA.ANADIV.DIV_SEL_BIAS = 1. Bits [0:16, 24, 30] are don't care..
-       (uint32_t)0x4001405D,
-       // Set RF_FSCA.ANADIV.DIV_SEL_BIAS = 1. Bits [0:16, 24, 30] are don't care..
-       (uint32_t)0x08141131,
-       // override_prop_common.json
-       // DC/DC regulator: In Tx with 14 dBm PA setting, use DCDCCTL5[3:0]=0xF (DITHER_EN=1 and IPEAK=7). In Rx, use default settings.
-       (uint32_t)0x00F788D3,
-       (uint32_t)0xFFFFFFFF
-};
 
-// Overrides for CMD_PROP_RADIO_DIV_SETUP_PA
-uint32_t pOverrides_fsk_200kbpsTxStd[] =
-{
-    // override_txstd_placeholder.json
-    // TX Standard power override
-    TX_STD_POWER_OVERRIDE(0x013F),
-    // The ANADIV radio parameter based on LO divider and front end settings
-    (uint32_t)0x11310703,
-    // override_phy_tx_pa_ramp_genfsk_std.json
-    // Tx: Configure PA ramping, set wait time before turning off (0x1A ticks of 16/24 us = 17.3 us).
-    HW_REG_OVERRIDE(0x6028,0x001A),
-    // Set TXRX pin to 0 in RX and high impedance in idle/TX. 
-    HW_REG_OVERRIDE(0x60A8,0x0401),
-    (uint32_t)0xFFFFFFFF
-};
+#ifndef CMD_PROP_RADIO_DIV_SETUP_PA
+/* workaround for older HAL TI SDK (less than 4.40) */
+#define CMD_PROP_RADIO_DIV_SETUP_PA CMD_PROP_RADIO_DIV_SETUP
+#endif
 
-// Overrides for CMD_PROP_RADIO_DIV_SETUP_PA
-uint32_t pOverrides_fsk_200kbpsTx20[] =
-{
-    // override_tx20_placeholder.json
-    // TX HighPA power override
-    TX20_POWER_OVERRIDE(0x001B8ED2),
-    // The ANADIV radio parameter based on LO divider and front end settings
-    (uint32_t)0x11C10703,
-    // override_phy_tx_pa_ramp_genfsk_hpa.json
-    // Tx: Configure PA ramping, set wait time before turning off (0x1F ticks of 16/24 us = 20.3 us).
-    HW_REG_OVERRIDE(0x6028,0x001F),
-    // Set TXRX pin to 0 in RX/TX and high impedance in idle. 
-    HW_REG_OVERRIDE(0x60A8,0x0001),
-    (uint32_t)0xFFFFFFFF
-};
+#if defined(CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_CUSTOM_RADIO_SETUP)
+/* User-defined CMD_PROP_RADIO_DIV_SETUP structures */
+#if defined(CONFIG_SOC_CC1352R)
+extern volatile rfc_CMD_PROP_RADIO_DIV_SETUP_t iee802154_cc13xx_subg_radio_div_setup;
+#elif defined(CONFIG_SOC_CC1352P)
+extern volatile rfc_CMD_PROP_RADIO_DIV_SETUP_PA_t iee802154_cc13xx_subg_radio_div_setup;
+#endif /* CONFIG_SOC_CC1352x, extern RADIO_DIV_SETUP */
 
-#else
-static uint32_t overrides_sub_ghz[] = {
-       /* DC/DC regulator: In Tx, use DCDCCTL5[3:0]=0x7 (DITHER_EN=0 and IPEAK=7). */
-       (uint32_t)0x00F788D3,
-       /* Set RF_FSCA.ANADIV.DIV_SEL_BIAS = 1. Bits [0:16, 24, 30] are don't care.. */
-       (uint32_t)0x4001405D,
-       /* Set RF_FSCA.ANADIV.DIV_SEL_BIAS = 1. Bits [0:16, 24, 30] are don't care.. */
-       (uint32_t)0x08141131,
-       /* Tx: Configure PA ramp time, PACTL2.RC=0x3 (in ADI0, set PACTL2[4:3]=0x3) */
-       ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
-       /* Tx: Configure PA ramping, set wait time before turning off (0x1A ticks of 16/24 us = 17.3 us). */
-       HW_REG_OVERRIDE(0x6028, 0x001A),
-       /* Rx: Set AGC reference level to 0x16 (default: 0x2E) */
-       HW_REG_OVERRIDE(0x609C, 0x0016),
-       /* Rx: Set RSSI offset to adjust reported RSSI by -1 dB (default: -2), trimmed for external bias and differential configuration */
-       (uint32_t)0x000188A3,
-       /* Rx: Set anti-aliasing filter bandwidth to 0x8 (in ADI0, set IFAMPCTL3[7:4]=0x8) */
-       ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0x8),
-       /* Tx: Set PA trim to max to maximize its output power (in ADI0, set PACTL0=0xF8) */
-       ADI_REG_OVERRIDE(0, 12, 0xF8),
-       (uint32_t)0xFFFFFFFF
+#elif defined(CONFIG_SOC_CC1352R)
+/* Radio values for CC13x2R (note: CC26x2 does not support sub-GHz radio) */
+/* From SmartRF Studio (200kbps, 50kHz deviation, 2-GFSK, 311.8kHz Rx BW) */
+static uint32_t ieee802154_cc13xx_overrides_sub_ghz[] = {
+	/* DC/DC regulator: In Tx, use DCDCCTL5[3:0]=0x7 (DITHER_EN=0 and IPEAK=7). */
+	(uint32_t)0x00F788D3,
+	/* Set RF_FSCA.ANADIV.DIV_SEL_BIAS = 1. Bits [0:16, 24, 30] are don't care.. */
+	(uint32_t)0x4001405D,
+	/* Set RF_FSCA.ANADIV.DIV_SEL_BIAS = 1. Bits [0:16, 24, 30] are don't care.. */
+	(uint32_t)0x08141131,
+	/* Tx: Configure PA ramp time, PACTL2.RC=0x3 (in ADI0, set PACTL2[4:3]=0x3) */
+	ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
+	/* Tx: Configure PA ramping, set wait time before turning off */
+	/* (0x1A ticks of 16/24 us = 17.3 us). */
+	HW_REG_OVERRIDE(0x6028, 0x001A),
+	/* Rx: Set AGC reference level to 0x16 (default: 0x2E) */
+	HW_REG_OVERRIDE(0x609C, 0x0016),
+	/* Rx: Set RSSI offset to adjust reported RSSI by -1 dB (default: -2), */
+	/* trimmed for external bias and differential configuration */
+	(uint32_t)0x000188A3,
+	/* Rx: Set anti-aliasing filter bandwidth to 0x8 (in ADI0, set IFAMPCTL3[7:4]=0x8) */
+	ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0x8),
+	/* Tx: Set PA trim to max to maximize its output power (in ADI0, set PACTL0=0xF8) */
+	ADI_REG_OVERRIDE(0, 12, 0xF8),
+	(uint32_t)0xFFFFFFFF
 };
 #endif
 
-/* Sub GHz power table */
-static const RF_TxPowerTable_Entry txPowerTable_sub_ghz[] = {
-	{-20, RF_TxPowerTable_DEFAULT_PA_ENTRY(0, 3, 0, 2) },
-	{-15, RF_TxPowerTable_DEFAULT_PA_ENTRY(1, 3, 0, 3) },
-	{-10, RF_TxPowerTable_DEFAULT_PA_ENTRY(2, 3, 0, 5) },
-	{-5, RF_TxPowerTable_DEFAULT_PA_ENTRY(4, 3, 0, 5) },
-	{0, RF_TxPowerTable_DEFAULT_PA_ENTRY(8, 3, 0, 8) },
-	{1, RF_TxPowerTable_DEFAULT_PA_ENTRY(9, 3, 0, 9) },
-	{2, RF_TxPowerTable_DEFAULT_PA_ENTRY(10, 3, 0, 9) },
-	{3, RF_TxPowerTable_DEFAULT_PA_ENTRY(11, 3, 0, 10) },
-	{4, RF_TxPowerTable_DEFAULT_PA_ENTRY(13, 3, 0, 11) },
-	{5, RF_TxPowerTable_DEFAULT_PA_ENTRY(14, 3, 0, 14) },
-	{6, RF_TxPowerTable_DEFAULT_PA_ENTRY(17, 3, 0, 16) },
-	{7, RF_TxPowerTable_DEFAULT_PA_ENTRY(20, 3, 0, 19) },
-	{8, RF_TxPowerTable_DEFAULT_PA_ENTRY(24, 3, 0, 22) },
-	{9, RF_TxPowerTable_DEFAULT_PA_ENTRY(28, 3, 0, 31) },
-	{10, RF_TxPowerTable_DEFAULT_PA_ENTRY(18, 2, 0, 31) },
-	{11, RF_TxPowerTable_DEFAULT_PA_ENTRY(26, 2, 0, 51) },
-	{12, RF_TxPowerTable_DEFAULT_PA_ENTRY(16, 0, 0, 82) },
-	// The original PA value (12.5 dBm) has been rounded to an integer value.
-	{13, RF_TxPowerTable_DEFAULT_PA_ENTRY(36, 0, 0, 89) },
-	{14, RF_TxPowerTable_DEFAULT_PA_ENTRY(63, 0, 1, 0) },
-	{15, RF_TxPowerTable_HIGH_PA_ENTRY(18, 0, 0, 36, 0) },
-	{16, RF_TxPowerTable_HIGH_PA_ENTRY(24, 0, 0, 43, 0) },
-	{17, RF_TxPowerTable_HIGH_PA_ENTRY(28, 0, 0, 51, 2) },
-	{18, RF_TxPowerTable_HIGH_PA_ENTRY(34, 0, 0, 64, 4) },
-	{19, RF_TxPowerTable_HIGH_PA_ENTRY(15, 3, 0, 36, 4) },
-	{20, RF_TxPowerTable_HIGH_PA_ENTRY(18, 3, 0, 71, 27) },
+/* Radio setup command for CC1312R / CC1352R */
+static volatile rfc_CMD_PROP_RADIO_DIV_SETUP_t iee802154_cc13xx_subg_radio_div_setup = {
+	.commandNo = CMD_PROP_RADIO_DIV_SETUP,
+	.condition.rule = COND_NEVER,
+	.modulation.modType = 1, /* FSK */
+	.modulation.deviation = 200,
+	.symbolRate.preScale = 15,
+	.symbolRate.rateWord = 131072,
+	.rxBw = 0x59,                   /* 310.8 kHz */
+	.preamConf.nPreamBytes = 7,
+	.formatConf.nSwBits = 24,       /* 24-bit of syncword */
+	.formatConf.bMsbFirst = true,
+	.formatConf.whitenMode = 7,
+	.config.biasMode = true,
+	.formatConf.bMsbFirst = true,
+	.txPower = 0x013f, /* from Smart RF Studio */
+	.centerFreq = 915,
+	.intFreq = 0x0999,
+	.loDivider = 5,
+	.pRegOverride = ieee802154_cc13xx_overrides_sub_ghz,
+};
+
+/* Radio values for CC13X2P */
+#elif defined(CONFIG_SOC_CC1352P)
+/* CC1352P overrides from SmartRF Studio (200kbps, 50kHz deviation, 2-GFSK, 311.8kHz Rx BW) */
+static uint32_t ieee802154_cc13xx_overrides_sub_ghz[] = {
+	/* Tx: Configure PA ramp time, PACTL2.RC=0x3 (in ADI0, set PACTL2[4:3]=0x1) */
+	ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x0),
+	/* Rx: Set AGC reference level to 0x16 (default: 0x2E) */
+	HW_REG_OVERRIDE(0x609C, 0x0016),
+	/* Rx: Set RSSI offset to adjust reported RSSI by -1 dB (default: -2), trimmed */
+	/* for external bias and differential configuration */
+	(uint32_t)0x000188A3,
+	/* Rx: Set anti-aliasing filter bandwidth to 0x6 (in ADI0, set IFAMPCTL3[7:4]=0x8) */
+	ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0x8),
+	/* override_prop_common_sub1g.xml */
+	/* Set RF_FSCA.ANADIV.DIV_SEL_BIAS = 1. Bits [0:16, 24, 30] are don't care.. */
+	(uint32_t)0x4001405D,
+	/* Set RF_FSCA.ANADIV.DIV_SEL_BIAS = 1. Bits [0:16, 24, 30] are don't care.. */
+	(uint32_t)0x08141131,
+	/* override_prop_common.xml */
+	/* DC/DC regulator: In Tx with 14 dBm PA setting, use DCDCCTL5[3:0]=0xF */
+	/* (DITHER_EN=1 and IPEAK=7). In Rx, use default settings. */
+	(uint32_t)0x00F788D3,
+	/* TX power override */
+	/* Tx: Set PA trim to max to maximize its output power (in ADI0, set PACTL0=0xF8) */
+	ADI_REG_OVERRIDE(0, 12, 0xF8),
+	(uint32_t)0xFFFFFFFF
+};
+static uint32_t rf_prop_overrides_tx_std[] = {
+	/* The TX Power element should always be the first in the list */
+	TX_STD_POWER_OVERRIDE(0xB224),
+	/* The ANADIV radio parameter based on the LO divider (0) and front-end (0) settings */
+	(uint32_t)0x11310703,
+	/* override_phy_tx_pa_ramp_genfsk_std.xml */
+	/* Tx: Configure PA ramping, set wait time before turning off */
+	/* (0x1A ticks of 16/24 us = 17.3 us). */
+	HW_REG_OVERRIDE(0x6028, 0x001A),
+	(uint32_t)0xFFFFFFFF
+};
+static uint32_t rf_prop_overrides_tx_20[] = {
+	/* The TX Power element should always be the first in the list */
+	TX20_POWER_OVERRIDE(0x001B8ED2),
+	/* The ANADIV radio parameter based on the LO divider (0) and front-end (0) settings */
+	(uint32_t)0x11C10703,
+	/* override_phy_tx_pa_ramp_genfsk_hpa.xml */
+	/* Tx: Configure PA ramping, set wait time before turning off */
+	/* (0x1F ticks of 16/24 us = 20.3 us). */
+	HW_REG_OVERRIDE(0x6028, 0x001F),
+	(uint32_t)0xFFFFFFFF
+};
+
+/* Radio setup command for CC1312P / CC1352P */
+static volatile rfc_CMD_PROP_RADIO_DIV_SETUP_PA_t iee802154_cc13xx_subg_radio_div_setup = {
+	.commandNo = CMD_PROP_RADIO_DIV_SETUP_PA,
+	.condition.rule = COND_NEVER,
+	.modulation.modType = 1, /* FSK */
+	.modulation.deviation = 200,
+	.symbolRate.preScale = 15,
+	.symbolRate.rateWord = 131072,
+	.rxBw = 0x59,                   /* 310.8 kHz */
+	.preamConf.nPreamBytes = 7,
+	.formatConf.nSwBits = 24,       /* 24-bit of syncword */
+	.formatConf.bMsbFirst = true,
+	.formatConf.whitenMode = 7,
+	.config.biasMode = true,
+	.formatConf.bMsbFirst = true,
+	.txPower = 0x013f, /* from Smart RF Studio */
+	.centerFreq = 915,
+	.intFreq = 0x0C00,
+	.loDivider = 5,
+	.pRegOverride = ieee802154_cc13xx_overrides_sub_ghz,
+	.pRegOverrideTxStd = rf_prop_overrides_tx_std,
+	.pRegOverrideTx20 = rf_prop_overrides_tx_20,
+};
+#endif /* CONFIG_SOC_CC1352x, default CMD_PROP_RADIO_DIV_SETUP structures */
+
+/* Sub GHz power tables */
+#if defined(CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_CUSTOM_POWER_TABLE)
+extern RF_TxPowerTable_Entry iee802154_cc13xx_subg_power_table[];
+
+#elif defined(CONFIG_SOC_CC1352R)
+static const RF_TxPowerTable_Entry iee802154_cc13xx_subg_power_table[] = {
+	{ -20, RF_TxPowerTable_DEFAULT_PA_ENTRY(0, 3, 0, 2) },
+	{ -15, RF_TxPowerTable_DEFAULT_PA_ENTRY(1, 3, 0, 3) },
+	{ -10, RF_TxPowerTable_DEFAULT_PA_ENTRY(2, 3, 0, 5) },
+	{ -5, RF_TxPowerTable_DEFAULT_PA_ENTRY(4, 3, 0, 5) },
+	{ 0, RF_TxPowerTable_DEFAULT_PA_ENTRY(8, 3, 0, 8) },
+	{ 1, RF_TxPowerTable_DEFAULT_PA_ENTRY(9, 3, 0, 9) },
+	{ 2, RF_TxPowerTable_DEFAULT_PA_ENTRY(10, 3, 0, 9) },
+	{ 3, RF_TxPowerTable_DEFAULT_PA_ENTRY(11, 3, 0, 10) },
+	{ 4, RF_TxPowerTable_DEFAULT_PA_ENTRY(13, 3, 0, 11) },
+	{ 5, RF_TxPowerTable_DEFAULT_PA_ENTRY(14, 3, 0, 14) },
+	{ 6, RF_TxPowerTable_DEFAULT_PA_ENTRY(17, 3, 0, 16) },
+	{ 7, RF_TxPowerTable_DEFAULT_PA_ENTRY(20, 3, 0, 19) },
+	{ 8, RF_TxPowerTable_DEFAULT_PA_ENTRY(24, 3, 0, 22) },
+	{ 9, RF_TxPowerTable_DEFAULT_PA_ENTRY(28, 3, 0, 31) },
+	{ 10, RF_TxPowerTable_DEFAULT_PA_ENTRY(18, 2, 0, 31) },
+	{ 11, RF_TxPowerTable_DEFAULT_PA_ENTRY(26, 2, 0, 51) },
+	{ 12, RF_TxPowerTable_DEFAULT_PA_ENTRY(16, 0, 0, 82) },
+	{ 13, RF_TxPowerTable_DEFAULT_PA_ENTRY(36, 0, 0, 89) },
+#ifdef CC13X2_CC26X2_BOOST_MODE
+	{ 14, RF_TxPowerTable_DEFAULT_PA_ENTRY(63, 0, 1, 0) },
+#endif
 	RF_TxPowerTable_TERMINATION_ENTRY
 };
+#elif defined(CONFIG_SOC_CC1352P)
+/* Sub GHz power table */
+static const RF_TxPowerTable_Entry iee802154_cc13xx_subg_power_table[] = {
+	{ -20, RF_TxPowerTable_DEFAULT_PA_ENTRY(0, 3, 0, 2) },
+	{ -15, RF_TxPowerTable_DEFAULT_PA_ENTRY(1, 3, 0, 3) },
+	{ -10, RF_TxPowerTable_DEFAULT_PA_ENTRY(2, 3, 0, 5) },
+	{ -5, RF_TxPowerTable_DEFAULT_PA_ENTRY(4, 3, 0, 5) },
+	{ 0, RF_TxPowerTable_DEFAULT_PA_ENTRY(8, 3, 0, 8) },
+	{ 1, RF_TxPowerTable_DEFAULT_PA_ENTRY(9, 3, 0, 9) },
+	{ 2, RF_TxPowerTable_DEFAULT_PA_ENTRY(10, 3, 0, 9) },
+	{ 3, RF_TxPowerTable_DEFAULT_PA_ENTRY(11, 3, 0, 10) },
+	{ 4, RF_TxPowerTable_DEFAULT_PA_ENTRY(13, 3, 0, 11) },
+	{ 5, RF_TxPowerTable_DEFAULT_PA_ENTRY(14, 3, 0, 14) },
+	{ 6, RF_TxPowerTable_DEFAULT_PA_ENTRY(17, 3, 0, 16) },
+	{ 7, RF_TxPowerTable_DEFAULT_PA_ENTRY(20, 3, 0, 19) },
+	{ 8, RF_TxPowerTable_DEFAULT_PA_ENTRY(24, 3, 0, 22) },
+	{ 9, RF_TxPowerTable_DEFAULT_PA_ENTRY(28, 3, 0, 31) },
+	{ 10, RF_TxPowerTable_DEFAULT_PA_ENTRY(18, 2, 0, 31) },
+	{ 11, RF_TxPowerTable_DEFAULT_PA_ENTRY(26, 2, 0, 51) },
+	{ 12, RF_TxPowerTable_DEFAULT_PA_ENTRY(16, 0, 0, 82) },
+	{ 13, RF_TxPowerTable_DEFAULT_PA_ENTRY(36, 0, 0, 89) },
+#ifdef CC13X2_CC26X2_BOOST_MODE
+	{ 14, RF_TxPowerTable_DEFAULT_PA_ENTRY(63, 0, 1, 0) },
+#endif
+	{ 15, RF_TxPowerTable_HIGH_PA_ENTRY(18, 0, 0, 36, 0) },
+	{ 16, RF_TxPowerTable_HIGH_PA_ENTRY(24, 0, 0, 43, 0) },
+	{ 17, RF_TxPowerTable_HIGH_PA_ENTRY(28, 0, 0, 51, 2) },
+	{ 18, RF_TxPowerTable_HIGH_PA_ENTRY(34, 0, 0, 64, 4) },
+	{ 19, RF_TxPowerTable_HIGH_PA_ENTRY(15, 3, 0, 36, 4) },
+	{ 20, RF_TxPowerTable_HIGH_PA_ENTRY(18, 3, 0, 71, 27) },
+	RF_TxPowerTable_TERMINATION_ENTRY
+};
+#endif /* CONFIG_SOC_CC1352x power table */
+
+/** RF patches to use (note: RF core keeps a pointer to this, so no stack). */
+static RF_Mode rf_mode = {
+	.rfMode = RF_MODE_MULTIPLE,
+	.cpePatchFxn = &rf_patch_cpe_multi_protocol,
+};
+
 
 static inline int ieee802154_cc13xx_cc26xx_subg_channel_to_frequency(
 	uint16_t channel, uint16_t *frequency, uint16_t *fractFreq)
@@ -367,7 +468,7 @@ static int ieee802154_cc13xx_cc26xx_subg_set_txpower(
 	RF_Stat status;
 
 	RF_TxPowerTable_Value power_table_value = RF_TxPowerTable_findValue(
-		(RF_TxPowerTable_Entry *)txPowerTable_sub_ghz, dbm);
+		(RF_TxPowerTable_Entry *)iee802154_cc13xx_subg_power_table, dbm);
 
 	if (power_table_value.rawValue == RF_TxPowerTable_INVALID_VALUE) {
 		LOG_DBG("RF_TxPowerTable_findValue() failed");
@@ -555,10 +656,14 @@ static void ieee802154_cc13xx_cc26xx_subg_rx_done(
 
 static int ieee802154_cc13xx_cc26xx_subg_start(const struct device *dev)
 {
-	ARG_UNUSED(dev);
+	/* Start RX */
+	(void)ieee802154_cc13xx_cc26xx_subg_rx(dev);
 	return 0;
 }
 
+/**
+ * Flushes / stops all radio commands in RF queue.
+ */
 static int ieee802154_cc13xx_cc26xx_subg_stop(const struct device *dev)
 {
 	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data =
@@ -574,6 +679,26 @@ static int ieee802154_cc13xx_cc26xx_subg_stop(const struct device *dev)
 		return -EIO;
 	}
 
+	return 0;
+}
+
+/**
+ * Stops the sub-GHz interface and yields the radio (tells RF module to power
+ * down).
+ */
+static int ieee802154_cc13xx_cc26xx_subg_stop_if(const struct device *dev)
+{
+	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data =
+		get_dev_data(dev);
+	int ret;
+
+	ret = ieee802154_cc13xx_cc26xx_subg_stop(dev);
+	if (ret < 0) {
+		return ret;
+	}
+
+	/* power down radio */
+	RF_yield(drv_data->rf_handle);
 	return 0;
 }
 
@@ -664,7 +789,7 @@ static struct ieee802154_radio_api
 	.set_txpower = ieee802154_cc13xx_cc26xx_subg_set_txpower,
 	.tx = ieee802154_cc13xx_cc26xx_subg_tx,
 	.start = ieee802154_cc13xx_cc26xx_subg_start,
-	.stop = ieee802154_cc13xx_cc26xx_subg_stop,
+	.stop = ieee802154_cc13xx_cc26xx_subg_stop_if,
 	.configure = ieee802154_cc13xx_cc26xx_subg_configure,
 	.get_subg_channel_count =
 		ieee802154_cc13xx_cc26xx_subg_get_subg_channel_count,
@@ -674,10 +799,6 @@ static int ieee802154_cc13xx_cc26xx_subg_init(const struct device *dev)
 {
 	RF_Params rf_params;
 	RF_EventMask reason;
-	RF_Mode rf_mode = {
-		.rfMode = RF_MODE_MULTIPLE,
-		.cpePatchFxn = &rf_patch_cpe_multi_protocol,
-	};
 	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data =
 		get_dev_data(dev);
 
@@ -690,11 +811,7 @@ static int ieee802154_cc13xx_cc26xx_subg_init(const struct device *dev)
 	rf_params.pClientEventCb = client_event_callback;
 
 	drv_data->rf_handle = RF_open(&drv_data->rf_object,
-#if CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_DIV_SETUP_PA
-		&rf_mode, (RF_RadioSetup *)&drv_data->cmd_prop_radio_div_setup_pa,
-#else
-		&rf_mode, (RF_RadioSetup *)&drv_data->cmd_prop_radio_div_setup,
-#endif
+		&rf_mode, (RF_RadioSetup *)&iee802154_cc13xx_subg_radio_div_setup,
 		&rf_params);
 	if (drv_data->rf_handle == NULL) {
 		LOG_ERR("RF_open() failed");
@@ -735,69 +852,6 @@ static struct ieee802154_cc13xx_cc26xx_subg_data
 		.pQueue = &ieee802154_cc13xx_cc26xx_subg_data.rx_queue,
 	},
 
-	/* Sub-GHz Radio Commands */
-#if CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_DIV_SETUP_PA
-		.cmd_prop_radio_div_setup_pa = {
-		.commandNo = 0x3807,
-		.status = 0x0000,
-		.pNextOp = 0,
-		.startTime = 0x00000000,
-		.startTrigger.triggerType = 0x0,
-		.startTrigger.bEnaCmd = 0x0,
-		.startTrigger.triggerNo = 0x0,
-		.startTrigger.pastTrig = 0x0,
-		.condition.rule = 0x1,
-		.condition.nSkip = 0x0,
-		.modulation.modType = 0x1,
-		.modulation.deviation = 0xC8,
-		.modulation.deviationStepSz = 0x0,
-		.symbolRate.preScale = 0xF,
-		.symbolRate.rateWord = 0x20000,
-		.symbolRate.decimMode = 0x0,
-		.rxBw = 0x59,
-		.preamConf.nPreamBytes = 0x7,
-		.preamConf.preamMode = 0x0,
-		.formatConf.nSwBits = 0x18,
-		.formatConf.bBitReversal = 0x0,
-		.formatConf.bMsbFirst = 0x1,
-		.formatConf.fecMode = 0x0,
-		.formatConf.whitenMode = 0x7,
-		.config.frontEndMode = 0x0,
-		.config.biasMode = 0x1,
-		.config.analogCfgMode = 0x0,
-		.config.bNoFsPowerUp = 0x0,
-		.config.bSynthNarrowBand = 0x0,
-		.txPower = 0xFFFF,
-		.pRegOverride = overrides_sub_ghz,
-		.centerFreq = 0x0364,
-		.intFreq = 0x0C00,
-		.loDivider = 0x05,
-		.pRegOverrideTxStd = pOverrides_fsk_200kbpsTxStd,
-		.pRegOverrideTx20 = pOverrides_fsk_200kbpsTx20
-	},
-#else
-	.cmd_prop_radio_div_setup = {
-		.commandNo = CMD_PROP_RADIO_DIV_SETUP,
-		.condition.rule = COND_NEVER,
-		.modulation.modType = 1, /* FSK */
-		.modulation.deviation = 200,
-		.symbolRate.preScale = 15,
-		.symbolRate.rateWord = 131072,
-		.rxBw = 0x59,                   /* 310.8 kHz */
-		.preamConf.nPreamBytes = 7,
-		.formatConf.nSwBits = 24,       /* 24-bit of syncword */
-		.formatConf.bMsbFirst = true,
-		.formatConf.whitenMode = 7,
-		.config.biasMode = true,
-		.formatConf.bMsbFirst = true,
-		.txPower = 0x013f, /* from Smart RF Studio */
-		.centerFreq = 915,
-		.intFreq = 0x0999,
-		.loDivider = 5,
-		.pRegOverride = overrides_sub_ghz,
-	},
-
-#endif
 	.cmd_fs = {
 		.commandNo = CMD_FS,
 		.condition.rule = COND_NEVER,
@@ -866,15 +920,16 @@ static struct ieee802154_cc13xx_cc26xx_subg_data
 #if defined(CONFIG_NET_L2_IEEE802154_SUB_GHZ)
 NET_DEVICE_INIT(ieee802154_cc13xx_cc26xx_subg,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_DRV_NAME,
-		ieee802154_cc13xx_cc26xx_subg_init, device_pm_control_nop,
+		ieee802154_cc13xx_cc26xx_subg_init, NULL,
 		&ieee802154_cc13xx_cc26xx_subg_data, NULL,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_INIT_PRIO,
 		&ieee802154_cc13xx_cc26xx_subg_radio_api, IEEE802154_L2,
 		NET_L2_GET_CTX_TYPE(IEEE802154_L2), IEEE802154_MTU);
 #else
-DEVICE_AND_API_INIT(ieee802154_cc13xx_cc26xx_subg,
+DEVICE_DEFINE(ieee802154_cc13xx_cc26xx_subg,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_DRV_NAME,
 		ieee802154_cc13xx_cc26xx_subg_init,
+		NULL,
 		&ieee802154_cc13xx_cc26xx_subg_data, NULL, POST_KERNEL,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_INIT_PRIO,
 		&ieee802154_cc13xx_cc26xx_subg_radio_api);

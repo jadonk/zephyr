@@ -12,29 +12,29 @@
 
 #define DESC(d) ((void *)d)
 
-int fprintf(FILE *_MLIBC_RESTRICT F, const char *_MLIBC_RESTRICT format, ...)
+int fprintf(FILE *ZRESTRICT stream, const char *ZRESTRICT format, ...)
 {
 	va_list vargs;
 	int     r;
 
 	va_start(vargs, format);
-	r = cbvprintf(fputc, DESC(F), format, vargs);
+	r = cbvprintf(fputc, DESC(stream), format, vargs);
 	va_end(vargs);
 
 	return r;
 }
 
-int vfprintf(FILE *_MLIBC_RESTRICT F, const char *_MLIBC_RESTRICT format,
+int vfprintf(FILE *ZRESTRICT stream, const char *ZRESTRICT format,
 	     va_list vargs)
 {
 	int r;
 
-	r = cbvprintf(fputc, DESC(F), format, vargs);
+	r = cbvprintf(fputc, DESC(stream), format, vargs);
 
 	return r;
 }
 
-int printf(const char *_MLIBC_RESTRICT format, ...)
+int printf(const char *ZRESTRICT format, ...)
 {
 	va_list vargs;
 	int     r;
@@ -46,7 +46,7 @@ int printf(const char *_MLIBC_RESTRICT format, ...)
 	return r;
 }
 
-int vprintf(const char *_MLIBC_RESTRICT format, va_list vargs)
+int vprintf(const char *ZRESTRICT format, va_list vargs)
 {
 	int r;
 

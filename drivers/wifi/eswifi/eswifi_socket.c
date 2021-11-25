@@ -150,10 +150,9 @@ do_recv_cb:
 	next_timeout_ms = 0;
 
 done:
-	err = k_delayed_work_submit_to_queue(&eswifi->work_q,
-					     &socket->read_work,
-					     K_MSEC(next_timeout_ms));
-	if (err) {
+	err = k_work_reschedule_for_queue(&eswifi->work_q, &socket->read_work,
+					  K_MSEC(next_timeout_ms));
+	if (err < 0) {
 		LOG_ERR("Rescheduling socket read error");
 	}
 
@@ -206,6 +205,7 @@ int __eswifi_off_start_client(struct eswifi_dev *eswifi,
 		LOG_ERR("Unable to start TCP/UDP client");
 		return -EIO;
 	}
+	net_context_set_state(socket->context, NET_CONTEXT_CONNECTED);
 
 	return 0;
 }
@@ -237,7 +237,7 @@ int __eswifi_socket_free(struct eswifi_dev *eswifi,
 			 struct eswifi_off_socket *socket)
 {
 	__select_socket(eswifi, socket->index);
-	k_delayed_work_cancel(&socket->read_work);
+	k_work_cancel_delayable(&socket->read_work);
 
 	__select_socket(eswifi, socket->index);
 	__stop_socket(eswifi, socket);
@@ -298,7 +298,7 @@ int __eswifi_socket_new(struct eswifi_dev *eswifi, int family, int type,
 		return -EIO;
 	}
 
-	k_delayed_work_init(&socket->read_work, eswifi_off_read_work);
+	k_work_init_delayable(&socket->read_work, eswifi_off_read_work);
 	socket->usage = 1;
 	LOG_DBG("Socket index %d", socket->index);
 

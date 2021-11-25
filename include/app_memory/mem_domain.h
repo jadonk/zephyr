@@ -12,14 +12,11 @@
 #include <stddef.h>
 #include <sys/dlist.h>
 #include <toolchain.h>
+#include <kernel/thread.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* Forward declaration */
-struct k_thread;
-typedef struct k_thread *k_tid_t;
 
 /**
  * @defgroup mem_domain_apis Memory domain APIs
@@ -127,20 +124,6 @@ struct k_mem_partition;
  */
 extern void k_mem_domain_init(struct k_mem_domain *domain, uint8_t num_parts,
 			      struct k_mem_partition *parts[]);
-/**
- * @brief Destroy a memory domain.
- *
- * Destroy a memory domain. All member threads will be re-assigned to the
- * default memory domain.
- *
- * The default memory domain may not be destroyed.
- *
- * This API is deprecated and will be removed in Zephyr 2.5.
- *
- * @param domain The memory domain to be destroyed.
- */
-__deprecated
-extern void k_mem_domain_destroy(struct k_mem_domain *domain);
 
 /**
  * @brief Add a memory partition into a memory domain.
@@ -191,17 +174,6 @@ extern void k_mem_domain_remove_partition(struct k_mem_domain *domain,
  */
 extern void k_mem_domain_add_thread(struct k_mem_domain *domain,
 				    k_tid_t thread);
-
-/**
- * @brief Remove a thread from its memory domain.
- *
- * Remove a thread from its memory domain. It will be reassigned to the
- * default memory domain.
- *
- * @param thread ID of thread going to be removed from its memory domain.
- */
-__deprecated
-extern void k_mem_domain_remove_thread(k_tid_t thread);
 
 #ifdef __cplusplus
 }

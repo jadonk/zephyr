@@ -10,6 +10,12 @@ menuconfig DISPLAY
 
 if DISPLAY
 
+config DISPLAY_INIT_PRIORITY
+	int "Display devices init priority"
+	default 85
+	help
+	  Display devices initialization priority.
+
 module = DISPLAY
 module-str = display
 source "subsys/logging/Kconfig.template.log_config"
@@ -21,9 +27,11 @@ source "drivers/display/Kconfig.ili9xxx"
 source "drivers/display/Kconfig.sdl"
 source "drivers/display/Kconfig.ssd1306"
 source "drivers/display/Kconfig.ssd16xx"
+source "drivers/display/Kconfig.st7735r"
 source "drivers/display/Kconfig.st7789v"
 source "drivers/display/Kconfig.gd7965"
 source "drivers/display/Kconfig.dummy"
+source "drivers/display/Kconfig.ls0xx"
 
 config FRAMEBUF_DISPLAY
 	# Hidden, selected by client drivers.

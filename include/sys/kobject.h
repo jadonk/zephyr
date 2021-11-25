@@ -67,7 +67,7 @@ union z_object_data {
 
 #ifdef CONFIG_GEN_PRIV_STACKS
 	/* Metadata for K_OBJ_THREAD_STACK_ELEMENT */
-	struct z_stack_data *stack_data;
+	const struct z_stack_data *stack_data;
 #else
 	/* Stack buffer size for K_OBJ_THREAD_STACK_ELEMENT */
 	size_t stack_size;
@@ -110,7 +110,7 @@ struct z_object_assignment {
 #define K_THREAD_ACCESS_GRANT(name_, ...) \
 	static void * const _CONCAT(_object_list_, name_)[] = \
 		{ __VA_ARGS__, NULL }; \
-	static const Z_STRUCT_SECTION_ITERABLE(z_object_assignment, \
+	static const STRUCT_SECTION_ITERABLE(z_object_assignment, \
 					_CONCAT(_object_access_, name_)) = \
 			{ (&_k_thread_obj_ ## name_), \
 			  (_CONCAT(_object_list_, name_)) }
@@ -134,52 +134,6 @@ struct z_object_assignment {
  * @param obj Address of the kernel object
  */
 void z_object_init(const void *obj);
-#else
-/* LCOV_EXCL_START */
-#define K_THREAD_ACCESS_GRANT(thread, ...)
-
-/**
- * @internal
- */
-static inline void z_object_init(const void *obj)
-{
-	ARG_UNUSED(obj);
-}
-
-/**
- * @internal
- */
-static inline void z_impl_k_object_access_grant(const void *object,
-						struct k_thread *thread)
-{
-	ARG_UNUSED(object);
-	ARG_UNUSED(thread);
-}
-
-/**
- * @internal
- */
-static inline void k_object_access_revoke(const void *object,
-					  struct k_thread *thread)
-{
-	ARG_UNUSED(object);
-	ARG_UNUSED(thread);
-}
-
-/**
- * @internal
- */
-static inline void z_impl_k_object_release(const void *object)
-{
-	ARG_UNUSED(object);
-}
-
-static inline void k_object_access_all_grant(const void *object)
-{
-	ARG_UNUSED(object);
-}
-/* LCOV_EXCL_STOP */
-#endif /* !CONFIG_USERSPACE */
 
 /**
  * Grant a thread access to a kernel object
@@ -236,6 +190,54 @@ __syscall void k_object_release(const void *object);
  */
 void k_object_access_all_grant(const void *object);
 
+#else
+/* LCOV_EXCL_START */
+#define K_THREAD_ACCESS_GRANT(thread, ...)
+
+/**
+ * @internal
+ */
+static inline void z_object_init(const void *obj)
+{
+	ARG_UNUSED(obj);
+}
+
+/**
+ * @internal
+ */
+static inline void z_impl_k_object_access_grant(const void *object,
+						struct k_thread *thread)
+{
+	ARG_UNUSED(object);
+	ARG_UNUSED(thread);
+}
+
+/**
+ * @internal
+ */
+static inline void k_object_access_revoke(const void *object,
+					  struct k_thread *thread)
+{
+	ARG_UNUSED(object);
+	ARG_UNUSED(thread);
+}
+
+/**
+ * @internal
+ */
+static inline void z_impl_k_object_release(const void *object)
+{
+	ARG_UNUSED(object);
+}
+
+static inline void k_object_access_all_grant(const void *object)
+{
+	ARG_UNUSED(object);
+}
+/* LCOV_EXCL_STOP */
+#endif /* !CONFIG_USERSPACE */
+
+#ifdef CONFIG_DYNAMIC_OBJECTS
 /**
  * Allocate a kernel object of a designated type
  *
@@ -252,7 +254,28 @@ void k_object_access_all_grant(const void *object);
  */
 __syscall void *k_object_alloc(enum k_objects otype);
 
-#ifdef CONFIG_DYNAMIC_OBJECTS
+/**
+ * Allocate memory and install as a generic kernel object
+ *
+ * This is a low-level function to allocate some memory, and register that
+ * allocated memory in the kernel object lookup tables with type K_OBJ_ANY.
+ * Initialization state and thread permissions will be cleared. The
+ * returned z_object's data value will be uninitialized.
+ *
+ * Most users will want to use k_object_alloc() instead.
+ *
+ * Memory allocated will be drawn from the calling thread's reasource pool
+ * and may be freed later by passing the actual object pointer (found
+ * in the returned z_object's 'name' member) to k_object_free().
+ *
+ * @param align Required memory alignment for the allocated object
+ * @param size Size of the allocated object
+ * @return NULL on insufficient memory
+ * @return A pointer to the associated z_object that is installed in the
+ *	kernel object tables
+ */
+struct z_object *z_dynamic_object_aligned_create(size_t align, size_t size);
+
 /**
  * Allocate memory and install as a generic kernel object
  *
@@ -272,7 +295,10 @@ __syscall void *k_object_alloc(enum k_objects otype);
  * @return A pointer to the associated z_object that is installed in the
  *	kernel object tables
  */
-struct z_object *z_dynamic_object_create(size_t size);
+static inline struct z_object *z_dynamic_object_create(size_t size)
+{
+	return z_dynamic_object_aligned_create(0, size);
+}
 
 /**
  * Free a kernel object previously allocated with k_object_alloc()
@@ -285,10 +311,20 @@ struct z_object *z_dynamic_object_create(size_t size);
  */
 void k_object_free(void *obj);
 #else
+
 /* LCOV_EXCL_START */
 static inline void *z_impl_k_object_alloc(enum k_objects otype)
 {
 	ARG_UNUSED(otype);
+
+	return NULL;
+}
+
+static inline struct z_object *z_dynamic_object_aligned_create(size_t align,
+							       size_t size)
+{
+	ARG_UNUSED(align);
+	ARG_UNUSED(size);
 
 	return NULL;
 }

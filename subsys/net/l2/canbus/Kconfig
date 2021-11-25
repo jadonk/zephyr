@@ -5,6 +5,7 @@ config NET_L2_CANBUS
 	bool "Enable CANBUS L2 layer [EXPERIMENTAL]"
 	depends on CAN_NET
 	select NET_6LO
+	select EXPERIMENTAL
 	help
 	  Add a CANBUS L2 layer driver. This is the layer for IPv6 over CAN
 	  (6loCAN). It uses IPHC to compress the IP header and ISO-TP for
@@ -58,7 +59,7 @@ config NET_L2_CANBUS_ETH_TRANSLATOR
 	help
 	  Enable a 6LoCAN Ethernet translator. With this translator it is
 	  possible to connect a 6LoCAN network to a Ethernet network directly,
-	  via a Switch or trough a router. Messages that goes through the
+	  via a Switch or through a router. Messages that goes through the
 	  translator have a special address and the MAC address is carried inline.
 	  The packet is forwarded with uncompressed IPv6 header.
 

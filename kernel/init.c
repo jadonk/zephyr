@@ -27,30 +27,30 @@
 #include <string.h>
 #include <sys/dlist.h>
 #include <kernel_internal.h>
-#include <kswap.h>
 #include <drivers/entropy.h>
 #include <logging/log_ctrl.h>
 #include <tracing/tracing.h>
 #include <stdbool.h>
 #include <debug/gcov.h>
 #include <kswap.h>
+#include <timing/timing.h>
 #include <logging/log.h>
 LOG_MODULE_REGISTER(os, CONFIG_KERNEL_LOG_LEVEL);
 
-/* boot time measurement items */
-#ifdef CONFIG_BOOT_TIME_MEASUREMENT
-uint32_t __noinit z_timestamp_main;  /* timestamp when main task starts */
-uint32_t __noinit z_timestamp_idle;  /* timestamp when CPU goes idle */
-#endif
+/* the only struct z_kernel instance */
+struct z_kernel _kernel;
 
 /* init/main and idle threads */
-K_THREAD_STACK_DEFINE(z_main_stack, CONFIG_MAIN_STACK_SIZE);
+K_THREAD_PINNED_STACK_DEFINE(z_main_stack, CONFIG_MAIN_STACK_SIZE);
 struct k_thread z_main_thread;
 
 #ifdef CONFIG_MULTITHREADING
+__pinned_bss
 struct k_thread z_idle_threads[CONFIG_MP_NUM_CPUS];
-static K_KERNEL_STACK_ARRAY_DEFINE(z_idle_stacks, CONFIG_MP_NUM_CPUS,
-				   CONFIG_IDLE_STACK_SIZE);
+
+static K_KERNEL_PINNED_STACK_ARRAY_DEFINE(z_idle_stacks,
+					  CONFIG_MP_NUM_CPUS,
+					  CONFIG_IDLE_STACK_SIZE);
 #endif /* CONFIG_MULTITHREADING */
 
 /*
@@ -61,16 +61,9 @@ static K_KERNEL_STACK_ARRAY_DEFINE(z_idle_stacks, CONFIG_MP_NUM_CPUS,
  * of this area is safe since interrupts are disabled until the kernel context
  * switches to the init thread.
  */
-K_KERNEL_STACK_ARRAY_DEFINE(z_interrupt_stacks, CONFIG_MP_NUM_CPUS,
-			    CONFIG_ISR_STACK_SIZE);
-
-#ifdef CONFIG_SYS_CLOCK_EXISTS
-	#define initialize_timeouts() do { \
-		sys_dlist_init(&_timeout_q); \
-	} while (false)
-#else
-	#define initialize_timeouts() do { } while ((0))
-#endif
+K_KERNEL_PINNED_STACK_ARRAY_DEFINE(z_interrupt_stacks,
+				   CONFIG_MP_NUM_CPUS,
+				   CONFIG_ISR_STACK_SIZE);
 
 extern void idle(void *unused1, void *unused2, void *unused3);
 
@@ -90,6 +83,7 @@ extern void idle(void *unused1, void *unused2, void *unused3);
  *
  * @return N/A
  */
+__boot_func
 void z_bss_zero(void)
 {
 	(void)memset(__bss_start, 0, __bss_end - __bss_start);
@@ -108,9 +102,49 @@ void z_bss_zero(void)
 #endif	/* CONFIG_CODE_DATA_RELOCATION */
 #ifdef CONFIG_COVERAGE_GCOV
 	(void)memset(&__gcov_bss_start, 0,
-		 ((uint32_t) &__gcov_bss_end - (uint32_t) &__gcov_bss_start));
+		 ((uintptr_t) &__gcov_bss_end - (uintptr_t) &__gcov_bss_start));
 #endif
 }
+
+#ifdef CONFIG_LINKER_USE_BOOT_SECTION
+/**
+ * @brief Clear BSS within the bot region
+ *
+ * This routine clears the BSS within the boot region.
+ * This is separate from z_bss_zero() as boot region may
+ * contain symbols required for the boot process before
+ * paging is initialized.
+ */
+__boot_func
+void z_bss_zero_boot(void)
+{
+	(void)memset(&lnkr_boot_bss_start, 0,
+		     (uintptr_t)&lnkr_boot_bss_end
+		     - (uintptr_t)&lnkr_boot_bss_start);
+}
+#endif /* CONFIG_LINKER_USE_BOOT_SECTION */
+
+#ifdef CONFIG_LINKER_USE_PINNED_SECTION
+/**
+ * @brief Clear BSS within the pinned region
+ *
+ * This routine clears the BSS within the pinned region.
+ * This is separate from z_bss_zero() as pinned region may
+ * contain symbols required for the boot process before
+ * paging is initialized.
+ */
+#ifdef CONFIG_LINKER_USE_BOOT_SECTION
+__boot_func
+#else
+__pinned_func
+#endif
+void z_bss_zero_pinned(void)
+{
+	(void)memset(&lnkr_pinned_bss_start, 0,
+		(uintptr_t)&lnkr_pinned_bss_end
+		- (uintptr_t)&lnkr_pinned_bss_start);
+}
+#endif /* CONFIG_LINKER_USE_PINNED_SECTION */
 
 #ifdef CONFIG_STACK_CANARIES
 extern volatile uintptr_t __stack_chk_guard;
@@ -118,7 +152,9 @@ extern volatile uintptr_t __stack_chk_guard;
 
 /* LCOV_EXCL_STOP */
 
+__pinned_bss
 bool z_sys_post_kernel;
+
 extern void boot_banner(void);
 
 /**
@@ -130,12 +166,21 @@ extern void boot_banner(void);
  *
  * @return N/A
  */
+__boot_func
 static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 {
 	ARG_UNUSED(unused1);
 	ARG_UNUSED(unused2);
 	ARG_UNUSED(unused3);
 
+#ifdef CONFIG_MMU
+	/* Invoked here such that backing store or eviction algorithms may
+	 * initialize kernel objects, and that all POST_KERNEL and later tasks
+	 * may perform memory management tasks (except for z_phys_map() which
+	 * is allowed at any time)
+	 */
+	z_mem_manage_init();
+#endif /* CONFIG_MMU */
 	z_sys_post_kernel = true;
 
 	z_sys_init_run_level(_SYS_INIT_LEVEL_POST_KERNEL);
@@ -144,12 +189,9 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 #endif
 	boot_banner();
 
-#ifdef CONFIG_CPLUSPLUS
-	/* Process the .ctors and .init_array sections */
-	extern void __do_global_ctors_aux(void);
-	extern void __do_init_array_aux(void);
-	__do_global_ctors_aux();
-	__do_init_array_aux();
+#if defined(CONFIG_CPLUSPLUS) && !defined(CONFIG_ARCH_POSIX)
+	void z_cpp_init_static(void);
+	z_cpp_init_static();
 #endif
 
 	/* Final init level before app starts */
@@ -157,8 +199,8 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 
 	z_init_static_threads();
 
-#ifdef KERNEL_COHERENCE
-	__ASSERT_NO_MSG(arch_mem_coherent(_kernel));
+#ifdef CONFIG_KERNEL_COHERENCE
+	__ASSERT_NO_MSG(arch_mem_coherent(&_kernel));
 #endif
 
 #ifdef CONFIG_SMP
@@ -166,9 +208,9 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 	z_sys_init_run_level(_SYS_INIT_LEVEL_SMP);
 #endif
 
-#ifdef CONFIG_BOOT_TIME_MEASUREMENT
-	z_timestamp_main = k_cycle_get_32();
-#endif
+#ifdef CONFIG_MMU
+	z_mem_manage_boot_finish();
+#endif /* CONFIG_MMU */
 
 	extern void main(void);
 
@@ -183,17 +225,8 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 #endif
 } /* LCOV_EXCL_LINE ... because we just dumped final coverage data */
 
-/* LCOV_EXCL_START */
-
-void __weak main(void)
-{
-	/* NOP default main() if the application does not provide one. */
-	arch_nop();
-}
-
-/* LCOV_EXCL_STOP */
-
 #if defined(CONFIG_MULTITHREADING)
+__boot_func
 static void init_idle_thread(int i)
 {
 	struct k_thread *thread = &z_idle_threads[i];
@@ -209,13 +242,18 @@ static void init_idle_thread(int i)
 
 	z_setup_new_thread(thread, stack,
 			  CONFIG_IDLE_STACK_SIZE, idle, &_kernel.cpus[i],
-			  NULL, NULL, K_LOWEST_THREAD_PRIO, K_ESSENTIAL,
+			  NULL, NULL, K_IDLE_PRIO, K_ESSENTIAL,
 			  tname);
 	z_mark_thread_as_started(thread);
 
 #ifdef CONFIG_SMP
 	thread->base.is_idle = 1U;
 #endif
+}
+
+void z_reinit_idle_thread(int i)
+{
+	init_idle_thread(i);
 }
 
 /**
@@ -230,10 +268,10 @@ static void init_idle_thread(int i)
  *
  * @return initial stack pointer for the main thread
  */
+__boot_func
 static char *prepare_multithreading(void)
 {
 	char *stack_ptr;
-	uint32_t opt;
 
 	/* _kernel.ready_q is all zeroes */
 	z_sched_init();
@@ -250,18 +288,11 @@ static char *prepare_multithreading(void)
 	 */
 	_kernel.ready_q.cache = &z_main_thread;
 #endif
-
-	opt = K_ESSENTIAL;
-#if defined(CONFIG_FPU) && defined(CONFIG_FPU_SHARING)
-	/* Enable FPU in main thread */
-	opt |= K_FP_REGS;
-#endif
-
 	stack_ptr = z_setup_new_thread(&z_main_thread, z_main_stack,
 				       CONFIG_MAIN_STACK_SIZE, bg_thread_main,
 				       NULL, NULL, NULL,
 				       CONFIG_MAIN_THREAD_PRIORITY,
-				       opt, "main");
+				       K_ESSENTIAL, "main");
 	z_mark_thread_as_started(&z_main_thread);
 	z_ready_thread(&z_main_thread);
 
@@ -274,11 +305,10 @@ static char *prepare_multithreading(void)
 			 K_KERNEL_STACK_SIZEOF(z_interrupt_stacks[i]));
 	}
 
-	initialize_timeouts();
-
 	return stack_ptr;
 }
 
+__boot_func
 static FUNC_NORETURN void switch_to_main_thread(char *stack_ptr)
 {
 #ifdef CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN
@@ -297,6 +327,7 @@ static FUNC_NORETURN void switch_to_main_thread(char *stack_ptr)
 #endif /* CONFIG_MULTITHREADING */
 
 #if defined(CONFIG_ENTROPY_HAS_DRIVER) || defined(CONFIG_TEST_RANDOM_GENERATOR)
+__boot_func
 void z_early_boot_rand_get(uint8_t *buf, size_t length)
 {
 	int n = sizeof(uint32_t);
@@ -333,7 +364,7 @@ sys_rand_fallback:
 	 * those devices without a HWRNG entropy driver.
 	 */
 
-	while (length > 0) {
+	while (length > 0U) {
 		uint32_t rndbits;
 		uint8_t *p_rndbits = (uint8_t *)&rndbits;
 
@@ -365,6 +396,7 @@ sys_rand_fallback:
  *
  * @return Does not return
  */
+__boot_func
 FUNC_NORETURN void z_cstart(void)
 {
 	/* gcov hook needed to get the coverage report.*/
@@ -383,6 +415,8 @@ FUNC_NORETURN void z_cstart(void)
 
 	z_dummy_thread_init(&dummy_thread);
 #endif
+	/* do any necessary initialization of static devices */
+	z_device_state_init();
 
 	/* perform basic hardware initialization */
 	z_sys_init_run_level(_SYS_INIT_LEVEL_PRE_KERNEL_1);
@@ -396,7 +430,7 @@ FUNC_NORETURN void z_cstart(void)
 	__stack_chk_guard <<= 8;
 #endif	/* CONFIG_STACK_CANARIES */
 
-#ifdef CONFIG_THREAD_RUNTIME_STATS_USE_TIMING_FUNCTIONS
+#ifdef CONFIG_TIMING_FUNCTIONS_NEED_AT_BOOT
 	timing_init();
 	timing_start();
 #endif

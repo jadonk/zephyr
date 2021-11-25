@@ -9,10 +9,10 @@
 #ifndef __PLATFORM_LIB_SHIM_H__
 #define __PLATFORM_LIB_SHIM_H__
 
-#include <sys/util.h>
 #include <soc/memory.h>
 
 #ifndef ASSEMBLY
+#include <sys/util.h>
 #include <stdint.h>
 #endif
 
@@ -204,6 +204,7 @@
 #define SHIM_HSPGCTL		0x80
 #define SHIM_LSPGCTL		0x84
 #define SHIM_SPSREQ		0xa0
+#define LSPGCTL			(SHIM_BASE + SHIM_LSPGCTL)
 
 #define SHIM_SPSREQ_RVNNP	BIT(0)
 

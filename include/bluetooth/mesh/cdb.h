@@ -25,7 +25,6 @@ extern "C" {
 
 enum {
 	BT_MESH_CDB_NODE_CONFIGURED,
-	BT_MESH_CDB_NODE_BLACKLISTED,
 
 	BT_MESH_CDB_NODE_FLAG_COUNT
 };
@@ -43,7 +42,6 @@ struct bt_mesh_cdb_node {
 struct bt_mesh_cdb_subnet {
 	uint16_t net_idx;
 
-	bool kr_flag;
 	uint8_t kr_phase;
 
 	struct {

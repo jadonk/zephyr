@@ -8,82 +8,23 @@ zephyr_library()
 zephyr_library_sources(pinmux.c)
 zephyr_library_include_directories(${ZEPHYR_BASE}/drivers)
 
-if (CONFIG_BUILD_WITH_TFM)
-	# Set default image versions if not defined elsewhere
-	if (NOT DEFINED TFM_IMAGE_VERSION_S)
-		set(TFM_IMAGE_VERSION_S 0.0.0+0)
-	endif()
+if(CONFIG_SOC_MPS2_AN521_CPU1 AND NOT CONFIG_OPENAMP)
+# Building a firmware image for CPU1: this requires a binary
+# for CPU0, which will boot the device and wake up CPU1.
+# However, if building with OPENAMP, there is no need to build
+# any binary for CPU0, as this is built by the dual core sample.
 
-	if (NOT DEFINED TFM_IMAGE_VERSION_NS)
-		set(TFM_IMAGE_VERSION_NS 0.0.0+0)
-	endif()
+  set(CPU0_BINARY_DIR ${BOARD_DIR}/empty_cpu0-prefix/src/empty-cpu0-build/zephyr)
 
-	set(PREPROCESSED_FILE_S "${CMAKE_BINARY_DIR}/tfm/bl2/ext/mcuboot/CMakeFiles/signing_layout_s.dir/signing_layout_s.o")
-	set(PREPROCESSED_FILE_NS "${CMAKE_BINARY_DIR}/tfm/bl2/ext/mcuboot/CMakeFiles/signing_layout_ns.dir/signing_layout_ns.o")
-	set(TFM_MCUBOOT_DIR "${ZEPHYR_TFM_MODULE_DIR}/trusted-firmware-m/bl2/ext/mcuboot")
+  include(ExternalProject)
 
-	# Configure which format (full or hash) to include the public key in
-	# the image manifest
-	set(TFM_PUBLIC_KEY_FORMAT "full")
+  ExternalProject_Add(
+    empty_cpu0
+    SOURCE_DIR ${BOARD_DIR}/empty_cpu0
+    INSTALL_COMMAND  ""
+    CMAKE_CACHE_ARGS -DBOARD:STRING=mps2_an521
+    BUILD_BYPRODUCTS "${CPU0_BINARY_DIR}/${KERNEL_BIN_NAME}"
+    BUILD_ALWAYS True
+  )
 
-	# Set srec_cat binary name
-	find_program(SREC_CAT srec_cat)
-	if(${SREC_CAT} STREQUAL SREC_CAT-NOTFOUND)
-	    message(FATAL_ERROR "'srec_cat' not found. Please install it, or add it to $PATH.")
-	endif()
-
-	#Create and sign for concatenated binary image, should align with the TF-M BL2
-	set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
-
-		#Sign secure binary image with public key
-		COMMAND ${PYTHON_EXECUTABLE} ${TFM_MCUBOOT_DIR}/scripts/wrapper/wrapper.py
-			 --layout ${PREPROCESSED_FILE_S}
-			 -k ${CONFIG_TFM_KEY_FILE_S}
-			 --public-key-format ${TFM_PUBLIC_KEY_FORMAT}
-			 --align 1
-			 -v ${TFM_IMAGE_VERSION_S}
-			 --pad
-			 --pad-header
-			 ${ADD_NS_IMAGE_MIN_VER}
-			 -s auto
-			 -H 0x400
-			 ${CMAKE_BINARY_DIR}/tfm/install/outputs/MPS2/AN521/tfm_s.bin
-			 ${CMAKE_BINARY_DIR}/tfm_s_signed.bin
-
-		#Sign non-secure binary image with public key
-		COMMAND ${PYTHON_EXECUTABLE} ${TFM_MCUBOOT_DIR}/scripts/wrapper/wrapper.py
-			 --layout ${PREPROCESSED_FILE_NS}
-			 -k ${CONFIG_TFM_KEY_FILE_NS}
-			 --public-key-format ${TFM_PUBLIC_KEY_FORMAT}
-			 --align 1
-			 -v ${TFM_IMAGE_VERSION_NS}
-			 -s auto
-			 ${ADD_S_IMAGE_MIN_VER}
-			 -H 0x400
-			 ${CMAKE_BINARY_DIR}/zephyr/${KERNEL_BIN_NAME}
-			 ${CMAKE_BINARY_DIR}/zephyr_ns_signed.bin
-
-		#Create concatenated binary image from the two independently signed binary file
-		COMMAND ${PYTHON_EXECUTABLE} ${TFM_MCUBOOT_DIR}/scripts/assemble.py
-		     --layout ${PREPROCESSED_FILE_S}
-			 -s ${CMAKE_BINARY_DIR}/tfm_s_signed.bin
-			 -n ${CMAKE_BINARY_DIR}/zephyr_ns_signed.bin
-			 -o ${CMAKE_BINARY_DIR}/tfm_sign.bin
-
-		#Copy mcuboot.bin
-		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/tfm/bin/bl2.bin ${CMAKE_BINARY_DIR}/mcuboot.bin
-
-		#Merge mcuboot.bin and tfm_sign.bin for QEMU
-		COMMAND ${SREC_CAT}
-		ARGS ${CMAKE_BINARY_DIR}/mcuboot.bin -Binary
-			${CMAKE_BINARY_DIR}/tfm_sign.bin -Binary
-			-offset 0x80000
-			-o ${CMAKE_BINARY_DIR}/tfm_qemu.bin -Binary
-
-		#Convert tfm_qemu.bin to .hex with an appropriate offset
-		COMMAND ${SREC_CAT}
-		ARGS ${CMAKE_BINARY_DIR}/tfm_qemu.bin -binary
-			-offset 0x10000000
-			-o ${CMAKE_BINARY_DIR}/tfm_qemu.hex -intel --line-length=44
-	)
 endif()

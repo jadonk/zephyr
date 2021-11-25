@@ -51,7 +51,7 @@ struct init_entry {
 	const struct device *dev;
 };
 
-void z_sys_init_run_level(int32_t _level);
+void z_sys_init_run_level(int32_t level);
 
 /* A counter is used to avoid issues when two or more system devices
  * are declared in the same C file with the same init function.
@@ -67,7 +67,7 @@ void z_sys_init_run_level(int32_t _level);
  * configured by the kernel during system initialization. Note that
  * init entries will not be accessible from user mode. Also this macro should
  * not be used directly, use relevant macro such as SYS_INIT() or
- * DEVICE_AND_API_INIT() instead.
+ * DEVICE_DEFINE() instead.
  *
  * @param _entry_name Init entry name. It is the name this instance exposes to
  * the system.
@@ -85,7 +85,7 @@ void z_sys_init_run_level(int32_t _level);
 #define Z_INIT_ENTRY_DEFINE(_entry_name, _init_fn, _device, _level, _prio)	\
 	static const Z_DECL_ALIGN(struct init_entry)			\
 		_CONCAT(__init_, _entry_name) __used			\
-	__attribute__((__section__(".init_" #_level STRINGIFY(_prio)))) = { \
+	__attribute__((__section__(".z_init_" #_level STRINGIFY(_prio)"_"))) = { \
 		.init = (_init_fn),					\
 		.dev = (_device),					\
 	}

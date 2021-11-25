@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define DT_DRV_COMPAT ti_cc13xx_cc26xx_pinmux
+
 #include <device.h>
 #include <errno.h>
 #include <sys/__assert.h>
@@ -50,7 +52,7 @@ static int pinmux_cc13xx_cc26xx_pullup(const struct device *dev, uint32_t pin,
 	case PINMUX_PULLUP_DISABLE:
 		IOCIOPortPullSet(pin, IOC_NO_IOPULL);
 		return 0;
-	};
+	}
 
 	return -EINVAL;
 }
@@ -69,7 +71,7 @@ static int pinmux_cc13xx_cc26xx_input(const struct device *dev, uint32_t pin,
 	case PINMUX_OUTPUT_ENABLED:
 		IOCIOInputSet(pin, IOC_INPUT_DISABLE);
 		return 0;
-	};
+	}
 
 	return -EINVAL;
 }
@@ -87,7 +89,7 @@ static const struct pinmux_driver_api pinmux_cc13xx_cc26xx_driver_api = {
 	.input = pinmux_cc13xx_cc26xx_input,
 };
 
-DEVICE_AND_API_INIT(pinmux_cc13xx_cc26xx, CONFIG_PINMUX_NAME,
-		    &pinmux_cc13xx_cc26xx_init, NULL, NULL, PRE_KERNEL_1,
+DEVICE_DT_INST_DEFINE(0, &pinmux_cc13xx_cc26xx_init, NULL,
+		    NULL, NULL, PRE_KERNEL_1,
 		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		    &pinmux_cc13xx_cc26xx_driver_api);

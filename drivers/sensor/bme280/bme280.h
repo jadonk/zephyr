@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016, 2017 Intel Corporation
  * Copyright (c) 2017 IpTronix S.r.l.
+ * Copyright (c) 2021 Nordic Semiconductor ASA
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,6 +11,45 @@
 
 #include <zephyr/types.h>
 #include <device.h>
+#include <devicetree.h>
+#include <drivers/spi.h>
+#include <drivers/i2c.h>
+
+#define DT_DRV_COMPAT bosch_bme280
+
+#define BME280_BUS_SPI DT_ANY_INST_ON_BUS_STATUS_OKAY(spi)
+#define BME280_BUS_I2C DT_ANY_INST_ON_BUS_STATUS_OKAY(i2c)
+
+union bme280_bus {
+#if BME280_BUS_SPI
+	struct spi_dt_spec spi;
+#endif
+#if BME280_BUS_I2C
+	struct i2c_dt_spec i2c;
+#endif
+};
+
+typedef int (*bme280_bus_check_fn)(const union bme280_bus *bus);
+typedef int (*bme280_reg_read_fn)(const union bme280_bus *bus,
+				  uint8_t start, uint8_t *buf, int size);
+typedef int (*bme280_reg_write_fn)(const union bme280_bus *bus,
+				   uint8_t reg, uint8_t val);
+
+struct bme280_bus_io {
+	bme280_bus_check_fn check;
+	bme280_reg_read_fn read;
+	bme280_reg_write_fn write;
+};
+
+#if BME280_BUS_SPI
+#define BME280_SPI_OPERATION (SPI_WORD_SET(8) | SPI_TRANSFER_MSB |	\
+			      SPI_MODE_CPOL | SPI_MODE_CPHA)
+extern const struct bme280_bus_io bme280_bus_io_spi;
+#endif
+
+#if BME280_BUS_I2C
+extern const struct bme280_bus_io bme280_bus_io_i2c;
+#endif
 
 #define BME280_REG_PRESS_MSB            0xF7
 #define BME280_REG_COMP_START           0x88
@@ -20,14 +60,19 @@
 #define BME280_REG_CTRL_MEAS            0xF4
 #define BME280_REG_CTRL_HUM             0xF2
 #define BME280_REG_STATUS               0xF3
+#define BME280_REG_RESET                0xE0
 
 #define BMP280_CHIP_ID_SAMPLE_1         0x56
 #define BMP280_CHIP_ID_SAMPLE_2         0x57
 #define BMP280_CHIP_ID_MP               0x58
 #define BME280_CHIP_ID                  0x60
+#define BME280_MODE_SLEEP               0x00
 #define BME280_MODE_FORCED              0x01
 #define BME280_MODE_NORMAL              0x03
 #define BME280_SPI_3W_DISABLE           0x00
+#define BME280_CMD_SOFT_RESET           0xB6
+#define BME280_STATUS_MEASURING         0x08
+#define BME280_STATUS_IM_UPDATE         0x01
 
 #if defined CONFIG_BME280_MODE_NORMAL
 #define BME280_MODE BME280_MODE_NORMAL
@@ -107,5 +152,10 @@
 #define BME280_CONFIG_VAL               (BME280_STANDBY | \
 					 BME280_FILTER |  \
 					 BME280_SPI_3W_DISABLE)
+
+
+#define BME280_CTRL_MEAS_OFF_VAL	(BME280_PRESS_OVER | \
+					 BME280_TEMP_OVER |  \
+					 BME280_MODE_SLEEP)
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_BME280_BME280_H_ */

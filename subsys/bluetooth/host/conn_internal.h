@@ -29,9 +29,9 @@ enum {
 	BT_CONN_BR_PAIRING_INITIATOR,	/* local host starts authentication */
 	BT_CONN_CLEANUP,                /* Disconnected, pending cleanup */
 	BT_CONN_AUTO_PHY_UPDATE,        /* Auto-update PHY */
-	BT_CONN_SLAVE_PARAM_UPDATE,	/* If slave param update timer fired */
-	BT_CONN_SLAVE_PARAM_SET,	/* If slave param were set from app */
-	BT_CONN_SLAVE_PARAM_L2CAP,	/* If should force L2CAP for CPUP */
+	BT_CONN_PERIPHERAL_PARAM_UPDATE,/* If periph param update timer fired */
+	BT_CONN_PERIPHERAL_PARAM_SET,	/* If periph param were set from app */
+	BT_CONN_PERIPHERAL_PARAM_L2CAP,	/* If should force L2CAP for CPUP */
 	BT_CONN_FORCE_PAIR,             /* Pairing even with existing keys. */
 
 	BT_CONN_AUTO_PHY_COMPLETE,      /* Auto-initiated PHY procedure done */
@@ -99,10 +99,27 @@ struct bt_conn_sco {
 struct bt_conn_iso {
 	/* Reference to ACL Connection */
 	struct bt_conn          *acl;
-	/* CIG ID */
-	uint8_t			cig_id;
-	/* CIS ID */
-	uint8_t			cis_id;
+
+	/* Reference to the struct bt_iso_chan */
+	struct bt_iso_chan      *chan;
+
+	union {
+		/* CIG ID */
+		uint8_t			cig_id;
+		/* BIG handle */
+		uint8_t			big_handle;
+	};
+
+	union {
+		/* CIS ID within the CIG */
+		uint8_t			cis_id;
+
+		/* BIS ID within the BIG*/
+		uint8_t			bis_id;
+	};
+
+	/** If true, this is a ISO for a BIS, else it is a ISO for a CIS */
+	bool is_bis;
 };
 
 typedef void (*bt_conn_tx_cb_t)(struct bt_conn *conn, void *user_data);
@@ -166,7 +183,7 @@ struct bt_conn {
 	/* Queue for outgoing ACL data */
 	struct k_fifo		tx_queue;
 
-	/* Active L2CAP/ISO channels */
+	/* Active L2CAP channels */
 	sys_slist_t		channels;
 
 	/* Delayed work deferred tasks:
@@ -174,7 +191,7 @@ struct bt_conn {
 	 * - Initiator connect create cancel.
 	 * - Connection cleanup.
 	 */
-	struct k_delayed_work	deferred_work;
+	struct k_work_delayable	deferred_work;
 
 	union {
 		struct bt_conn_le	le;
@@ -182,7 +199,7 @@ struct bt_conn {
 		struct bt_conn_br	br;
 		struct bt_conn_sco	sco;
 #endif
-#if defined(CONFIG_BT_AUDIO)
+#if defined(CONFIG_BT_ISO)
 		struct bt_conn_iso	iso;
 #endif
 	};
@@ -205,7 +222,13 @@ void bt_conn_reset_rx_state(struct bt_conn *conn);
 /* Process incoming data for a connection */
 void bt_conn_recv(struct bt_conn *conn, struct net_buf *buf, uint8_t flags);
 
-/* Send data over a connection */
+/* Send data over a connection
+ *
+ * Buffer ownership is transferred to stack in case of success.
+ *
+ * Calling this from RX thread is assumed to never fail so the return can be
+ * ignored.
+ */
 int bt_conn_send_cb(struct bt_conn *conn, struct net_buf *buf,
 		    bt_conn_tx_cb_t cb, void *user_data);
 
@@ -228,17 +251,13 @@ struct bt_iso_create_param {
 	struct bt_iso_chan	**chans;
 };
 
-/* Bind ISO connections parameters */
-int bt_conn_bind_iso(struct bt_iso_create_param *param);
-
-/* Connect ISO connections */
-int bt_conn_connect_iso(struct bt_conn **conns, uint8_t num_conns);
+int bt_conn_iso_init(void);
 
 /* Add a new ISO connection */
 struct bt_conn *bt_conn_add_iso(struct bt_conn *acl);
 
 /* Cleanup ISO references */
-void bt_iso_cleanup(struct bt_conn *iso_conn);
+void bt_iso_cleanup_acl(struct bt_conn *iso_conn);
 
 /* Add a new BR/EDR connection */
 struct bt_conn *bt_conn_add_br(const bt_addr_t *peer);
@@ -301,6 +320,8 @@ struct bt_conn *bt_conn_lookup_state_le(uint8_t id, const bt_addr_le_t *peer,
 
 /* Set connection object in certain state and perform action related to state */
 void bt_conn_set_state(struct bt_conn *conn, bt_conn_state_t state);
+
+void bt_conn_connected(struct bt_conn *conn);
 
 int bt_conn_le_conn_update(struct bt_conn *conn,
 			   const struct bt_le_conn_param *param);

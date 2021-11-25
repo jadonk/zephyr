@@ -41,7 +41,7 @@ def get_cld_pid(mdb_process):
 # MDB creates child process (cld) which won't be terminated if we simply
 # terminate parents process (mdb). 'record_cld_pid' is provided to record 'cld'
 # process pid to file (mdb.pid) so this process can be terminated correctly by
-# sanitycheck infrastructure
+# twister infrastructure
 def record_cld_pid(mdb_runner, mdb_process):
     for _i in range(100):
         found, pid = get_cld_pid(mdb_process)
@@ -105,7 +105,7 @@ def mdb_do_run(mdb_runner, command):
                          ('-prop=download=2' if i > 0 else '')] +
                          mdb_basic_options + mdb_target + [mdb_runner.elf_name])
             mdb_runner.check_call(mdb_sub_cmd)
-            mdb_multifiles += (',core{}'.format(i) if i > 0 else 'core{}'.format(i))
+            mdb_multifiles += ('core{}'.format(mdb_runner.cores-1-i) if i == 0 else ',core{}'.format(mdb_runner.cores-1-i))
 
         # to enable multi-core aware mode for use with the MetaWare debugger,
         # need to set the NSIM_MULTICORE environment variable to a non-zero value

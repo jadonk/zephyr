@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Disable syscall tracing for all calls from this compilation unit to avoid
+ * undefined symbols as the macros are not expanded recursively
+ */
+#define DISABLE_SYSCALL_TRACING
+
 #include <init.h>
 #include <string.h>
 #include <kernel.h>
@@ -22,6 +27,8 @@
 #define TRACING_BACKEND_NAME "tracing_backend_usb"
 #elif defined CONFIG_TRACING_BACKEND_POSIX
 #define TRACING_BACKEND_NAME "tracing_backend_posix"
+#elif defined CONFIG_TRACING_BACKEND_RAM
+#define TRACING_BACKEND_NAME "tracing_backend_ram"
 #else
 #define TRACING_BACKEND_NAME ""
 #endif

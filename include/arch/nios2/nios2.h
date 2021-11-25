@@ -1,6 +1,8 @@
 #ifndef ZEPHYR_INCLUDE_ARCH_NIOS2_NIOS2_H_
 #define ZEPHYR_INCLUDE_ARCH_NIOS2_NIOS2_H_
 
+/* SPDX-License-Identifier: Xnet */
+
 /******************************************************************************
 *                                                                             *
 * License Agreement                                                           *
@@ -53,7 +55,7 @@ extern "C"
 
 #include <zephyr/types.h>
 #include <arch/cpu.h>
-#include <arch/common/sys_io.h>
+#include <sys/sys_io.h>
 
 /*
  * Functions for accessing select Nios II general-purpose registers.

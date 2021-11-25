@@ -53,8 +53,8 @@
 #define TICK_IRQ ARM_ARCH_TIMER_IRQ
 #elif defined(CONFIG_APIC_TIMER)
 #define TICK_IRQ CONFIG_APIC_TIMER_IRQ
-#elif defined(CONFIG_LOAPIC_TIMER)
-#define TICK_IRQ CONFIG_LOAPIC_TIMER_IRQ
+#elif defined(CONFIG_APIC_TSC_DEADLINE_TIMER)
+#define TICK_IRQ z_loapic_irq_base() /* first LVT interrupt */
 #elif defined(CONFIG_XTENSA_TIMER)
 #define TICK_IRQ UTIL_CAT(XCHAL_TIMER,		\
 			  UTIL_CAT(CONFIG_XTENSA_TIMER_ID, _INTERRUPT))
@@ -67,12 +67,16 @@
 #define TICK_IRQ IRQ_TIMER0
 #elif defined(CONFIG_RISCV_MACHINE_TIMER)
 #define TICK_IRQ RISCV_MACHINE_TIMER_IRQ
+#elif defined(CONFIG_ITE_IT8XXX2_TIMER)
+#define TICK_IRQ DT_IRQ_BY_IDX(DT_NODELABEL(timer), 5, irq)
 #elif defined(CONFIG_LITEX_TIMER)
 #define TICK_IRQ DT_IRQN(DT_NODELABEL(timer0))
 #elif defined(CONFIG_RV32M1_LPTMR_TIMER)
 #define TICK_IRQ DT_IRQN(DT_ALIAS(system_lptmr))
 #elif defined(CONFIG_XLNX_PSTTC_TIMER)
 #define TICK_IRQ DT_IRQN(DT_INST(0, xlnx_ttcps))
+#elif defined(CONFIG_RCAR_CMT_TIMER)
+#define TICK_IRQ DT_IRQN(DT_INST(0, renesas_rcar_cmt))
 #elif defined(CONFIG_CPU_CORTEX_M)
 /*
  * The Cortex-M use the SYSTICK exception for the system timer, which is
@@ -94,13 +98,9 @@
 #endif
 
 /* Cortex-M1, Nios II, and RISCV without CONFIG_RISCV_HAS_CPU_IDLE
- * do have a power saving instruction, so k_cpu_idle() returns immediately.
- *
- * Includes workaround on QEMU aarch64, see
- * https://github.com/zephyrproject-rtos/sdk-ng/issues/255
+ * do have a power saving instruction, so k_cpu_idle() returns immediately
  */
 #if !defined(CONFIG_CPU_CORTEX_M1) && !defined(CONFIG_NIOS2) && \
-	!defined(CONFIG_SOC_QEMU_CORTEX_A53) && \
 	(!defined(CONFIG_RISCV) || defined(CONFIG_RISCV_HAS_CPU_IDLE))
 #define HAS_POWERSAVE_INSTRUCTION
 #endif
@@ -401,15 +401,15 @@ static void _test_kernel_cpu_idle(int atomic)
  *
  * @see k_cpu_idle()
  */
-#ifndef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 static void test_kernel_cpu_idle_atomic(void)
 {
-	_test_kernel_cpu_idle(1);
+	ztest_test_skip();
 }
 #else
 static void test_kernel_cpu_idle_atomic(void)
 {
-	ztest_test_skip();
+	_test_kernel_cpu_idle(1);
 }
 #endif
 
@@ -446,15 +446,15 @@ static void _test_kernel_interrupts(disable_int_func disable_int,
 	int imask;
 
 	/* Align to a "tick boundary" */
-	tick = z_tick_get_32();
-	while (z_tick_get_32() == tick) {
+	tick = sys_clock_tick_get_32();
+	while (sys_clock_tick_get_32() == tick) {
 #if defined(CONFIG_ARCH_POSIX)
 		k_busy_wait(1000);
 #endif
 	}
 
 	tick++;
-	while (z_tick_get_32() == tick) {
+	while (sys_clock_tick_get_32() == tick) {
 #if defined(CONFIG_ARCH_POSIX)
 		k_busy_wait(1000);
 #endif
@@ -471,15 +471,15 @@ static void _test_kernel_interrupts(disable_int_func disable_int,
 	count <<= 4;
 
 	imask = disable_int(irq);
-	tick = z_tick_get_32();
+	tick = sys_clock_tick_get_32();
 	for (i = 0; i < count; i++) {
-		z_tick_get_32();
+		sys_clock_tick_get_32();
 #if defined(CONFIG_ARCH_POSIX)
 		k_busy_wait(1000);
 #endif
 	}
 
-	tick2 = z_tick_get_32();
+	tick2 = sys_clock_tick_get_32();
 
 	/*
 	 * Re-enable interrupts before returning (for both success and failure
@@ -497,13 +497,13 @@ static void _test_kernel_interrupts(disable_int_func disable_int,
 
 	/* Now repeat with interrupts unlocked. */
 	for (i = 0; i < count; i++) {
-		z_tick_get_32();
+		sys_clock_tick_get_32();
 #if defined(CONFIG_ARCH_POSIX)
 		k_busy_wait(1000);
 #endif
 	}
 
-	tick2 = z_tick_get_32();
+	tick2 = sys_clock_tick_get_32();
 	zassert_not_equal(tick, tick2,
 			  "tick didn't advance as expected");
 }
@@ -534,13 +534,13 @@ static void _test_kernel_interrupts(disable_int_func disable_int,
  * -# Do action to align to a tick boundary.
  * -# Left shift 4 bits for the value of counts.
  * -# Call irq_lock() and restore its return value to imask.
- * -# Call z_tick_get_32() and store its return value to tick.
- * -# Repeat counts of calling z_tick_get_32().
- * -# Call z_tick_get_32() and store its return value to tick2.
+ * -# Call sys_clock_tick_get_32() and store its return value to tick.
+ * -# Repeat counts of calling sys_clock_tick_get_32().
+ * -# Call sys_clock_tick_get_32() and store its return value to tick2.
  * -# Call irq_unlock() with parameter imask.
  * -# Check if tick is equal to tick2.
- * -# Repeat counts of calling z_tick_get_32().
- * -# Call z_tick_get_32() and store its return value to tick2.
+ * -# Repeat counts of calling sys_clock_tick_get_32().
+ * -# Call sys_clock_tick_get_32() and store its return value to tick2.
  * -# Check if tick is NOT equal to tick2.
  *
  * Expected Test Result:
@@ -592,13 +592,13 @@ static void test_kernel_interrupts(void)
  * -# Do action to align to a tick boundary.
  * -# Left shift 4 bit for the value of counts.
  * -# Call irq_disable() and restore its return value to imask.
- * -# Call z_tick_get_32() and store its return value to tick.
- * -# Repeat counts of calling z_tick_get_32().
- * -# Call z_tick_get_32() and store its return value to tick2.
+ * -# Call sys_clock_tick_get_32() and store its return value to tick.
+ * -# Repeat counts of calling sys_clock_tick_get_32().
+ * -# Call sys_clock_tick_get_32() and store its return value to tick2.
  * -# Call irq_enable() with parameter imask.
  * -# Check if tick is equal to tick2.
- * -# Repeat counts of calling z_tick_get_32().
- * -# Call z_tick_get_32() and store its return value to tick2.
+ * -# Repeat counts of calling sys_clock_tick_get_32().
+ * -# Call sys_clock_tick_get_32() and store its return value to tick2.
  * -# Check if tick is NOT equal to tick2.
  *
  * Expected Test Result:
@@ -609,7 +609,14 @@ static void test_kernel_interrupts(void)
  *   failure.
  *
  * Assumptions and Constraints:
- * - N/A
+ * - Note that this test works by disabling the timer interrupt
+ *   directly, without any interaction with the timer driver or
+ *   timeout subsystem.  NOT ALL ARCHITECTURES will latch and deliver
+ *   a timer interrupt that arrives while the interrupt is disabled,
+ *   which means that the timeout list will become corrupted (because
+ *   it contains items that should have expired in the past).  Any use
+ *   of kernel timeouts after completion of this test is disallowed.
+ *   RUN THIS TEST LAST IN THE SUITE.
  *
  * @see irq_disable(), irq_enable()
  */
@@ -1161,16 +1168,17 @@ void test_main(void)
 
 	kernel_init_objects();
 
+	/* The timer_interrupts test MUST BE LAST, see note above */
 	ztest_test_suite(context,
 			 ztest_unit_test(test_kernel_interrupts),
-			 ztest_1cpu_unit_test(test_kernel_timer_interrupts),
 			 ztest_unit_test(test_kernel_ctx_thread),
 			 ztest_1cpu_unit_test(test_busy_wait),
 			 ztest_1cpu_unit_test(test_k_sleep),
 			 ztest_unit_test(test_kernel_cpu_idle_atomic),
 			 ztest_unit_test(test_kernel_cpu_idle),
 			 ztest_1cpu_unit_test(test_k_yield),
-			 ztest_1cpu_unit_test(test_kernel_thread)
+			 ztest_1cpu_unit_test(test_kernel_thread),
+			 ztest_1cpu_unit_test(test_kernel_timer_interrupts)
 			 );
 	ztest_run_test_suite(context);
 }

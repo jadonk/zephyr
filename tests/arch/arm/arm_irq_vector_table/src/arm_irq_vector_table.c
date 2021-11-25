@@ -147,7 +147,7 @@ void test_arm_irq_vector_table(void)
 	for (int ii = 0; ii < 3; ii++) {
 		irq_enable(_ISR_OFFSET + ii);
 		z_arm_irq_priority_set(_ISR_OFFSET + ii, 0, 0);
-		k_sem_init(&sem[ii], 0, UINT_MAX);
+		k_sem_init(&sem[ii], 0, K_SEM_MAX_LIMIT);
 	}
 
 	zassert_true((k_sem_take(&sem[0], K_NO_WAIT) ||
@@ -229,6 +229,18 @@ extern void rtc_isr(void);
 vth __irq_vector_table _irq_vector_table[] = {
 	isr0, isr1, isr2, 0,
 	rtc_isr
+};
+#elif defined(CONFIG_SOC_SERIES_IMX_RT6XX) && defined(CONFIG_MCUX_OS_TIMER)
+/* MXRT685 employs a OS Event timer to implement the Kernel system
+ * timer, instead of the ARM Cortex-M SysTick. Therefore, a pointer to
+ * the timer ISR needs to be added in the custom vector table to handle
+ * the timer "tick" interrupts.
+ */
+extern void mcux_lpc_ostick_isr(void);
+vth __irq_vector_table _irq_vector_table[] = {
+	isr0, isr1, isr2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	mcux_lpc_ostick_isr
 };
 #else
 vth __irq_vector_table _irq_vector_table[] = {

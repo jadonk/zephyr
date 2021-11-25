@@ -6,7 +6,7 @@
 # a YAML structure validator, to validate the YAML files that describe
 # Zephyr test platforms
 #
-# The original spec comes from Zephyr's sanitycheck script
+# The original spec comes from Zephyr's twister script
 #
 type: map
 mapping:
@@ -61,6 +61,9 @@ mapping:
             required: no
           "repeat":
             type: int
+            required: no
+          "pytest_root":
+            type: str
             required: no
           "regex":
             type: seq
@@ -186,6 +189,9 @@ mapping:
                 required: no
               "repeat":
                 type: int
+                required: no
+              "pytest_root":
+                type: str
                 required: no
               "regex":
                 type: seq

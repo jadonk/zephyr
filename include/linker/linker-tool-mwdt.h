@@ -21,16 +21,6 @@
 #define ASSERT(x, y)
 #define SUBALIGN(x) ALIGN(x)
 
-#define LOG2CEIL(x) ((((x) <= 2048) ? 11 : (((x) <= 4096)?12:(((x) <= 8192) ? \
-	13 : (((x) <= 16384) ? 14 : (((x) <= 32768) ? 15:(((x) <= 65536) ? \
-	16 : (((x) <= 131072) ? 17 : (((x) <= 262144) ? 18:(((x) <= 524288) ? \
-	19 : (((x) <= 1048576) ? 20 : (((x) <= 2097152) ? \
-	21 : (((x) <= 4194304) ? 22 : (((x) <= 8388608) ? \
-	23 : (((x) <= 16777216) ? 24 : (((x) <= 33554432) ? \
-	25 : (((x) <= 67108864) ? 26 : (((x) <= 134217728) ? \
-	27 : (((x) <= 268435456) ? 28 : (((x) <= 536870912) ? \
-	29 : (((x) <= 1073741824) ? 30 : (((x) <= 2147483648) ? \
-	31 : 32))))))))))))))))))))))
 /*
  * The GROUP_START() and GROUP_END() macros are used to define a group
  * of sections located in one memory area, such as RAM, ROM, etc.
@@ -45,6 +35,14 @@
  * the memory area specified by <where> argument.
  */
 #define GROUP_LINK_IN(where) > where
+
+/**
+ * The GROUP_ROM_LINK_IN() macro is located at the end of the section
+ * description and tells the linker that this a read-only section
+ * that is physically placed at the 'lregion` argument.
+ *
+ */
+#define GROUP_ROM_LINK_IN(vregion, lregion) > lregion
 
 /*
  * As GROUP_LINK_IN(), but takes a second argument indicating the
@@ -63,13 +61,15 @@
 #define GROUP_DATA_LINK_IN(vregion, lregion) > vregion
 #endif
 
-/*
- * The GROUP_FOLLOWS_AT() macro is located at the end of the section
- * and indicates that the section does not specify an address at which
- * it is to be loaded, but that it follows a section which did specify
- * such an address
+/**
+ * Route memory for read-write sections that are NOT loaded; typically this
+ * is only used for 'BSS' and 'noinit'.
  */
-#define GROUP_FOLLOWS_AT(where) AT > where
+#ifdef CONFIG_XIP
+#define GROUP_NOLOAD_LINK_IN(vregion, lregion) > vregion AT > vregion
+#else
+#define GROUP_NOLOAD_LINK_IN(vregion, lregion) > vregion
+#endif
 
 /*
  * The SECTION_PROLOGUE() macro is used to define the beginning of a section.

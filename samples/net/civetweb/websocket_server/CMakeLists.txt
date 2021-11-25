@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-cmake_minimum_required(VERSION 3.13.1)
+cmake_minimum_required(VERSION 3.20.0)
 
 set(common_dir ${CMAKE_CURRENT_SOURCE_DIR}/../common)
 set(common_src_dir ${common_dir}/src)
@@ -29,6 +29,8 @@ target_sources(app PRIVATE
 
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 set(web_page_dir web_page)
+
+file(MAKE_DIRECTORY ${gen_dir}/${web_page_dir})
 
 # List of files that are used to generate .h file that can be included
 # into .c file.

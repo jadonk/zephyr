@@ -43,7 +43,7 @@ static void process_sample(const struct device *dev)
 }
 
 static void lps22hh_handler(const struct device *dev,
-			    struct sensor_trigger *trig)
+			    const struct sensor_trigger *trig)
 {
 	process_sample(dev);
 }
@@ -74,7 +74,7 @@ void main(void)
 		if (sensor_trigger_set(dev, &trig, lps22hh_handler) < 0) {
 			printf("Cannot configure trigger\n");
 			return;
-		};
+		}
 		printk("Configured for triggered collection at %u Hz\n",
 		       attr.val1);
 	}

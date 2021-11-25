@@ -8,11 +8,9 @@
 #include <zephyr.h>
 #include <sys/sys_io.h>
 #include <sys/__assert.h>
-#include <power/power.h>
+#include <pm/pm.h>
 #include <soc.h>
 #include "device_power.h"
-
-#if defined(CONFIG_PM_DEEP_SLEEP_STATES)
 
 /*
  * Deep Sleep
@@ -66,20 +64,17 @@ static void z_power_soc_deep_sleep(void)
 
 	/* Wait for PLL to lock */
 	while ((PCR_REGS->OSC_ID & MCHP_PCR_OSC_ID_PLL_LOCK) == 0) {
-	};
+	}
 
 	soc_deep_sleep_periph_restore();
 
 	/*
-	 * _pm_power_state_exit_post_ops() is not being called
+	 * pm_power_state_exit_post_ops() is not being called
 	 * after exiting deep sleep, so need to unmask exceptions
 	 * and interrupts here.
 	 */
 	__set_PRIMASK(0);
 }
-#endif
-
-#ifdef CONFIG_PM_SLEEP_STATES
 
 /*
  * Light Sleep
@@ -100,45 +95,45 @@ static void z_power_soc_sleep(void)
 	__NOP();
 	__NOP();
 }
-#endif
 
 /*
  * Called from pm_system_suspend(int32_t ticks) in subsys/power.c
  * For deep sleep pm_system_suspend has executed all the driver
  * power management call backs.
  */
-void pm_power_state_set(enum power_states state)
+__weak void pm_power_state_set(struct pm_state_info info)
 {
-	switch (state) {
-#if (defined(CONFIG_PM_SLEEP_STATES))
-	case POWER_STATE_SLEEP_1:
+	switch (info.state) {
+	case PM_STATE_SUSPEND_TO_IDLE:
 		z_power_soc_sleep();
 		break;
-#endif
-#if (defined(CONFIG_PM_DEEP_SLEEP_STATES))
-	case POWER_STATE_DEEP_SLEEP_1:
+	case PM_STATE_SUSPEND_TO_RAM:
 		z_power_soc_deep_sleep();
 		break;
-#endif
 	default:
 		break;
 	}
 }
 
-void _pm_power_state_exit_post_ops(enum power_states state)
+/*
+ * Zephyr PM code expects us to enabled interrupts at post op exit. Zephyr used
+ * arch_irq_lock() which sets BASEPRI to a non-zero value masking all interrupts
+ * preventing wake. MCHP z_power_soc_(deep)_sleep sets PRIMASK=1 and BASEPRI=0
+ * allowing wake from any enabled interrupt and prevents the CPU from entering
+ * an ISR on wake except for faults. We re-enable interrupts by setting PRIMASK
+ * to 0.
+ */
+__weak void pm_power_state_exit_post_ops(struct pm_state_info info)
 {
-	switch (state) {
-#if (defined(CONFIG_PM_SLEEP_STATES))
-	case POWER_STATE_SLEEP_1:
-		__enable_irq();
+	switch (info.state) {
+	case PM_STATE_SUSPEND_TO_IDLE:
+	case PM_STATE_SUSPEND_TO_RAM:
+		__set_PRIMASK(0);
+		__ISB();
 		break;
-#endif
-#if (defined(CONFIG_PM_DEEP_SLEEP_STATES))
-	case POWER_STATE_DEEP_SLEEP_1:
-		__enable_irq();
-		break;
-#endif
+
 	default:
+		irq_unlock(0);
 		break;
 	}
 }

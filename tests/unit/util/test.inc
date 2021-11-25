@@ -166,9 +166,9 @@ void test_UTIL_LISTIFY(void)
 {
 	int i = 0;
 
-#define INC(x, _)		\
+#define INC(x, n, m)		\
 	do {			\
-		i += x;		\
+		i += (x + n + m);\
 	} while (0);
 
 #define DEFINE(x, y) int a##x = x * y;
@@ -177,9 +177,9 @@ void test_UTIL_LISTIFY(void)
 	UTIL_LISTIFY(4, DEFINE, 2)
 	UTIL_LISTIFY(4, MARK_UNUSED, _)
 
-	UTIL_LISTIFY(4, INC, _)
+	UTIL_LISTIFY(4, INC, 1, 2)
 
-	zassert_equal(i, 0 + 1 + 2 + 3, NULL);
+	zassert_equal(i, 0 + 1 + 2 + 3 + 4 * (1 + 2), NULL);
 	zassert_equal(a0, 0, NULL);
 	zassert_equal(a1, 2, NULL);
 	zassert_equal(a2, 4, NULL);
@@ -353,6 +353,10 @@ static void test_IS_EMPTY(void)
 	zassert_true(IS_EMPTY(test_IS_EMPTY_REAL_EMPTY),
 		     "Expected to be empty");
 	zassert_false(IS_EMPTY(test_IS_EMPTY_NOT_EMPTY),
+		      "Expected to be non-empty");
+	zassert_false(IS_EMPTY("string"),
+		      "Expected to be non-empty");
+	zassert_false(IS_EMPTY(&test_IS_EMPTY),
 		      "Expected to be non-empty");
 }
 

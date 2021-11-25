@@ -38,7 +38,36 @@
 #include "radio_nrf52840.h"
 #elif defined(CONFIG_SOC_NRF5340_CPUNET)
 #include "radio_nrf5340.h"
+#elif
+#error "Unsupported SoC."
 #endif
 
+#if defined(CONFIG_SOC_SERIES_NRF51X)
+#define HAL_RADIO_PDU_LEN_MAX (BIT(5) - 1)
+#else
+#define HAL_RADIO_PDU_LEN_MAX (BIT(8) - 1)
+#endif
+
+#include <nrf_peripherals.h>
+
+#if defined(CONFIG_PWM_NRF5_SW)
+#define HAL_PALNA_GPIOTE_CHAN 3
+#define HAL_PDN_GPIOTE_CHAN 4
+#define HAL_CSN_GPIOTE_CHAN 5
+#else
+#define HAL_PALNA_GPIOTE_CHAN 0
+#define HAL_PDN_GPIOTE_CHAN 1
+#define HAL_CSN_GPIOTE_CHAN 2
+#endif
+
+/* This has to come before the ppi/dppi includes below. */
+#include "radio_nrf5_fem.h"
+
+#if defined(PPI_PRESENT)
 #include "radio_nrf5_ppi.h"
+#elif defined(DPPI_PRESENT)
+#include "radio_nrf5_dppi.h"
+#else
+#error "PPI or DPPI abstractions missing."
+#endif
 #include "radio_nrf5_txp.h"

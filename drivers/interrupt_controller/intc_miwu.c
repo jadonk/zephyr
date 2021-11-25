@@ -23,8 +23,8 @@
  * it include:
  *  1. npcxn-miwus-wui-map.dtsi: it presents relationship between wake-up inputs
  *     (WUI) and its source device such as gpio, timer, eSPI VWs and so on.
- *  2. npcx7-miwus-int-map.dtsi: it presents relationship between MIWU group
- *     and NVIC interrupt in npcx7. Please notice it isn't 1-to-1 mapping.
+ *  2. npcxn-miwus-int-map.dtsi: it presents relationship between MIWU group
+ *     and NVIC interrupt in npcx series. Please notice it isn't 1-to-1 mapping.
  *     For example, here is the mapping between miwu0's group a & d and IRQ7:
  *
  *     map_miwu0_groups: {
@@ -170,14 +170,37 @@ void npcx_miwu_irq_disable(const struct npcx_wui *wui)
 	NPCX_WKEN(base, wui->group) &= ~BIT(wui->bit);
 }
 
-unsigned int npcx_miwu_irq_get_state(const struct npcx_wui *wui)
+void npcx_miwu_io_enable(const struct npcx_wui *wui)
 {
 	const uint32_t base = DRV_CONFIG(miwu_devs[wui->table])->base;
 
-	if (IS_BIT_SET(NPCX_WKEN(base, wui->group), wui->bit))
-		return 1;
-	else
-		return 0;
+	NPCX_WKINEN(base, wui->group) |= BIT(wui->bit);
+}
+
+void npcx_miwu_io_disable(const struct npcx_wui *wui)
+{
+	const uint32_t base = DRV_CONFIG(miwu_devs[wui->table])->base;
+
+	NPCX_WKINEN(base, wui->group) &= ~BIT(wui->bit);
+}
+
+bool npcx_miwu_irq_get_state(const struct npcx_wui *wui)
+{
+	const uint32_t base = DRV_CONFIG(miwu_devs[wui->table])->base;
+
+	return IS_BIT_SET(NPCX_WKEN(base, wui->group), wui->bit);
+}
+
+bool npcx_miwu_irq_get_and_clear_pending(const struct npcx_wui *wui)
+{
+	const uint32_t base = DRV_CONFIG(miwu_devs[wui->table])->base;
+	bool pending = IS_BIT_SET(NPCX_WKPND(base, wui->group), wui->bit);
+
+	if (pending) {
+		NPCX_WKPCL(base, wui->group) = BIT(wui->bit);
+	}
+
+	return pending;
 }
 
 int npcx_miwu_interrupt_configure(const struct npcx_wui *wui,
@@ -186,60 +209,58 @@ int npcx_miwu_interrupt_configure(const struct npcx_wui *wui,
 	const uint32_t base = DRV_CONFIG(miwu_devs[wui->table])->base;
 	uint8_t pmask = BIT(wui->bit);
 
-	if (mode == NPCX_MIWU_MODE_DISABLED) {
-		/* Clear MIWU enable bit */
-		NPCX_WKEN(base, wui->group) &= ~pmask;
-	} else {
-		/* Handle interrupt for level trigger */
-		if (mode == NPCX_MIWU_MODE_LEVEL) {
-			/* Set detection mode to level */
-			NPCX_WKMOD(base, wui->group) |= pmask;
-			switch (trig) {
-			/* Enable interrupting on level high */
-			case NPCX_MIWU_TRIG_HIGH:
-				NPCX_WKEDG(base, wui->group) &= ~pmask;
-				break;
-			/* Enable interrupting on level low */
-			case NPCX_MIWU_TRIG_LOW:
-				NPCX_WKEDG(base, wui->group) |= pmask;
-				break;
-			default:
-				return -EINVAL;
-			}
-		/* Handle interrupt for edge trigger */
-		} else {
-			/* Set detection mode to edge */
-			NPCX_WKMOD(base, wui->group) &= ~pmask;
-			switch (trig) {
-			/* Handle interrupting on falling edge */
-			case NPCX_MIWU_TRIG_LOW:
-				NPCX_WKAEDG(base, wui->group) &= ~pmask;
-				NPCX_WKEDG(base, wui->group) |= pmask;
-				break;
-			/* Handle interrupting on rising edge */
-			case NPCX_MIWU_TRIG_HIGH:
-				NPCX_WKAEDG(base, wui->group) &= ~pmask;
-				NPCX_WKEDG(base, wui->group) &= ~pmask;
-				break;
-			/* Handle interrupting on both edges */
-			case NPCX_MIWU_TRIG_BOTH:
-				/* Enable any edge */
-				NPCX_WKAEDG(base, wui->group) |= pmask;
-				break;
-			default:
-				return -EINVAL;
-			}
+	/* Disable interrupt of wake-up input source before configuring it */
+	npcx_miwu_irq_disable(wui);
+
+	/* Handle interrupt for level trigger */
+	if (mode == NPCX_MIWU_MODE_LEVEL) {
+		/* Set detection mode to level */
+		NPCX_WKMOD(base, wui->group) |= pmask;
+		switch (trig) {
+		/* Enable interrupting on level high */
+		case NPCX_MIWU_TRIG_HIGH:
+			NPCX_WKEDG(base, wui->group) &= ~pmask;
+			break;
+		/* Enable interrupting on level low */
+		case NPCX_MIWU_TRIG_LOW:
+			NPCX_WKEDG(base, wui->group) |= pmask;
+			break;
+		default:
+			return -EINVAL;
 		}
-
-		/* Enable wake-up input sources */
-		NPCX_WKINEN(base, wui->group) |= pmask;
-
-		/*
-		 * Clear pending bit since it might be set if WKINEN bit is
-		 * changed.
-		 */
-		NPCX_WKPCL(base, wui->group) |= pmask;
+	/* Handle interrupt for edge trigger */
+	} else {
+		/* Set detection mode to edge */
+		NPCX_WKMOD(base, wui->group) &= ~pmask;
+		switch (trig) {
+		/* Handle interrupting on falling edge */
+		case NPCX_MIWU_TRIG_LOW:
+			NPCX_WKAEDG(base, wui->group) &= ~pmask;
+			NPCX_WKEDG(base, wui->group) |= pmask;
+			break;
+		/* Handle interrupting on rising edge */
+		case NPCX_MIWU_TRIG_HIGH:
+			NPCX_WKAEDG(base, wui->group) &= ~pmask;
+			NPCX_WKEDG(base, wui->group) &= ~pmask;
+			break;
+		/* Handle interrupting on both edges */
+		case NPCX_MIWU_TRIG_BOTH:
+			/* Enable any edge */
+			NPCX_WKAEDG(base, wui->group) |= pmask;
+			break;
+		default:
+			return -EINVAL;
+		}
 	}
+
+	/* Enable wake-up input sources */
+	NPCX_WKINEN(base, wui->group) |= pmask;
+
+	/*
+	 * Clear pending bit since it might be set if WKINEN bit is
+	 * changed.
+	 */
+	NPCX_WKPCL(base, wui->group) |= pmask;
 
 	return 0;
 }
@@ -333,8 +354,8 @@ int npcx_miwu_manage_dev_callback(struct miwu_dev_callback *cb, bool set)
 									       \
 		/* Clear all MIWUs' pending and enable bits of MIWU device */  \
 		for (i = 0; i < NPCX_MIWU_GROUP_COUNT; i++) {                  \
-			NPCX_WKPCL(base, i) = 0xFF;                            \
 			NPCX_WKEN(base, i) = 0;                                \
+			NPCX_WKPCL(base, i) = 0xFF;                            \
 		}                                                              \
 									       \
 		/* Config IRQ and MWIU group directly */                       \
@@ -351,8 +372,9 @@ int npcx_miwu_manage_dev_callback(struct miwu_dev_callback *cb, bool set)
 		.index = DT_PROP(DT_NODELABEL(miwu##inst), index),             \
 	};                                                                     \
 									       \
-	DEVICE_AND_API_INIT(intc_miwu_##inst, DT_INST_LABEL(inst),             \
+	DEVICE_DT_INST_DEFINE(inst,					       \
 			    NPCX_MIWU_INIT_FUNC(inst),                         \
+			    NULL,					       \
 			    NULL, &miwu_config_##inst,                         \
 			    PRE_KERNEL_1,                                      \
 			    CONFIG_KERNEL_INIT_PRIORITY_OBJECTS, NULL);        \
@@ -364,7 +386,7 @@ int npcx_miwu_manage_dev_callback(struct miwu_dev_callback *cb, bool set)
 DT_INST_FOREACH_STATUS_OKAY(NPCX_MIWU_INIT)
 
 /* MIWU module instances */
-#define NPCX_MIWU_DEV(inst) DEVICE_GET(intc_miwu_##inst),
+#define NPCX_MIWU_DEV(inst) DEVICE_DT_INST_GET(inst),
 
 static const struct device *miwu_devs[] = {
 	DT_INST_FOREACH_STATUS_OKAY(NPCX_MIWU_DEV)

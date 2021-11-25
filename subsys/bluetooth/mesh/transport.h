@@ -1,5 +1,3 @@
-/*  Bluetooth Mesh */
-
 /*
  * Copyright (c) 2017 Intel Corporation
  *
@@ -76,13 +74,6 @@ struct bt_mesh_ctl_friend_sub_confirm {
 	uint8_t xact;
 } __packed;
 
-struct bt_mesh_va {
-	uint16_t ref:15,
-		 changed:1;
-	uint16_t addr;
-	uint8_t  uuid[16];
-};
-
 bool bt_mesh_tx_in_progress(void);
 
 void bt_mesh_rx_reset(void);
@@ -110,12 +101,10 @@ void bt_mesh_trans_init(void);
 
 void bt_mesh_trans_reset(void);
 
-struct bt_mesh_va *bt_mesh_va_get(uint16_t index);
+uint8_t bt_mesh_va_add(const uint8_t uuid[16], uint16_t *addr);
 
-struct bt_mesh_va *bt_mesh_va_find(uint8_t uuid[16]);
-
-uint8_t bt_mesh_va_add(uint8_t uuid[16], uint16_t *addr);
-
-uint8_t bt_mesh_va_del(uint8_t uuid[16], uint16_t *addr);
+uint8_t bt_mesh_va_del(const uint8_t uuid[16], uint16_t *addr);
 
 uint8_t *bt_mesh_va_label_get(uint16_t addr);
+
+void bt_mesh_va_pending_store(void);

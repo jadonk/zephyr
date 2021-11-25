@@ -102,7 +102,7 @@ static const struct mdm_control_pinconfig pinconfig[] = {
 #endif
 };
 
-#define MDM_UART_DEV_NAME		DT_INST_BUS_LABEL(0)
+#define MDM_UART_DEV			DEVICE_DT_GET(DT_INST_BUS(0))
 
 #define MDM_BOOT_MODE_SPECIAL		0
 #define MDM_BOOT_MODE_NORMAL		1
@@ -197,13 +197,14 @@ struct wncm14a2a_iface_ctx {
 	struct k_sem response_sem;
 
 	/* RSSI work */
-	struct k_delayed_work rssi_query_work;
+	struct k_work_delayable rssi_query_work;
 
 	/* modem data */
 	char mdm_manufacturer[MDM_MANUFACTURER_LENGTH];
 	char mdm_model[MDM_MODEL_LENGTH];
 	char mdm_revision[MDM_REVISION_LENGTH];
 	char mdm_imei[MDM_IMEI_LENGTH];
+	int mdm_rssi;
 
 	/* modem state */
 	int ev_csps;
@@ -390,7 +391,7 @@ static int send_data(struct wncm14a2a_socket *sock, struct net_pkt *pkt)
 
 	frag = pkt->frags;
 	/* use SOCKWRITE with binary mode formatting */
-	snprintk(buf, sizeof(buf), "AT@SOCKWRITE=%d,%u,1\r",
+	snprintk(buf, sizeof(buf), "AT@SOCKWRITE=%d,%zu,1\r",
 		 sock->socket_id, net_buf_frags_len(frag));
 	mdm_receiver_send(&ictx.mdm_ctx, buf, strlen(buf));
 
@@ -663,8 +664,8 @@ static void on_cmd_atcmdinfo_rssi(struct net_buf **buf, uint16_t len)
 	}
 
 	if (i > 0) {
-		ictx.mdm_ctx.data_rssi = atoi(value);
-		LOG_INF("RSSI: %d", ictx.mdm_ctx.data_rssi);
+		ictx.mdm_rssi = atoi(value);
+		LOG_INF("RSSI: %d", ictx.mdm_rssi);
 	} else {
 		LOG_WRN("Bad format found for RSSI");
 	}
@@ -1091,7 +1092,7 @@ static void wncm14a2a_read_rx(struct net_buf **buf)
 					      read_rx_allocator,
 					      &mdm_recv_pool);
 		if (rx_len < bytes_read) {
-			LOG_ERR("Data was lost! read %u of %u!",
+			LOG_ERR("Data was lost! read %u of %zu!",
 				    rx_len, bytes_read);
 		}
 	}
@@ -1145,7 +1146,7 @@ static void wncm14a2a_rx(void)
 
 	while (true) {
 		/* wait for incoming data */
-		k_sem_take(&ictx.mdm_ctx.rx_sem, K_FOREVER);
+		(void)k_sem_take(&ictx.mdm_ctx.rx_sem, K_FOREVER);
 
 		wncm14a2a_read_rx(&rx_buf);
 
@@ -1322,9 +1323,8 @@ static void wncm14a2a_rssi_query_work(struct k_work *work)
 	}
 
 	/* re-start RSSI query work */
-	k_delayed_work_submit_to_queue(&wncm14a2a_workq,
-				       &ictx.rssi_query_work,
-				       K_SECONDS(RSSI_TIMEOUT_SECS));
+	k_work_reschedule_for_queue(&wncm14a2a_workq, &ictx.rssi_query_work,
+				    K_SECONDS(RSSI_TIMEOUT_SECS));
 }
 
 static void wncm14a2a_modem_reset(void)
@@ -1336,7 +1336,7 @@ static void wncm14a2a_modem_reset(void)
 
 restart:
 	/* stop RSSI delay work */
-	k_delayed_work_cancel(&ictx.rssi_query_work);
+	k_work_cancel_delayable(&ictx.rssi_query_work);
 
 	modem_pin_init();
 
@@ -1399,15 +1399,15 @@ restart:
 	counter = 0;
 	/* wait for RSSI > -1000 and != 0 */
 	while (counter++ < 15 &&
-	       (ictx.mdm_ctx.data_rssi <= -1000 ||
-		ictx.mdm_ctx.data_rssi == 0)) {
+	       (ictx.mdm_rssi <= -1000 ||
+		ictx.mdm_rssi == 0)) {
 		/* stop RSSI delay work */
-		k_delayed_work_cancel(&ictx.rssi_query_work);
+		k_work_cancel_delayable(&ictx.rssi_query_work);
 		wncm14a2a_rssi_query_work(NULL);
 		k_sleep(K_SECONDS(2));
 	}
 
-	if (ictx.mdm_ctx.data_rssi <= -1000 || ictx.mdm_ctx.data_rssi == 0) {
+	if (ictx.mdm_rssi <= -1000 || ictx.mdm_rssi == 0) {
 		retry_count++;
 		if (retry_count > 3) {
 			LOG_ERR("Failed network init.  Too many attempts!");
@@ -1460,10 +1460,9 @@ static int wncm14a2a_init(const struct device *dev)
 	k_sem_init(&ictx.response_sem, 0, 1);
 
 	/* initialize the work queue */
-	k_work_q_start(&wncm14a2a_workq,
-		       wncm14a2a_workq_stack,
-		       K_KERNEL_STACK_SIZEOF(wncm14a2a_workq_stack),
-		       K_PRIO_COOP(7));
+	k_work_queue_start(&wncm14a2a_workq, wncm14a2a_workq_stack,
+			   K_KERNEL_STACK_SIZEOF(wncm14a2a_workq_stack),
+			   K_PRIO_COOP(7), NULL);
 
 	ictx.last_socket_id = 0;
 
@@ -1488,8 +1487,9 @@ static int wncm14a2a_init(const struct device *dev)
 #ifdef CONFIG_MODEM_SIM_NUMBERS
 	ictx.mdm_ctx.data_imei = ictx.mdm_imei;
 #endif
+	ictx.mdm_ctx.data_rssi = &ictx.mdm_rssi;
 
-	ret = mdm_receiver_register(&ictx.mdm_ctx, MDM_UART_DEV_NAME,
+	ret = mdm_receiver_register(&ictx.mdm_ctx, MDM_UART_DEV,
 				    mdm_recv_buf, sizeof(mdm_recv_buf));
 	if (ret < 0) {
 		LOG_ERR("Error registering modem receiver (%d)!", ret);
@@ -1503,7 +1503,7 @@ static int wncm14a2a_init(const struct device *dev)
 			NULL, NULL, NULL, K_PRIO_COOP(7), 0, K_NO_WAIT);
 
 	/* init RSSI query */
-	k_delayed_work_init(&ictx.rssi_query_work, wncm14a2a_rssi_query_work);
+	k_work_init_delayable(&ictx.rssi_query_work, wncm14a2a_rssi_query_work);
 
 	wncm14a2a_modem_reset();
 
@@ -1660,7 +1660,9 @@ static int offload_connect(struct net_context *context,
 		 sock->socket_id, wncm14a2a_sprint_ip_addr(addr),
 		 dst_port, timeout_sec);
 	ret = send_at_cmd(sock, buf, MDM_CMD_CONN_TIMEOUT);
-	if (ret < 0) {
+	if (!ret) {
+		net_context_set_state(sock->context, NET_CONTEXT_CONNECTED);
+	} else {
 		LOG_ERR("AT@SOCKCONN ret:%d", ret);
 	}
 
@@ -1846,7 +1848,8 @@ static struct net_if_api api_funcs = {
 	.init	= offload_iface_init,
 };
 
-NET_DEVICE_OFFLOAD_INIT(modem_wncm14a2a, "MODEM_WNCM14A2A",
-			wncm14a2a_init, device_pm_control_nop, &ictx,
-			NULL, CONFIG_MODEM_WNCM14A2A_INIT_PRIORITY, &api_funcs,
-			MDM_MAX_DATA_LENGTH);
+NET_DEVICE_DT_INST_OFFLOAD_DEFINE(0, wncm14a2a_init, NULL,
+				  &ictx, NULL,
+				  CONFIG_MODEM_WNCM14A2A_INIT_PRIORITY,
+				  &api_funcs,
+				  MDM_MAX_DATA_LENGTH);

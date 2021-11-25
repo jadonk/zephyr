@@ -12,7 +12,7 @@ menuconfig COUNTER_RTC_STM32
 	select USE_STM32_LL_EXTI
 	help
 	  Build RTC driver for STM32 SoCs.
-	  Tested on STM32 F0, F2, F3, F4, L1, L4, F7, G4, H7 series
+	  Tested on STM32 F0, F2, F3, F4, L1, L4, F7, G0, G4, H7 series
 
 if COUNTER_RTC_STM32
 
@@ -80,5 +80,12 @@ config COUNTER_RTC_STM32_BACKUP_DOMAIN_RESET
 	default y
 	help
 	  Force a backup domain reset on startup
+
+config COUNTER_RTC_STM32_SAVE_VALUE_BETWEEN_RESETS
+	bool "Save rtc time value between resets"
+	default y
+	depends on !COUNTER_RTC_STM32_BACKUP_DOMAIN_RESET
+	help
+	  Do not reset the rtc time and date after each reset.
 
 endif # COUNTER_RTC_STM32

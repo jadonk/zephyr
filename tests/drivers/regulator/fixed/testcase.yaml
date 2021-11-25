@@ -1,10 +1,12 @@
 common:
   tags: drivers gpio
   depends_on: gpio
-  filter: dt_compat_enabled("test,regulator-fixed")
+  filter: dt_compat_enabled("test-regulator-fixed")
   harness: ztest
   harness_config:
     fixture: regulator_loopback
+  integration_platforms:
+    - nrf52840dk_nrf52840
 
 tests:
   drivers.regulator.fixed.onoff:

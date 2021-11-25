@@ -25,7 +25,7 @@ OUTPUT_ARCH(xtensa)
 PROVIDE(__memctl_default = 0x00000000);
 PROVIDE(_MemErrorHandler = 0x00000000);
 
-#define LPRAM_REGION lpram
+#define LP_SRAM_REGION lpram
 
 /* DSP RAM regions (all of them) are mapped twice on the DSP: once in
  * a 512MB region from 0x80000000-0x9fffffff and again from
@@ -42,9 +42,11 @@ PROVIDE(_MemErrorHandler = 0x00000000);
  * the output tooling ignores it, but it will cause the linker to emit
  * 512MB of unused data into the output file!)
  *
+ * (Note clumsy syntax because XCC doesn't understand the "~" operator)
+ *
  */
 #define SEGSTART_CACHED   (ALIGN(64) | 0x20000000)
-#define SEGSTART_UNCACHED (ALIGN(64) & ~0x20000000)
+#define SEGSTART_UNCACHED (ALIGN(64) & 0xdfffffff) /* == ~0x20000000 */
 
 MEMORY
 {
@@ -123,8 +125,8 @@ MEMORY
 	len = IDT_SIZE
 #endif
   lpram :
-	org = LPRAM_BASE,
-	len = LPRAM_SIZE
+	org = LP_SRAM_BASE,
+	len = LP_SRAM_SIZE
 
   static_uuid_entries_seg (!ari) :
         org = UUID_ENTRY_ELF_BASE,
@@ -132,6 +134,9 @@ MEMORY
   static_log_entries_seg (!ari) :
         org = LOG_ENTRY_ELF_BASE,
         len = LOG_ENTRY_ELF_SIZE
+  fw_metadata_seg (!ari) :
+        org = EXT_MANIFEST_ELF_BASE,
+        len = EXT_MANIFEST_ELF_SIZE
 }
 
 PHDRS
@@ -161,6 +166,7 @@ PHDRS
   ucram_phdr PT_LOAD;
   static_uuid_entries_phdr PT_NOTE;
   static_log_entries_phdr PT_NOTE;
+  metadata_entries_phdr PT_NOTE;
 }
 _rom_store_table = 0;
 PROVIDE(_memmap_vecbase_reset = XCHAL_VECBASE_RESET_PADDR_SRAM);
@@ -205,6 +211,11 @@ _memmap_cacheattr_bp_allvalid = 0x22222222;
 _memmap_cacheattr_intel_cavs15_adsp = 0xFF42FFF2;
 
 PROVIDE(_memmap_cacheattr_reset = _memmap_cacheattr_intel_cavs15_adsp);
+
+_EXT_MAN_ALIGN_ = 16;
+EXTERN(ext_man_fw_ver)
+EXTERN(ext_man_cavs_config)
+
 SECTIONS
 {
 
@@ -465,6 +476,11 @@ SECTIONS
     *(.cached .cached.*)
   } >ram :ram_phdr
 
+  .tm_clone_table SEGSTART_UNCACHED :
+  {
+    *(.tm_clone_table)
+  } >ram :ram_phdr
+
   . = ALIGN(4096);
 
   .bss SEGSTART_UNCACHED (NOLOAD) :
@@ -490,18 +506,23 @@ SECTIONS
   /* Re-adjust to the upper mapping for the final symbols below */
   . = SEGSTART_CACHED;
 
-  /* stack */
-  _end = ALIGN(8);
-  PROVIDE(end = ALIGN(8));
-  __stack = L2_SRAM_BASE + L2_SRAM_SIZE;
+  /* Initial/boot stack lives in the CPU0 interrupt stack */
+  __stack = z_interrupt_stacks + CONFIG_ISR_STACK_SIZE;
+
+  /* These symbols bound the newlib heap, which must be uncached */
+  . = SEGSTART_UNCACHED;
+  _end = .;
+  . = L2_SRAM_BASE + L2_SRAM_SIZE;
+  . = SEGSTART_UNCACHED;
+  _heap_sentry = .;
+
   /* dma buffers */
   .lpbuf (NOLOAD): ALIGN(4)
   {
     _dma_buf_start = ABSOLUTE(.);
     *(.dma_buffers)
     _dma_buf_end = ABSOLUTE(.);
-  } >LPRAM_REGION
-  _heap_sentry = L2_SRAM_BASE + L2_SRAM_SIZE;
+  } >LP_SRAM_REGION
   .comment  0 :  { *(.comment) }
   .debug 0 : { *(.debug) }
   .line 0 : { *(.line) }
@@ -567,4 +588,10 @@ SECTIONS
   {
     *(*.static_log*)
   } > static_log_entries_seg :static_log_entries_phdr
+
+  .fw_metadata (COPY) : ALIGN(1024)
+  {
+    KEEP (*(.fw_metadata))
+    . = ALIGN(_EXT_MAN_ALIGN_);
+  } >fw_metadata_seg :metadata_entries_phdr
 }

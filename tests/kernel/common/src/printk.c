@@ -51,7 +51,7 @@ char *expected = "22 113 10000 32768 40000 22\n"
 		 "42 42   42       42\n"
 		 "42 42 0042 00000042\n"
 		 "255     42    abcdef        42\n"
-		 "ERR -1 4294967295 ffffffff\n"
+		 "ERR -1 ERR ERR\n"
 		 "0xcafebabe 0xbeef 0x2a\n"
 ;
 #endif
@@ -99,6 +99,10 @@ static int ram_console_out(int character)
 void test_printk(void)
 {
 	int count;
+
+	if (IS_ENABLED(CONFIG_LOG_PRINTK)) {
+		ztest_test_skip();
+	}
 
 	_old_char_out = __printk_get_hook();
 	__printk_hook_install(ram_console_out);

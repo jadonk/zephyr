@@ -20,43 +20,11 @@ config MCG_VDIV0
 config MCG_FCRDIV
 	default 1
 
-if PINMUX_MCUX
-
-config PINMUX_MCUX_PORTA
-	default y if MAX30101
-
-config PINMUX_MCUX_PORTB
-	default y if "$(dt_nodelabel_enabled,uart0)" && SERIAL
-
-config PINMUX_MCUX_PORTC
-	default y
-
-config PINMUX_MCUX_PORTD
-	default y
-
-config PINMUX_MCUX_PORTE
-	default y if "$(dt_nodelabel_enabled,uart4)" && SERIAL
-
-endif # PINMUX_MCUX
-
 if ADC
 
 config BATTERY_SENSE
 	default y
 
 endif # ADC
-
-if SPI
-
-config SPI_0
-	default y
-
-config SPI_1
-	default n
-
-config SPI_2
-	default n
-
-endif # SPI
 
 endif # BOARD_HEXIWEAR_K64

@@ -219,8 +219,6 @@ static int sgp30_chip_init(const struct device *dev)
 	/* Clear absoluteHumidity */
 	data->absoluteHumidity = 0;
 
-	return -EINVAL;
-
 	/* Get Serial ID */
 	LOG_DBG("Fetching Serial ID");
 	err = sgp30_cmd(data, 0x3682, 1, data->serialid, 3);

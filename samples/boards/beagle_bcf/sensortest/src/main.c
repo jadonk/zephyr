@@ -392,16 +392,6 @@ void main(void)
 	int r;
 	outstr[0] = '\0';
 
-	/* Set RF_SW */
-	const struct device *rf_sw_dev;
-	rf_sw_dev = device_get_binding(DT_GPIO_LABEL(DT_NODELABEL(rf_sw), gpios));
-	r = gpio_pin_configure(rf_sw_dev, DT_GPIO_PIN_BY_IDX(DT_NODELABEL(rf_sw), gpios, 0),
-		GPIO_OUTPUT_LOW);  /* Disable SubG +20dB */
-	r = gpio_pin_configure(rf_sw_dev, DT_GPIO_PIN_BY_IDX(DT_NODELABEL(rf_sw), gpios, 1),
-		GPIO_OUTPUT_HIGH); /* Enable SubG TX/RX 0dB */
-	r = gpio_pin_configure(rf_sw_dev, DT_GPIO_PIN_BY_IDX(DT_NODELABEL(rf_sw), gpios, 2),
-		GPIO_OUTPUT_LOW);  /* Disable 2.4GHz TX/RX */
-
 	fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	if (fd < 0) {
 		LOG_ERR("failed to open socket");

@@ -486,7 +486,11 @@ static int ads1115_init(const struct device *dev)
 	}
 
 	ADS1115_CFG_OS_SET(0);		/* OS = No conversion start */
-	ADS1115_CFG_MUX_SET(4);		/* MUX = 100b: AINP = AIN0 and AINN = GND */
+#if 0
+	ADS1115_CFG_MUX_SET(4);		/* MUX = 100b: AINp = AIN0 and AINn = GND */
+#else
+	ADS1115_CFG_MUX_SET(0);		/* MUX = 000b: AINp = AIN0 and AINn = AIN1 */
+#endif
 	ADS1115_CFG_PGA_SET(1);		/* PGA = 001b: FSR = 4.096V */
 	if(config->continuous_mode)
 		ADS1115_CFG_MODE_SET(0);/* MODE = 0: Continuous-conversion mode */

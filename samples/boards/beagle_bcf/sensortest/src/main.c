@@ -196,12 +196,12 @@ static void send_sensor_value()
 	outstr[0] = '\0';
 }
 
-/* Sampling frequency: 250Hz, 4ms
- * Oversample window: 16 samples, 64ms, 15.6Hz
- * Data window: 32 RMS samples, 2s of data
+/* Sampling frequency: 475Hz, 2.1ms
+ * Oversample window: 32 samples, 67.3ms, 14.8Hz
+ * Data window: 16 RMS samples, 1.1s of data
  */
 
-#define NUM_SAMPLES 32
+#define NUM_SAMPLES 16
 uint16_t ain0_buffer[NUM_SAMPLES];
 
 struct adc_channel_cfg ain0_channel_cfg = {
@@ -225,7 +225,7 @@ struct adc_sequence sequence0 = {
 	.buffer = ain0_buffer,
 	.buffer_size = sizeof(ain0_buffer),
 	.resolution = 16,
-	.oversampling = 4,
+	.oversampling = 5,
 	.calibrate = false,
 };
 

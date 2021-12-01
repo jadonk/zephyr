@@ -314,6 +314,7 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 	uint8_t channel;
 	int err;
 	uint16_t needed;
+	uint16_t valid;
 	uint16_t samples;
 	uint64_t acc;
 
@@ -322,6 +323,7 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 
 		acc = 0;
 		samples = 0;
+		valid = 0;
 		needed = 1 << data->oversampling;
 
 		while (data->seq_channels) {
@@ -343,12 +345,17 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 				break;
 			} else {
 				samples++;
-				acc += result*result;
+			       	/* TODO: create good threshold attribute */
+				//if(result > 10 && result < 0xfff0) {
+				if(result < 0xfff0) {
+					valid++;
+					acc += result*result;
+				}
 				if (samples >= needed) {
 					LOG_DBG("read channel %d, result = %d, acc = %ld", channel,
 						result, (long)acc);
 					if (needed > 1) {
-						acc /= samples;
+						acc /= valid;
 						*data->buffer++ = sqrt(acc);
 					} else {
 						*data->buffer++ = result;
@@ -357,6 +364,7 @@ static void ads1115_acquisition_thread(struct ads1115_data *data)
 
 					acc = 0;
 					samples = 0;
+					valid = 0;
 				}
 			}
 		}
@@ -486,17 +494,14 @@ static int ads1115_init(const struct device *dev)
 	}
 
 	ADS1115_CFG_OS_SET(0);		/* OS = No conversion start */
-#if 0
 	ADS1115_CFG_MUX_SET(4);		/* MUX = 100b: AINp = AIN0 and AINn = GND */
-#else
-	ADS1115_CFG_MUX_SET(0);		/* MUX = 000b: AINp = AIN0 and AINn = AIN1 */
-#endif
 	ADS1115_CFG_PGA_SET(1);		/* PGA = 001b: FSR = 4.096V */
 	if(config->continuous_mode)
 		ADS1115_CFG_MODE_SET(0);/* MODE = 0: Continuous-conversion mode */
 	else
 		ADS1115_CFG_MODE_SET(1);/* MODE = 1: Single-shot mode or power-down state */
-	ADS1115_CFG_DR_SET(5);		/* DR = 101b: 250 samples per second */
+	//ADS1115_CFG_DR_SET(5);		/* DR = 101b: 250 samples per second */
+	ADS1115_CFG_DR_SET(6);		/* DR = 110b: 475 samples per second */
 	ADS1115_CFG_CM_SET(0);		/* COMP_MODE = 0: Traditional comparator */
 	ADS1115_CFG_CP_SET(1);		/* COMP_POL = 1: Active high polarity */
 	ADS1115_CFG_CL_SET(0);		/* COMP_LAT = 0: Nonlatching comparator */

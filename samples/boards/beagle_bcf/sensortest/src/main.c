@@ -152,11 +152,11 @@ static void led_work_handler(struct k_work *work)
 	} else {
 		led_work.active_led = LED_SUBG;
 	}
+	*/
 
 	r = k_work_schedule(&led_work.dwork, K_MSEC(BLINK_MS));
 	__ASSERT(r == 0, "k_work_schedule() failed for LED %u work: %d",
 		 led_work.active_led, r);
-	*/
 
 	if (sensor_read_count > 0) {
 		sensor_read_count--;

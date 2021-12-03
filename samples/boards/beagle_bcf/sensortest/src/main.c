@@ -21,12 +21,18 @@
 #include <random/rand32.h>
 #include <devicetree.h>
 #include <devicetree/io-channels.h>
+#include <errno.h>
+#include <linker/sections.h>
+#include <net/net_core.h>
+#include <net/net_mgmt.h>
 
 #include <math.h>
 
 #define LOG_LEVEL LOG_LEVEL_INF
 #include <logging/log.h>
 LOG_MODULE_REGISTER(sensortest);
+
+#define MCAST_IP6ADDR "ff84::2"
 
 #define BLINK_MS 500
 
@@ -122,6 +128,30 @@ static int fd = -1;
 /* Set TIMED_SENSOR_READ to 0 to disable */
 #define TIMED_SENSOR_READ 60
 static int sensor_read_count = TIMED_SENSOR_READ;
+
+static void setup_telnet_ipv6(struct net_if *iface)
+{
+	char hr_addr[NET_IPV6_ADDR_LEN];
+	struct in6_addr addr;
+
+	if (net_addr_pton(AF_INET6, CONFIG_NET_CONFIG_MY_IPV6_ADDR, &addr)) {
+		LOG_ERR("Invalid address: %s", CONFIG_NET_CONFIG_MY_IPV6_ADDR);
+		return;
+	}
+
+	net_if_ipv6_addr_add(iface, &addr, NET_ADDR_MANUAL, 0);
+
+	LOG_INF("IPv6 address: %s",
+		log_strdup(net_addr_ntop(AF_INET6, &addr, hr_addr,
+					 NET_IPV6_ADDR_LEN)));
+
+	if (net_addr_pton(AF_INET6, MCAST_IP6ADDR, &addr)) {
+		LOG_ERR("Invalid address: %s", MCAST_IP6ADDR);
+		return;
+	}
+
+	net_if_ipv6_maddr_add(iface, &addr);
+}
 
 static void led_work_handler(struct k_work *work)
 {
@@ -391,6 +421,8 @@ static void button_handler(struct device *port, struct gpio_callback *cb,
 void main(void)
 {
 	int r;
+	struct net_if *iface = net_if_get_default();
+
 	outstr[0] = '\0';
 
 	fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
@@ -402,6 +434,8 @@ void main(void)
 		addr.sin6_port = htons(9999);
 		inet_pton(AF_INET6, "ff02::1", &addr.sin6_addr);
 	}
+
+	setup_telnet_ipv6(iface);
 
 	for (size_t i = 0; i < NUM_DEVICES; ++i) {
 		LOG_INF("opening device %s", device_labels[i]);

@@ -402,7 +402,7 @@ static int ads1115_reg_write(struct ads1115_data * data, uint8_t reg, uint16_t *
 	err = i2c_write_dt(&data->cfg->bus, wr_buff, 3);
 
 	if (err < 0) {
-		LOG_ERR("Error writing %d to reg 0x%02x", err, reg);
+		LOG_ERR("Error writing 0x%04x to reg 0x%02x: %d", wr_value, reg, err);
 		return err;
 	}
 
@@ -483,8 +483,8 @@ static int ads1115_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	/* Try 100ms delay at the start */
-	k_msleep(100);
+	/* Try 300ms delay at the start */
+	k_msleep(300);
 
 	err = ads1115_reg_read(data, ADS1115_REG_CONFIG, &data->config_reg);
 	if(err < 0)

@@ -234,6 +234,7 @@ static void send_sensor_value()
 
 #define NUM_SAMPLES 16
 uint16_t ain0_buffer[NUM_SAMPLES];
+char ain0_txbuf[3+NUM_SAMPLES*2] = "A0:";
 
 struct adc_channel_cfg ain0_channel_cfg = {
 	.gain = ADC_GAIN_1,
@@ -278,6 +279,13 @@ static void adc_work_handler(struct k_work *work)
 		adc_raw_to_millivolts(ADC_REF_MV, ADC_GAIN_1,
 			16, &mv_value);
 		LOG_INF(" %d: %d = %d mV", i/2, raw_value, mv_value);
+	}
+
+	if ((fd >= 0)) {
+		memcpy(ain0_txbuf+3, ain0_buffer, NUM_SAMPLES*2);
+		sendto(fd, ain0_txbuf, 3+NUM_SAMPLES*2, 0,
+			(const struct sockaddr *) &addr,
+			sizeof(addr));
 	}
 
 	err = k_work_schedule(&adc_dwork, K_MSEC(5000));

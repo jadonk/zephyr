@@ -118,15 +118,15 @@
 &uart0 {
     status = "okay";
     current-speed = <115200>;
-    tx-pin = <13 IOC_PORT_MCU_UART0_TX>;
-    rx-pin = <12 IOC_PORT_MCU_UART0_RX>;
+    tx-pin = <12 IOC_PORT_MCU_UART0_TX>;
+    rx-pin = <13 IOC_PORT_MCU_UART0_RX>;
 };
 
 &uart1 {
     status = "okay";
     current-speed = <115200>;
-    tx-pin = <21 IOC_PORT_MCU_UART1_TX>;
-    rx-pin = <22 IOC_PORT_MCU_UART1_RX>;
+    tx-pin = <22 IOC_PORT_MCU_UART1_TX>;
+    rx-pin = <21 IOC_PORT_MCU_UART1_RX>;
 };
 
 &i2c0 {

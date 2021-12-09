@@ -115,13 +115,17 @@
     status = "okay";
 };
 
+/* On C5, side away from battery connector (with MSP430) */
+/* Wrong pinout on header */
 &uart0 {
     status = "okay";
     current-speed = <115200>;
-    tx-pin = <12 IOC_PORT_MCU_UART0_TX>;
-    rx-pin = <13 IOC_PORT_MCU_UART0_RX>;
+    tx-pin = <13 IOC_PORT_MCU_UART0_TX>;
+    rx-pin = <12 IOC_PORT_MCU_UART0_RX>;
 };
 
+/* On C5, side with battery connector (with CC1352 and not MSP430) */
+/* Correct pinout on header */
 &uart1 {
     status = "okay";
     current-speed = <115200>;

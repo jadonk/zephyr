@@ -15,11 +15,22 @@ module = GPIO
 module-str = gpio
 source "subsys/logging/Kconfig.template.log_config"
 
+config GPIO_GET_DIRECTION_BITS
+	bool
+	help
+	  Set by drivers that support gpio_port_get_direction_bits()
+
 config GPIO_SHELL
 	bool "Enable GPIO Shell"
 	depends on SHELL
 	help
 	  Enable GPIO Shell for testing.
+
+config GPIO_INIT_PRIORITY
+	int "GPIO init priority"
+	default KERNEL_INIT_PRIORITY_DEFAULT
+	help
+	  GPIO driver device initialization priority.
 
 source "drivers/gpio/Kconfig.b91"
 
@@ -28,6 +39,8 @@ source "drivers/gpio/Kconfig.dw"
 source "drivers/gpio/Kconfig.pca95xx"
 
 source "drivers/gpio/Kconfig.mcp23s17"
+
+source "drivers/gpio/Kconfig.mcp230xx"
 
 source "drivers/gpio/Kconfig.mcux"
 
@@ -104,5 +117,7 @@ source "drivers/gpio/Kconfig.fxl6408"
 source "drivers/gpio/Kconfig.andes_atcgpio100"
 
 source "drivers/gpio/Kconfig.neorv32"
+
+source "drivers/gpio/Kconfig.nct38xx"
 
 endif # GPIO

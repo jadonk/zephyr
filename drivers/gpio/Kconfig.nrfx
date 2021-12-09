@@ -6,16 +6,11 @@ menuconfig GPIO_NRFX
 	default y
 	depends on SOC_FAMILY_NRF
 	select NRFX_GPIOTE
+	select GPIO_GET_DIRECTION_BITS
 	help
 	  Enable GPIO driver for nRF line of MCUs.
 
 if GPIO_NRFX
-
-config GPIO_NRF_INIT_PRIORITY
-	int "nRF GPIO initialization priority"
-	default 40
-	help
-	  Initialization priority for nRF GPIO.
 
 choice
 	prompt "nRF GPIO edge interrupts mechanism"

@@ -17,7 +17,7 @@
 # It exists to reduce boilerplate code that Zephyr expects to be in
 # application CMakeLists.txt code.
 
-# CMake version 3.13.1 is the real minimum supported version.
+# CMake version 3.20 is the real minimum supported version.
 #
 # Unfortunately CMake requires the toplevel CMakeLists.txt file to
 # define the required version, not even invoking it from an included
@@ -50,18 +50,26 @@ define_property(GLOBAL PROPERTY ZEPHYR_INTERFACE_LIBS
 zephyr_interface_library_named() appends libs to this list.")
 set_property(GLOBAL PROPERTY ZEPHYR_INTERFACE_LIBS "")
 
-define_property(GLOBAL PROPERTY GENERATED_KERNEL_OBJECT_FILES
-  BRIEF_DOCS "Object files that are generated after Zephyr has been linked once."
+define_property(GLOBAL PROPERTY GENERATED_APP_SOURCE_FILES
+  BRIEF_DOCS "Source files that are generated after Zephyr has been linked once."
   FULL_DOCS "\
-Object files that are generated after Zephyr has been linked once.\
+Source files that are generated after Zephyr has been linked once.\
+May include dev_handles.c etc."
+  )
+set_property(GLOBAL PROPERTY GENERATED_APP_SOURCE_FILES "")
+
+define_property(GLOBAL PROPERTY GENERATED_KERNEL_OBJECT_FILES
+  BRIEF_DOCS "Object files that are generated after symbol addresses are fixed."
+  FULL_DOCS "\
+Object files that are generated after symbol addresses are fixed.\
 May include mmu tables, etc."
   )
 set_property(GLOBAL PROPERTY GENERATED_KERNEL_OBJECT_FILES "")
 
 define_property(GLOBAL PROPERTY GENERATED_KERNEL_SOURCE_FILES
-  BRIEF_DOCS "Source files that are generated after Zephyr has been linked once."
+  BRIEF_DOCS "Source files that are generated after symbol addresses are fixed."
   FULL_DOCS "\
-Source files that are generated after Zephyr has been linked once.\
+Source files that are generated after symbol addresses are fixed.\
 May include isr_tables.c etc."
   )
 set_property(GLOBAL PROPERTY GENERATED_KERNEL_SOURCE_FILES "")

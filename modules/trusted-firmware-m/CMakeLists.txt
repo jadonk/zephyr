@@ -214,6 +214,13 @@ if (CONFIG_BUILD_WITH_TFM)
     list(APPEND TFM_CMAKE_ARGS -DMCUBOOT_PATH=${ZEPHYR_MCUBOOT_MODULE_DIR})
   endif()
 
+  if(TFM_PSA_TEST_SUITE)
+    list(APPEND TFM_CMAKE_ARGS
+      -DPSA_TOOLCHAIN_FILE=${CMAKE_CURRENT_LIST_DIR}/psa/GNUARM.cmake
+      -DTOOLCHAIN=INHERIT
+      )
+  endif()
+
   file(MAKE_DIRECTORY ${TFM_BINARY_DIR})
   add_custom_target(tfm_cmake
     DEPENDS ${TFM_BINARY_DIR}/CMakeCache.txt
@@ -223,8 +230,6 @@ if (CONFIG_BUILD_WITH_TFM)
     COMMAND ${CMAKE_COMMAND}
       -G${CMAKE_GENERATOR}
       -DTFM_TOOLCHAIN_FILE=${ZEPHYR_TRUSTED_FIRMWARE_M_MODULE_DIR}/${TFM_TOOLCHAIN_FILE}
-      -DPSA_TOOLCHAIN_FILE=${CMAKE_CURRENT_LIST_DIR}/psa/GNUARM.cmake
-      -DTOOLCHAIN=INHERIT
       -DCROSS_COMPILE=${TFM_TOOLCHAIN_PATH}/${TFM_TOOLCHAIN_PREFIX}
       -DCMAKE_BUILD_TYPE=${TFM_CMAKE_BUILD_TYPE}
       -DTFM_PLATFORM=${CONFIG_TFM_BOARD}
@@ -265,6 +270,10 @@ if (CONFIG_BUILD_WITH_TFM)
     DEPENDS tfm_cmake
     BUILD_BYPRODUCTS ${BUILD_BYPRODUCTS}
   )
+
+  # Set TFM binary directory as target property on 'tfm'
+  # This is the root of all TFM build artifacts.
+  set_target_properties(tfm PROPERTIES TFM_BINARY_DIR ${TFM_BINARY_DIR})
 
   # Set BL2 (MCUboot) executable file paths as target properties on 'tfm'
   # These files are produced by the TFM build system.
@@ -329,8 +338,8 @@ if (CONFIG_BUILD_WITH_TFM)
   endif()
 
   if (CONFIG_TFM_BL2)
-    set(PREPROCESSED_FILE_S "${CMAKE_BINARY_DIR}/tfm/bl2/ext/mcuboot/CMakeFiles/signing_layout_s.dir/signing_layout_s.o")
-    set(PREPROCESSED_FILE_NS "${CMAKE_BINARY_DIR}/tfm/bl2/ext/mcuboot/CMakeFiles/signing_layout_ns.dir/signing_layout_ns.o")
+    set(PREPROCESSED_FILE_S "${TFM_BINARY_DIR}/bl2/ext/mcuboot/CMakeFiles/signing_layout_s.dir/signing_layout_s.o")
+    set(PREPROCESSED_FILE_NS "${TFM_BINARY_DIR}/bl2/ext/mcuboot/CMakeFiles/signing_layout_ns.dir/signing_layout_ns.o")
     set(TFM_MCUBOOT_DIR "${ZEPHYR_TRUSTED_FIRMWARE_M_MODULE_DIR}/bl2/ext/mcuboot")
   endif()
 
@@ -353,6 +362,10 @@ if (CONFIG_BUILD_WITH_TFM)
       set(pad_args --pad --pad-header)
     endif()
     set (${OUT_ARG}
+      # Add the MCUBoot script to the path so that if there is a version of imgtool in there then
+      # it gets used over the system imgtool. Used so that imgtool from upstream
+      # mcuboot is preferred over system imgtool
+      ${CMAKE_COMMAND} -E env PYTHONPATH=${ZEPHYR_MCUBOOT_MODULE_DIR}/scripts
       ${PYTHON_EXECUTABLE} ${TFM_MCUBOOT_DIR}/scripts/wrapper/wrapper.py
       --layout ${PREPROCESSED_FILE_${SUFFIX}}
       -k ${CONFIG_TFM_KEY_FILE_${SUFFIX}}

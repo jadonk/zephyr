@@ -446,7 +446,7 @@ void pthread_exit(void *retval)
 	}
 
 	if ((self->thread.base.user_options & K_STACK_ON_HEAP) != 0) {
-		self->thread.fn_abort = zephyr_pthread_stack_reclaim;
+		//self->thread.fn_abort = zephyr_pthread_stack_reclaim;
 	}
 
 	pthread_mutex_unlock(&self->state_lock);

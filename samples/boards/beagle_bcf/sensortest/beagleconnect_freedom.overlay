@@ -6,8 +6,11 @@
 
 / {
 	zephyr,user {
-		io-channels = <&adsadc0 0>;
-		io-channel-names = "AIN1";
+		io-channels = <&adsadc0 0>, <&adsadc0 1>, <&adsadc0 2>,
+			<&adsadc1 0>, <&adsadc1 1>, <&adsadc1 2>,
+			<&adsadc2 0>, <&adsadc2 1>, <&adsadc2 2>;
+		io-channel-names = "AIN1", "AIN2", "AIN3",
+			"AIN4", "AIN5", "AIN6", "AIN7", "AIN8", "AIN9";
 	};
 };
 
@@ -42,21 +45,19 @@
 		label = "ADS1115-ADC0";
 	};
 
-/*
 	adsadc1: ads1115_1@49 {
 		compatible = "ti,ads1115";
+		#io-channel-cells = <1>;
 		reg = <0x49>;
-		sampling_channel = <1>;
 		continuous_mode = <0>;
 		label = "ADS1115-ADC1";
 	};
 
 	adsadc2: ads1115_2@4b {
 		compatible = "ti,ads1115";
+		#io-channel-cells = <1>;
 		reg = <0x4b>;
-		sampling_channel = <2>;
 		continuous_mode = <0>;
 		label = "ADS1115-ADC2";
 	};
-*/
 };

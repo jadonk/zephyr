@@ -232,61 +232,80 @@ static void send_sensor_value()
  * Data window: 16 RMS samples, 1.1s of data
  */
 
-#define NUM_SAMPLES 16
-uint16_t ain0_buffer[NUM_SAMPLES];
-char ain0_txbuf[3+NUM_SAMPLES*2] = "A0:";
-
-struct adc_channel_cfg ain0_channel_cfg = {
-	.gain = ADC_GAIN_1,
-	.reference = ADC_REF_INTERNAL,
-	.acquisition_time = ADC_ACQ_TIME_DEFAULT,
-	.channel_id = DT_IO_CHANNELS_INPUT_BY_IDX(DT_PATH(zephyr_user), 0),
-	.differential = 0,
+#define ADC_CONFIG(iIDX, sIDX, NUM_SAMPLES, OVERSAMPLING) \
+int ain##iIDX##_size = NUM_SAMPLES; \
+char ain##iIDX##_txbuf[3+NUM_SAMPLES*2] = "A" sIDX ":"; \
+ \
+struct adc_channel_cfg ain##iIDX##_channel_cfg = { \
+	.gain = ADC_GAIN_1, \
+	.reference = ADC_REF_INTERNAL, \
+	.acquisition_time = ADC_ACQ_TIME_DEFAULT, \
+	.channel_id = DT_IO_CHANNELS_INPUT_BY_IDX(DT_PATH(zephyr_user), iIDX), \
+	.differential = 0, \
+}; \
+ \
+const struct adc_sequence_options ain##iIDX##_seq_options = { \
+	.interval_us = 1000, \
+	.extra_samplings = NUM_SAMPLES-1, \
+	.callback = NULL, \
+	.user_data = NULL, \
+}; \
+ \
+struct adc_sequence sequence_##iIDX = { \
+	.options = &ain##iIDX##_seq_options, \
+	.channels = 1, \
+	.buffer = ain##iIDX##_txbuf + 3, \
+	.buffer_size = NUM_SAMPLES*2, \
+	.resolution = 16, \
+	.oversampling = OVERSAMPLING, \
+	.calibrate = false, \
 };
 
-const struct adc_sequence_options ain0_seq_options = {
-	.interval_us = 1000,
-	.extra_samplings = NUM_SAMPLES-1,
-	.callback = NULL,
-	.user_data = NULL,
-};
+ADC_CONFIG(0, "1", 16, 5);
+ADC_CONFIG(1, "2", 1, 0);
+ADC_CONFIG(2, "3", 1, 0);
+ADC_CONFIG(3, "4", 1, 0);
+ADC_CONFIG(4, "5", 1, 0);
+ADC_CONFIG(5, "6", 1, 0);
+ADC_CONFIG(6, "7", 1, 0);
+ADC_CONFIG(7, "8", 1, 0);
+ADC_CONFIG(8, "9", 1, 0);
 
-struct adc_sequence sequence0 = {
-	.options = &ain0_seq_options,
-	.channels = 1,
-	.buffer = ain0_buffer,
-	.buffer_size = sizeof(ain0_buffer),
-	.resolution = 16,
-	.oversampling = 5,
-	.calibrate = false,
-};
+#define ADC_READ(DEV, iIDX, sIDX) \
+	dev = devices[DEV]; \
+	err = adc_read(dev, &sequence_##iIDX); \
+	if (err != 0) { \
+		LOG_ERR("ADC reading failed with error %d.", err); \
+	} else { \
+		for (uint8_t i = 0; i < 2*ain##iIDX##_size; i+=2) { \
+			int32_t raw_value = (int32_t)*(uint16_t *)(ain##iIDX##_txbuf+3+i); \
+			int32_t mv_value = raw_value; \
+			adc_raw_to_millivolts(ADC_REF_MV, ADC_GAIN_1, \
+				16, &mv_value); \
+			LOG_INF("ain" sIDX "%d: %d = %d mV", i/2, raw_value, mv_value); \
+		} \
+		if ((fd >= 0)) { \
+			sendto(fd, ain##iIDX##_txbuf, 3+ain##iIDX##_size*2, 0, \
+				(const struct sockaddr *) &addr, \
+				sizeof(addr)); \
+		} \
+	}
+
 
 static void adc_work_handler(struct k_work *work)
 {
 	int err;
 	const struct device * dev = devices[ADC_0];
 
-	err = adc_read(dev, &sequence0);
-	if (err != 0) {
-		LOG_ERR("ADC reading failed with error %d.", err);
-		return;
-	}
-
-	LOG_INF("ADC reading:");
-	for (uint8_t i = 0; i < 2*NUM_SAMPLES; i+=2) {
-		int32_t raw_value = ain0_buffer[i/2];
-		int32_t mv_value = raw_value;
-		adc_raw_to_millivolts(ADC_REF_MV, ADC_GAIN_1,
-			16, &mv_value);
-		LOG_INF(" %d: %d = %d mV", i/2, raw_value, mv_value);
-	}
-
-	if ((fd >= 0)) {
-		memcpy(ain0_txbuf+3, ain0_buffer, NUM_SAMPLES*2);
-		sendto(fd, ain0_txbuf, 3+NUM_SAMPLES*2, 0,
-			(const struct sockaddr *) &addr,
-			sizeof(addr));
-	}
+	ADC_READ(ADC_0, 0, "1");
+	ADC_READ(ADC_0, 1, "2");
+	ADC_READ(ADC_0, 2, "3");
+	ADC_READ(ADC_1, 3, "4");
+	ADC_READ(ADC_1, 4, "5");
+	ADC_READ(ADC_1, 5, "6");
+	ADC_READ(ADC_2, 6, "7");
+	ADC_READ(ADC_2, 7, "8");
+	ADC_READ(ADC_2, 8, "9");
 
 	err = k_work_schedule(&adc_dwork, K_MSEC(5000));
 	__ASSERT(err == 0, "k_work_schedule() failed for adc_dwork: %d", r);
@@ -497,10 +516,10 @@ void main(void)
 
 	/* setup timer-driven LED event */
 	k_work_init_delayable(&led_work.dwork, led_work_handler);
-	//led_work.active_led = LED_SUBG;
+	//led_work.active_led = LED_24G;
 	r = k_work_schedule(&led_work.dwork, K_MSEC(BLINK_MS));
 	__ASSERT(r == 0, "k_work_schedule() failed for LED %u work: %d",
-		 LED_SUBG, r);
+		 LED_24G, r);
 
 	if(devices[ADC_0])
 	{

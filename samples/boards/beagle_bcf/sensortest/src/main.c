@@ -261,15 +261,15 @@ struct adc_sequence sequence_##iIDX = { \
 	.calibrate = false, \
 };
 
-ADC_CONFIG(0, "1", 16, 5);
-ADC_CONFIG(1, "2", 1, 0);
-ADC_CONFIG(2, "3", 1, 0);
-ADC_CONFIG(3, "4", 1, 0);
-ADC_CONFIG(4, "5", 1, 0);
-ADC_CONFIG(5, "6", 1, 0);
-ADC_CONFIG(6, "7", 1, 0);
-ADC_CONFIG(7, "8", 1, 0);
-ADC_CONFIG(8, "9", 1, 0);
+ADC_CONFIG(0, "1", 1, 5);
+ADC_CONFIG(1, "2", 1, 5);
+ADC_CONFIG(2, "3", 1, 5);
+ADC_CONFIG(3, "4", 1, 5);
+ADC_CONFIG(4, "5", 1, 5);
+ADC_CONFIG(5, "6", 1, 5);
+ADC_CONFIG(6, "7", 1, 5);
+ADC_CONFIG(7, "8", 1, 5);
+ADC_CONFIG(8, "9", 1, 5);
 
 #define ADC_READ(DEV, iIDX, sIDX) \
 	dev = devices[DEV]; \
@@ -282,7 +282,7 @@ ADC_CONFIG(8, "9", 1, 0);
 			int32_t mv_value = raw_value; \
 			adc_raw_to_millivolts(ADC_REF_MV, ADC_GAIN_1, \
 				16, &mv_value); \
-			LOG_INF("ain" sIDX "%d: %d = %d mV", i/2, raw_value, mv_value); \
+			LOG_INF("ain" sIDX " %d: %d = %d mV", i/2, raw_value, mv_value); \
 		} \
 		if ((fd >= 0)) { \
 			sendto(fd, ain##iIDX##_txbuf, 3+ain##iIDX##_size*2, 0, \
@@ -307,7 +307,7 @@ static void adc_work_handler(struct k_work *work)
 	ADC_READ(ADC_2, 7, "8");
 	ADC_READ(ADC_2, 8, "9");
 
-	err = k_work_schedule(&adc_dwork, K_MSEC(5000));
+	err = k_work_schedule(&adc_dwork, K_MSEC(120000));
 	__ASSERT(err == 0, "k_work_schedule() failed for adc_dwork: %d", r);
 
 	return;

@@ -307,7 +307,7 @@ static void adc_work_handler(struct k_work *work)
 	ADC_READ(ADC_2, 7, "8");
 	ADC_READ(ADC_2, 8, "9");
 
-	err = k_work_schedule(&adc_dwork, K_MSEC(120000));
+	err = k_work_schedule(&adc_dwork, K_MSEC(60000));
 	__ASSERT(err == 0, "k_work_schedule() failed for adc_dwork: %d", r);
 
 	return;

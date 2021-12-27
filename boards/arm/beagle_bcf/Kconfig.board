@@ -18,4 +18,22 @@ config BOARD_ANTENNA_INIT_PRIO
 	  KERNEL_INIT_PRIORITY_DEVICE but smaller than
 	  IEEE802154_CC13XX_CC26XX_SUB_GHZ_INIT_PRIO.
 
+config BOARD_UARTMUX_INIT_PRIO
+	int "Board UART mux initialization priority"
+	default 99
+	help
+	  Set the priority for board UART mux switch init
+
+choice BCF_UARTMUX_STATE
+	prompt "UART0 MUX State"
+	default BCF_UARTMUX_STATE_MSP430
+
+config BCF_UARTMUX_STATE_MSP430
+	bool "UART MUX state to enable connection with USB-UART"
+
+config BCF_UARTMUX_STATE_MIKROBUS
+	bool "UART MUX state to enable connection with MIKROBUS-UART"
+
+endchoice
+
 endif # BOARD_BEAGLECONNECT_FREEDOM

@@ -16,9 +16,11 @@
 
 manifest:
   defaults:
-    remote: bcf-sdk
+    remote: upstream
 
   remotes:
+    - name: upstream
+      url-base: https://github.com/zephyrproject-rtos
     - name: bcf-sdk
       url-base: https://github.com/jadonk
 
@@ -44,9 +46,11 @@ manifest:
       groups:
         - tools
     - name: wpanusb_bc
+      remote: bcf-sdk
       path: modules/lib/wpanusb_bc
       revision: main
     - name: greybus-for-zephyr
+      remote: bcf-sdk
       path: modules/lib/greybus
       revision: mikrobus
 

@@ -46,7 +46,7 @@ manifest:
     - name: wpanusb_bc
       path: modules/lib/wpanusb_bc
       revision: main
-    - name: greybus-fo-zephyr
+    - name: greybus-for-zephyr
       path: modules/lib/greybus
       revision: mikrobus
 

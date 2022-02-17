@@ -37,6 +37,11 @@ manifest:
       path: modules/hal/ti
       groups:
         - hal
+    - name: mbedtls
+      revision: 711fd5ea13a5e018cebe1ac1f79c22d897e8b34d
+      path: modules/crypto/mbedtls
+      groups:
+        - crypto
     - name: mcuboot
       revision: 225b02468bf77806bdd5f503725256cb345970d2
       path: bootloader/mcuboot

@@ -23,9 +23,6 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: bcf-sdk
       url-base: https://github.com/jadonk
-    - name: manifesto-remote
-      url-base: https://github.com/vaishnav98
-
 
   #
   # Please add items below based on alphabetical order
@@ -62,9 +59,9 @@ manifest:
       path: modules/lib/greybus
       revision: mikrobus-2.7-hacks
     - name: manifesto
-      remote: manifesto-remote
+      remote: bcf-sdk
       path: modules/lib/greybus/scripts/manifesto
-      revision: zephyr
+      revision: main
 
   group-filter:
     - -ci

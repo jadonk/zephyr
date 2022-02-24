@@ -24,7 +24,8 @@
     compatible = "beagle,beagleconnect-freedom";
 
     aliases {
-        sw0 = &user_button_0;
+		led0 = &led0;
+		sw0 = &button0;
         sensor0 = &light;
         sensor1 = &accel;
         sensor2 = &humidity;  /* Not populated on rev C4 */
@@ -37,23 +38,18 @@
         zephyr,flash = &flash0;
     };
 
-	/* These aliases are provided for compatibility with samples */
-	aliases {
-		led0 = &led0;
-	};
-
     gpio_keys {
         compatible = "gpio-keys";
-        user_button_0: button_0 {
-            label = "User Button";
+        button0: button_0 {
+            label = "User button";
             gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
         };
     };
 
-	leds {
+	leds: leds {
 		compatible = "gpio-leds";
 		led0: led_0 {
-			<&gpio0 18 GPIO_ACTIVE_HIGH>; // 2.4GHz TX/RX
+			gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>; // 2.4GHz TX/RX
 			label = "LED";
 		};
 
@@ -62,10 +58,9 @@
             label = "RF_SW";
             gpios =
                 <&gpio0 29 GPIO_ACTIVE_HIGH>, // SubG TX +20dB
-                <&gpio0 30 GPIO_ACTIVE_HIGH>, // SubG TX/RX 0dB
+                <&gpio0 30 GPIO_ACTIVE_HIGH>; // SubG TX/RX 0dB
         };
 	};
-    };
 
     sens_i2c: sensor-switch {
         compatible = "ti,ts5a2066";

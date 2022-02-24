@@ -20,10 +20,8 @@
 #include <driverlib/rom.h>
 
 /* DIOs for RF antenna paths */
-#define DISABLE_RF_24GHZ_SWITCH 1
-#define BOARD_RF_24GHZ     18
-#define BOARD_RF_HIGH_PA   29
-#define BOARD_RF_SUB1GHZ   30
+#define BOARD_RF_HIGH_PA   29		/* TODO: pull from DT */
+#define BOARD_RF_SUB1GHZ   30		/* TODO: pull from DT */
 
 static void board_cc13xx_rf_callback(RF_Handle client, RF_GlobalEvent events,
 		void *arg);
@@ -48,8 +46,6 @@ static int board_antenna_init(const struct device *dev)
 	ARG_UNUSED(dev);
 
 	/* set all paths to low */
-	IOCPinTypeGpioOutput(BOARD_RF_24GHZ);
-	GPIO_setOutputEnableDio(BOARD_RF_24GHZ, GPIO_OUTPUT_DISABLE);
 	IOCPinTypeGpioOutput(BOARD_RF_HIGH_PA);
 	GPIO_setOutputEnableDio(BOARD_RF_HIGH_PA, GPIO_OUTPUT_DISABLE);
 	IOCPinTypeGpioOutput(BOARD_RF_SUB1GHZ);
@@ -65,9 +61,6 @@ void board_cc13xx_rf_callback(RF_Handle client, RF_GlobalEvent events, void *arg
 	uint8_t loDivider = 0;
 
 	/* Switch off all paths first. Needs to be done anyway in every sub-case below. */
-#ifndef DISABLE_RF_24GHZ_SWITCH
-	GPIO_setOutputEnableDio(BOARD_RF_24GHZ, GPIO_OUTPUT_DISABLE);
-#endif
 	GPIO_setOutputEnableDio(BOARD_RF_HIGH_PA, GPIO_OUTPUT_DISABLE);
 	GPIO_setOutputEnableDio(BOARD_RF_SUB1GHZ, GPIO_OUTPUT_DISABLE);
 
@@ -103,10 +96,6 @@ void board_cc13xx_rf_callback(RF_Handle client, RF_GlobalEvent events, void *arg
 			if (paType == RF_TxPowerTable_HighPA) {
 				/* PA enable --> HIGH PA */
 				/* LNA enable --> Sub-1 GHz */
-#ifndef DISABLE_RF_24GHZ_SWITCH
-				IOCPortConfigureSet(BOARD_RF_24GHZ, IOC_PORT_GPIO,
-						IOC_IOMODE_NORMAL);
-#endif
 				/* Note: RFC_GPO3 is a work-around because the RFC_GPO1 */
 				/* is sometimes not de-asserted on CC1352 Rev A. */
 				IOCPortConfigureSet(BOARD_RF_HIGH_PA,
@@ -115,10 +104,6 @@ void board_cc13xx_rf_callback(RF_Handle client, RF_GlobalEvent events, void *arg
 						IOC_PORT_RFC_GPO0, IOC_IOMODE_NORMAL);
 			} else {
 				/* RF core active --> Sub-1 GHz */
-#ifndef DISABLE_RF_24GHZ_SWITCH
-				IOCPortConfigureSet(BOARD_RF_24GHZ,
-						IOC_PORT_GPIO, IOC_IOMODE_NORMAL);
-#endif
 				IOCPortConfigureSet(BOARD_RF_HIGH_PA,
 						IOC_PORT_GPIO, IOC_IOMODE_NORMAL);
 				IOCPortConfigureSet(BOARD_RF_SUB1GHZ,
@@ -130,10 +115,6 @@ void board_cc13xx_rf_callback(RF_Handle client, RF_GlobalEvent events, void *arg
 			if (paType == RF_TxPowerTable_HighPA) {
 				/* PA enable --> HIGH PA */
 				/* LNA enable --> 2.4 GHz */
-#ifndef DISABLE_RF_24GHZ_SWITCH
-				IOCPortConfigureSet(BOARD_RF_24GHZ,
-						IOC_PORT_RFC_GPO0, IOC_IOMODE_NORMAL);
-#endif
 				/* Note: RFC_GPO3 is a work-around because the RFC_GPO1 */
 				/* is sometimes not de-asserted on CC1352 Rev A. */
 				IOCPortConfigureSet(BOARD_RF_HIGH_PA,
@@ -142,25 +123,14 @@ void board_cc13xx_rf_callback(RF_Handle client, RF_GlobalEvent events, void *arg
 						IOC_PORT_GPIO, IOC_IOMODE_NORMAL);
 			} else {
 				/* RF core active --> 2.4 GHz */
-#ifndef DISABLE_RF_24GHZ_SWITCH
-				IOCPortConfigureSet(BOARD_RF_24GHZ,
-						IOC_PORT_GPIO, IOC_IOMODE_NORMAL);
-#endif
 				IOCPortConfigureSet(BOARD_RF_HIGH_PA,
 						IOC_PORT_GPIO, IOC_IOMODE_NORMAL);
 				IOCPortConfigureSet(BOARD_RF_SUB1GHZ,
 						IOC_PORT_GPIO, IOC_IOMODE_NORMAL);
-#ifndef DISABLE_RF_24GHZ_SWITCH
-				GPIO_setOutputEnableDio(BOARD_RF_24GHZ, GPIO_OUTPUT_ENABLE);
-#endif
 			}
 		}
 	} else {
 		/* Reset the IO multiplexer to GPIO functionality */
-#ifndef DISABLE_RF_24GHZ_SWITCH
-		IOCPortConfigureSet(BOARD_RF_24GHZ,
-				IOC_PORT_GPIO, IOC_IOMODE_NORMAL);
-#endif
 		IOCPortConfigureSet(BOARD_RF_HIGH_PA,
 				IOC_PORT_GPIO, IOC_IOMODE_NORMAL);
 		IOCPortConfigureSet(BOARD_RF_SUB1GHZ,

@@ -37,6 +37,11 @@
         zephyr,flash = &flash0;
     };
 
+	/* These aliases are provided for compatibility with samples */
+	aliases {
+		led0 = &led0;
+	};
+
     gpio_keys {
         compatible = "gpio-keys";
         user_button_0: button_0 {
@@ -45,9 +50,12 @@
         };
     };
 
-    /* Not really LEDs, but outputs */
-    gpio_leds {
-        compatible = "gpio-leds";
+	leds {
+		compatible = "gpio-leds";
+		led0: led_0 {
+			<&gpio0 18 GPIO_ACTIVE_HIGH>; // 2.4GHz TX/RX
+			label = "LED";
+		};
 
         /* U.FL connector switch */
         rf_sw: rf_sw {
@@ -55,8 +63,8 @@
             gpios =
                 <&gpio0 29 GPIO_ACTIVE_HIGH>, // SubG TX +20dB
                 <&gpio0 30 GPIO_ACTIVE_HIGH>, // SubG TX/RX 0dB
-                <&gpio0 18 GPIO_ACTIVE_HIGH>; // 2.4GHz TX/RX
         };
+	};
     };
 
     sens_i2c: sensor-switch {

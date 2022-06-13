@@ -262,6 +262,33 @@ static int gpio_cc13xx_cc26xx_init(const struct device *dev)
 	return 0;
 }
 
+static int gpio_cc13xx_cc26xx_port_get_direction_bits_raw(const struct device *port,
+							  gpio_port_pins_t *inputs,
+							  gpio_port_pins_t *outputs)
+{
+	uint32_t pin;
+	gpio_port_pins_t ip = 0;
+	gpio_port_pins_t op = 0;
+
+	if (inputs != NULL) {
+		for (pin = 0; pin < NUM_IO_MAX; ++pin) {
+			ip |= !!(IOCPortConfigureGet(pin) & IOC_INPUT_ENABLE) * BIT(pin);
+		}
+
+		*inputs = ip;
+	}
+
+	if (outputs != NULL) {
+		for (pin = 0; pin < NUM_IO_MAX; ++pin) {
+			op |= GPIO_getOutputEnableDio(pin) * BIT(pin);
+		}
+
+		*outputs = op;
+	}
+
+	return 0;
+}
+
 static const struct gpio_driver_api gpio_cc13xx_cc26xx_driver_api = {
 	.pin_configure = gpio_cc13xx_cc26xx_config,
 	.port_get_raw = gpio_cc13xx_cc26xx_port_get_raw,
@@ -271,7 +298,8 @@ static const struct gpio_driver_api gpio_cc13xx_cc26xx_driver_api = {
 	.port_toggle_bits = gpio_cc13xx_cc26xx_port_toggle_bits,
 	.pin_interrupt_configure = gpio_cc13xx_cc26xx_pin_interrupt_configure,
 	.manage_callback = gpio_cc13xx_cc26xx_manage_callback,
-	.get_pending_int = gpio_cc13xx_cc26xx_get_pending_int
+	.get_pending_int = gpio_cc13xx_cc26xx_get_pending_int,
+	.port_get_direction_bits_raw = gpio_cc13xx_cc26xx_port_get_direction_bits_raw,
 };
 
 DEVICE_DT_INST_DEFINE(0, gpio_cc13xx_cc26xx_init,

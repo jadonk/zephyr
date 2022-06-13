@@ -666,6 +666,35 @@ static gpio_port_pins_t gpio_emul_get_pending_int(const struct device *dev)
 	return drv_data->interrupts;
 }
 
+static int gpio_emul_port_get_direction_bits_raw(const struct device *port,
+						 gpio_port_pins_t *inputs,
+						 gpio_port_pins_t *outputs)
+{
+	size_t i;
+	gpio_port_pins_t ip = 0;
+	gpio_port_pins_t op = 0;
+	struct gpio_emul_data *const drv_data = (struct gpio_emul_data *)port->data;
+	const struct gpio_emul_config *config = (const struct gpio_emul_config *)port->config;
+
+	if (inputs != NULL) {
+		for (i = 0; i < config->num_pins; ++i) {
+			ip |= !!(drv_data->flags[i] & GPIO_INPUT) * BIT(i);
+		}
+
+		*inputs = ip;
+	}
+
+	if (outputs != NULL) {
+		for (i = 0; i < config->num_pins; ++i) {
+			op |= !!(drv_data->flags[i] & GPIO_OUTPUT) * BIT(i);
+		}
+
+		*outputs = op;
+	}
+
+	return 0;
+}
+
 static const struct gpio_driver_api gpio_emul_driver = {
 	.pin_configure = gpio_emul_pin_configure,
 	.port_get_raw = gpio_emul_port_get_raw,
@@ -676,6 +705,7 @@ static const struct gpio_driver_api gpio_emul_driver = {
 	.pin_interrupt_configure = gpio_emul_pin_interrupt_configure,
 	.manage_callback = gpio_emul_manage_callback,
 	.get_pending_int = gpio_emul_get_pending_int,
+	.port_get_direction_bits_raw = gpio_emul_port_get_direction_bits_raw,
 };
 
 static int gpio_emul_init(const struct device *dev)

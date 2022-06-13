@@ -228,6 +228,37 @@ static void gpio_cc32xx_port_isr(const struct device *dev)
 	gpio_fire_callbacks(&data->callbacks, dev, int_status);
 }
 
+static int gpio_cc32xx_port_get_direction_bits_raw(const struct device *port,
+						   gpio_port_pins_t *inputs,
+						   gpio_port_pins_t *outputs)
+{
+	uint32_t pin;
+	gpio_port_pins_t ip = 0;
+	gpio_port_pins_t op = 0;
+	const struct gpio_cc32xx_config *gpio_config = DEV_CFG(port);
+	unsigned long port_base = gpio_config->port_base;
+
+	if (inputs != NULL) {
+		for (pin = 0; pin < 8; ++pin) {
+			ip |= !!(MAP_GPIODirModeGet(port_base, (1 << pin)) & GPIO_DIR_MODE_IN) *
+			      BIT(pin);
+		}
+
+		*inputs = ip;
+	}
+
+	if (outputs != NULL) {
+		for (pin = 0; pin < 8; ++pin) {
+			op |= !!(MAP_GPIODirModeGet(port_base, (1 << pin)) & GPIO_DIR_MODE_OUT) *
+			      BIT(pin);
+		}
+
+		*outputs = op;
+	}
+
+	return 0;
+}
+
 static const struct gpio_driver_api api_funcs = {
 	.pin_configure = gpio_cc32xx_config,
 	.port_get_raw = gpio_cc32xx_port_get_raw,
@@ -237,6 +268,7 @@ static const struct gpio_driver_api api_funcs = {
 	.port_toggle_bits = gpio_cc32xx_port_toggle_bits,
 	.pin_interrupt_configure = gpio_cc32xx_pin_interrupt_configure,
 	.manage_callback = gpio_cc32xx_manage_callback,
+	.port_get_direction_bits_raw = gpio_cc32xx_port_get_direction_bits_raw,
 };
 
 #define GPIO_CC32XX_INIT_FUNC(n)					     \

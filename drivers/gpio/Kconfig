@@ -15,6 +15,11 @@ module = GPIO
 module-str = gpio
 source "subsys/logging/Kconfig.template.log_config"
 
+config GPIO_GET_DIRECTION_BITS
+	bool
+	help
+	  Set by drivers that support gpio_port_get_direction_bits()
+
 config GPIO_SHELL
 	bool "GPIO Shell"
 	depends on SHELL

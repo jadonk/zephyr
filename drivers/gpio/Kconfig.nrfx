@@ -6,5 +6,6 @@ config GPIO_NRFX
 	default y
 	depends on SOC_FAMILY_NRF
 	select NRFX_GPIOTE
+	select GPIO_GET_DIRECTION_BITS
 	help
 	  Enable GPIO driver for nRF line of MCUs.

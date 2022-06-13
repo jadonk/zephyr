@@ -261,6 +261,23 @@ static void gpio_mcux_port_isr(const struct device *dev)
 	gpio_fire_callbacks(&data->callbacks, dev, int_status);
 }
 
+static int gpio_mcux_port_get_direction_bits_raw(const struct device *dev,
+						 gpio_port_pins_t *inputs,
+						 gpio_port_pins_t *outputs)
+{
+	const struct gpio_mcux_config *config = dev->config;
+	GPIO_Type *gpio_base = config->gpio_base;
+
+	if (inputs != NULL) {
+		*inputs = ~gpio_base->PDDR;
+	}
+
+	if (inputs != NULL) {
+		*outputs = gpio_base->PDDR;
+	}
+
+	return 0;
+}
 
 static const struct gpio_driver_api gpio_mcux_driver_api = {
 	.pin_configure = gpio_mcux_configure,
@@ -271,6 +288,7 @@ static const struct gpio_driver_api gpio_mcux_driver_api = {
 	.port_toggle_bits = gpio_mcux_port_toggle_bits,
 	.pin_interrupt_configure = gpio_mcux_pin_interrupt_configure,
 	.manage_callback = gpio_mcux_manage_callback,
+	.port_get_direction_bits_raw = gpio_mcux_port_get_direction_bits_raw,
 };
 
 #define GPIO_MCUX_IRQ_INIT(n)						\

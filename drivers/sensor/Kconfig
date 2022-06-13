@@ -94,6 +94,8 @@ source "drivers/sensor/ti_hdc/Kconfig"
 
 source "drivers/sensor/ti_hdc20xx/Kconfig"
 
+source "drivers/sensor/hm3301/Kconfig"
+
 source "drivers/sensor/hmc5883l/Kconfig"
 
 source "drivers/sensor/hp206c/Kconfig"
@@ -195,6 +197,8 @@ source "drivers/sensor/qdec_nrfx/Kconfig"
 source "drivers/sensor/qdec_sam/Kconfig"
 
 source "drivers/sensor/sbs_gauge/Kconfig"
+
+source "drivers/sensor/sgp30/Kconfig"
 
 source "drivers/sensor/sgp40/Kconfig"
 

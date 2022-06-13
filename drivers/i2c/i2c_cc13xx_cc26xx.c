@@ -47,13 +47,18 @@ static int i2c_cc13xx_cc26xx_transmit(const struct device *dev,
 	const uint32_t base = config->base;
 	struct i2c_cc13xx_cc26xx_data *data = dev->data;
 
-	/* Sending address without data is not supported */
-	if (len == 0) {
-		return -EIO;
-	}
-
 	I2CMasterSlaveAddrSet(base, addr, false);
+	
+        /* Sending address without data*/
+        if (len == 0) {
 
+                I2CMasterControl(base, I2C_MASTER_CMD_SINGLE_SEND); 
+
+                k_sem_take(&data->complete, K_FOREVER);
+
+                return data->error == I2C_MASTER_ERR_NONE ? 0 : -EIO;
+        }
+	
 	/* The following assumes a single master. Use I2CMasterBusBusy() if
 	 * wanting to implement multiple master support.
 	 */
@@ -405,6 +410,11 @@ static int i2c_cc13xx_cc26xx_init(const struct device *dev)
 		LOG_ERR("Failed to configure pinctrl state");
 		return err;
 	}
+
+//HACK!!!
+	IOCIODrvStrengthSet(get_dev_config(dev)->sda_pin, IOC_CURRENT_8MA, IOC_STRENGTH_MAX);
+	IOCIODrvStrengthSet(get_dev_config(dev)->scl_pin, IOC_CURRENT_8MA, IOC_STRENGTH_MAX);
+//HACK!!!
 
 	cfg = i2c_map_dt_bitrate(DT_INST_PROP(0, clock_frequency));
 	err = i2c_cc13xx_cc26xx_configure(dev, cfg | I2C_MODE_MASTER);

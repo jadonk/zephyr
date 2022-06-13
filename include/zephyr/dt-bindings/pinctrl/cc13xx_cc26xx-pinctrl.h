@@ -55,6 +55,20 @@
 #define IOC_PORT_RFC_SMI_DL_OUT   0x00000035  /* RF Core SMI Data Link Out */
 #define IOC_PORT_RFC_SMI_DL_IN    0x00000036  /* RF Core SMI Data Link in */
 #define IOC_PORT_RFC_SMI_CL_OUT   0x00000037  /* RF Core SMI Command Link Out */
-#define IOC_PORT_RFC_SMI_CL_IN    0x00000038  /* RF Core SMI Command Link In */
+#define IOC_PORT_RFC_SMI_CL_IN    0x00000039  /* RF Core SMI Command Link In */
+
+/* Defines that can be used to select the drive strength of an IO */
+#define IOC_CURRENT_2MA         0x00000000  // 2mA drive strength
+#define IOC_CURRENT_4MA         0x00000400  // 4mA drive strength
+#define IOC_CURRENT_8MA         0x00000800  // 4 or 8mA drive strength
+
+#define IOC_STRENGTH_AUTO       0x00000000  // Automatic Drive Strength
+                                            // (2/4/8 mA @ VVDS)
+#define IOC_STRENGTH_MAX        0x00000300  // Maximum Drive Strength
+                                            // (2/4/8 mA @ 1.8V)
+#define IOC_STRENGTH_MED        0x00000200  // Medium Drive Strength
+                                            // (2/4/8 mA @ 2.5V)
+#define IOC_STRENGTH_MIN        0x00000100  // Minimum Drive Strength
+                                            // (2/4/8 mA @ 3.3V)
 
 #endif  /* CC13XX_CC26XX_PINCTRL_COMMON_H_ */

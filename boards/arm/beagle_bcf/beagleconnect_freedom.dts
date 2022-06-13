@@ -112,24 +112,24 @@
 
 	/* UART1 */
 	uart1_tx_default: uart1_tx_default {
-		pinmux = <22 IOC_PORT_MCU_UART0_TX>;
+		pinmux = <22 IOC_PORT_MCU_UART1_TX>;
 		bias-disable;
 	};
 	uart1_rx_default: uart1_rx_default {
-		pinmux = <21 IOC_PORT_MCU_UART0_RX>;
+		pinmux = <21 IOC_PORT_MCU_UART1_RX>;
 		bias-disable;
 		input-enable;
 	};
 
 	/* I2C0 */
 	i2c0_scl_default: i2c0_scl_default {
-		pinmux = <25 IOC_PORT_MCU_I2C_MSSCL>;
+		pinmux = <25 IOC_PORT_MCU_I2C_MSSCL | IOC_CURRENT_8MA | IOC_STRENGTH_MAX>;
 		bias-pull-up;
 		drive-open-drain;
 		input-enable;
 	};
 	i2c0_sda_default: i2c0_sda_default {
-		pinmux = <26 IOC_PORT_MCU_I2C_MSSDA>;
+		pinmux = <26 IOC_PORT_MCU_I2C_MSSDA | IOC_CURRENT_8MA | IOC_STRENGTH_MAX>;
 		bias-pull-up;
 		drive-open-drain;
 		input-enable;

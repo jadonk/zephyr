@@ -55,7 +55,7 @@
 #define IOC_PORT_RFC_SMI_DL_OUT   0x00000035  /* RF Core SMI Data Link Out */
 #define IOC_PORT_RFC_SMI_DL_IN    0x00000036  /* RF Core SMI Data Link in */
 #define IOC_PORT_RFC_SMI_CL_OUT   0x00000037  /* RF Core SMI Command Link Out */
-#define IOC_PORT_RFC_SMI_CL_IN    0x00000039  /* RF Core SMI Command Link In */
+#define IOC_PORT_RFC_SMI_CL_IN    0x00000038  /* RF Core SMI Command Link In */
 
 /* Defines that can be used to select the drive strength of an IO */
 #define IOC_CURRENT_2MA         0x00000000  // 2mA drive strength

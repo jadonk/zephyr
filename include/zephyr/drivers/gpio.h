@@ -563,6 +563,10 @@ __subsystem struct gpio_driver_api {
 			       struct gpio_callback *cb,
 			       bool set);
 	uint32_t (*get_pending_int)(const struct device *dev);
+	int (*port_get_direction_bits_raw)(const struct device *port,
+                                                          gpio_port_pins_t *inputs,
+                                                          gpio_port_pins_t *outputs);
+
 };
 
 /**

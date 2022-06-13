@@ -8,14 +8,7 @@
 /dts-v1/;
 
 #include <ti/cc1352r.dtsi>
-/*
- * Define some constants from driverlib/ioc.h in TI HAL,
- * since we don't have a way to include the file directly.
- */
-#define IOC_PORT_MCU_UART0_TX 0x00000010
-#define IOC_PORT_MCU_UART0_RX 0x0000000F
-#define IOC_PORT_MCU_UART1_TX 0x00000014
-#define IOC_PORT_MCU_UART1_RX 0x00000013
+#include <zephyr/dt-bindings/pinctrl/cc13xx_cc26xx-pinctrl.h>
 
 #define BTN_GPIO_FLAGS (GPIO_ACTIVE_LOW | GPIO_PULL_UP)
 
@@ -105,6 +98,79 @@
 	};
 };
 
+&pinctrl {
+	/* UART0 */
+	uart0_tx_default: uart0_tx_default {
+		pinmux = <13 IOC_PORT_MCU_UART0_TX>;
+		bias-disable;
+	};
+	uart0_rx_default: uart0_rx_default {
+		pinmux = <12 IOC_PORT_MCU_UART0_RX>;
+		bias-disable;
+		input-enable;
+	};
+
+	/* UART1 */
+	uart1_tx_default: uart1_tx_default {
+		pinmux = <22 IOC_PORT_MCU_UART0_TX>;
+		bias-disable;
+	};
+	uart1_rx_default: uart1_rx_default {
+		pinmux = <21 IOC_PORT_MCU_UART0_RX>;
+		bias-disable;
+		input-enable;
+	};
+
+	/* I2C0 */
+	i2c0_scl_default: i2c0_scl_default {
+		pinmux = <25 IOC_PORT_MCU_I2C_MSSCL>;
+		bias-pull-up;
+		drive-open-drain;
+		input-enable;
+	};
+	i2c0_sda_default: i2c0_sda_default {
+		pinmux = <26 IOC_PORT_MCU_I2C_MSSDA>;
+		bias-pull-up;
+		drive-open-drain;
+		input-enable;
+	};
+	i2c0_scl_sleep: i2c0_scl_sleep {
+		pinmux = <25 IOC_PORT_GPIO>;
+		bias-disable;
+	};
+	i2c0_sda_sleep: i2c0_sda_sleep {
+		pinmux = <26 IOC_PORT_GPIO>;
+		bias-disable;
+	};
+
+	/* SPI0 */
+	spi0_sck_default: spi0_sck_default {
+		pinmux = <10 IOC_PORT_MCU_SSI0_CLK>;
+		bias-disable;
+	};
+	spi0_mosi_default: spi0_mosi_default {
+		pinmux = <9 IOC_PORT_MCU_SSI0_TX>;
+		bias-disable;
+	};
+	spi0_miso_default: spi0_miso_default {
+		pinmux = <11 IOC_PORT_MCU_SSI0_RX>;
+		bias-disable;
+		input-enable;
+	};
+	spi0_cs0_default: spi0_cs0_default {
+		pinmux = <8 IOC_PORT_GPIO>;
+		bias-disable;
+	};
+	spi0_cs1_default: spi0_cs1_default {
+		pinmux = <28 IOC_PORT_GPIO>;
+		bias-disable;
+	};
+	spi0_cs2_default: spi0_cs2_default {
+		pinmux = <27 IOC_PORT_GPIO>;
+		bias-disable;
+	};
+};
+
 &cpu0 {
 	clock-frequency = <48000000>;
 	cpu-power-states = <&idle &standby>;
@@ -123,8 +189,8 @@
 &uart0 {
     status = "okay";
     current-speed = <115200>;
-    tx-pin = <13 IOC_PORT_MCU_UART0_TX>;
-    rx-pin = <12 IOC_PORT_MCU_UART0_RX>;
+	pinctrl-0 = <&uart0_rx_default &uart0_tx_default>;
+	pinctrl-names = "default";
 };
 
 /* On C5, side with battery connector (with CC1352 and not MSP430) */
@@ -132,15 +198,16 @@
 &uart1 {
     status = "okay";
     current-speed = <115200>;
-    tx-pin = <22 IOC_PORT_MCU_UART1_TX>;
-    rx-pin = <21 IOC_PORT_MCU_UART1_RX>;
+	pinctrl-0 = <&uart1_rx_default &uart1_tx_default>;
+	pinctrl-names = "default";
 };
 
 &i2c0 {
     status = "okay";
     clock-frequency = <I2C_BITRATE_FAST>;
-    scl-pin = <25>;
-    sda-pin = <26>;
+	pinctrl-0 = <&i2c0_scl_default &i2c0_sda_default>;
+	pinctrl-1 = <&i2c0_scl_sleep &i2c0_sda_sleep>;
+	pinctrl-names = "default", "sleep";
 
     mcu: msp430-usbbridge@4 {
         compatible = "beagle,usbbridge";
@@ -151,9 +218,9 @@
 
 &spi0 {
     status = "okay";
-    sck-pin = <10>;
-    mosi-pin = <9>;
-    miso-pin = <11>;
+	pinctrl-0 = <&spi0_sck_default &spi0_mosi_default
+		&spi0_miso_default &spi0_cs0_default
+		&spi0_cs1_default &spi0_cs2_default>;
     cs-gpios = <&gpio0 8 GPIO_ACTIVE_LOW>,
         <&gpio0 28 GPIO_ACTIVE_LOW>,  // mikroBUS port 1
         <&gpio0 27 GPIO_ACTIVE_LOW>;  // mikroBUS port 2

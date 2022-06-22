@@ -598,21 +598,6 @@ int pthread_attr_setschedpolicy(pthread_attr_t *attr, int policy)
 }
 
 /**
- * @brief Set stack size attribute in thread attributes object.
- *
- * See IEEE 1003.1
- */
-int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize)
-{
-	if ((attr == NULL) || (attr->initialized == 0U)) {
-		return EINVAL;
-	}
-
-	attr->stacksize = stacksize;
-	return 0;
-}
-
-/**
  * @brief Get stack size attribute in thread attributes object.
  *
  * See IEEE 1003.1

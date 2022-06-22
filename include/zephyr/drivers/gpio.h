@@ -756,6 +756,96 @@ static inline int gpio_pin_configure_dt(const struct gpio_dt_spec *spec,
 				  spec->dt_flags | extra_flags);
 }
 
+/*
+ * @brief Get direction of all pins in a port.
+ *
+ * If @p inputs or @p outputs is NULL, then this function does not get the
+ * respective input or output direction information.
+ *
+ * @param port Pointer to the device structure for the driver instance.
+ * @param inputs Pointer to a variable where input directions will be stored.
+ * @param outputs Pointer to a variable where output directions will be stored.
+ *
+ * @retval 0 If successful.
+ * @retval -EIO I/O error when accessing an external GPIO chip.
+ * @retval -EWOULDBLOCK if operation would block.
+ */
+__syscall int gpio_port_get_direction_bits(const struct device *port, gpio_port_pins_t *inputs,
+					   gpio_port_pins_t *outputs);
+
+#if defined(CONFIG_GPIO_GET_DIRECTION_BITS)
+static inline int z_impl_gpio_port_get_direction_bits(const struct device *port,
+						      gpio_port_pins_t *inputs,
+						      gpio_port_pins_t *outputs)
+{
+	const struct gpio_driver_api *api = (const struct gpio_driver_api *)port->api;
+
+	return api->port_get_direction_bits_raw(port, inputs, outputs);
+}
+#endif
+
+/**
+ * @brief Check if @p pin is configured for input
+ *
+ * This function returns true if the given pin is configured as
+ * @ref GPIO_INPUT. Otherwise, this function returns false.
+ *
+ * @param port Pointer to device structure for the driver instance.
+ * @param pin Pin number to query the direction of
+ *
+ * @retval 1 if @p pin is configured as @ref GPIO_INPUT.
+ * @retval 0 if @p pin is not configured as @ref GPIO_INPUT.
+ * @retval -ENOTSUP if the underlying driver does not support this call.
+ * @return another negative errno code on failure.
+ */
+static inline int gpio_pin_is_input(const struct device *port, gpio_pin_t pin)
+{
+	int rv;
+	gpio_port_pins_t pins;
+	const struct gpio_driver_config *cfg = (const struct gpio_driver_config *)port->config;
+
+	(void)cfg;
+	__ASSERT((cfg->port_pin_mask & (gpio_port_pins_t)BIT(pin)) != 0U, "Unsupported pin");
+
+	rv = gpio_port_get_direction_bits(port, &pins, NULL);
+	if (rv < 0) {
+		return rv;
+	}
+
+	return !!((gpio_port_pins_t)BIT(pin) & pins);
+}
+
+/**
+ * @brief Check if @p pin is configured for output
+ *
+ * This function returns true if the given pin is configured as
+ * @ref GPIO_OUTPUT. Otherwise, this function returns false.
+ *
+ * @param port Pointer to device structure for the driver instance.
+ * @param pin Pin number to query the direction of
+ *
+ * @retval 1 if @p pin is configured as @ref GPIO_OUTPUT.
+ * @retval 0 if @p pin is not configured as @ref GPIO_OUTPUT.
+ * @retval -ENOTSUP if the underlying driver does not support this call.
+ * @return another negative errno code on failure.
+ */
+static inline int gpio_pin_is_output(const struct device *port, gpio_pin_t pin)
+{
+	int rv;
+	gpio_port_pins_t pins;
+	const struct gpio_driver_config *cfg = (const struct gpio_driver_config *)port->config;
+
+	(void)cfg;
+	__ASSERT((cfg->port_pin_mask & (gpio_port_pins_t)BIT(pin)) != 0U, "Unsupported pin");
+
+	rv = gpio_port_get_direction_bits(port, NULL, &pins);
+	if (rv < 0) {
+		return rv;
+	}
+
+	return !!((gpio_port_pins_t)BIT(pin) & pins);
+}
+
 /**
  * @brief Get physical level of all input pins in a port.
  *

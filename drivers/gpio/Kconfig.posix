@@ -1,0 +1,9 @@
+# Posix GPIO configuration options
+
+# Copyright (c) 2022 BeagleBoard.org Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig GPIO_POSIX
+	bool "Posix GPIO"
+	help
+	  Enable driver for Native Posix

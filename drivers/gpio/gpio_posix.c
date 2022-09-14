@@ -19,7 +19,7 @@
 
 #define LOG_LEVEL CONFIG_GPIO_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(gpio_emul);
+LOG_MODULE_REGISTER(gpio_posix);
 
 #define GPIO_EMUL_INT_BITMASK						\
 	(GPIO_INT_DISABLE | GPIO_INT_ENABLE | GPIO_INT_LEVELS_LOGICAL |	\
@@ -291,6 +291,8 @@ int gpio_emul_input_set_masked_pend(const struct device *port, gpio_port_pins_t 
 	const struct gpio_emul_config *config =
 		(const struct gpio_emul_config *)port->config;
 
+	posix_print_trace("gpio_emul_input_set_masked_pend(mask=%0x, values=%0x)\n", mask, values);
+
 	if (mask == 0) {
 		return 0;
 	}
@@ -315,8 +317,6 @@ int gpio_emul_input_set_masked_pend(const struct device *port, gpio_port_pins_t 
 	drv_data->input_vals &= ~mask;
 	drv_data->input_vals |= values;
 	values = drv_data->input_vals;
-
-	posix_print_trace("values = %0x\n", values);
 
 	if (pend) {
 		gpio_emul_pend_interrupt(port, mask, prev_values, values);
@@ -396,6 +396,8 @@ static int gpio_emul_pin_configure(const struct device *port, gpio_pin_t pin,
 		(struct gpio_emul_data *)port->data;
 	const struct gpio_emul_config *config =
 		(const struct gpio_emul_config *)port->config;
+
+	posix_print_trace("gpio_emul_pin_configure\n");
 
 	if (flags & GPIO_OPEN_DRAIN) {
 		return -ENOTSUP;
@@ -685,13 +687,15 @@ static const struct gpio_driver_api gpio_emul_driver = {
 	.pin_interrupt_configure = gpio_emul_pin_interrupt_configure,
 	.manage_callback = gpio_emul_manage_callback,
 	.get_pending_int = gpio_emul_get_pending_int,
-	.port_get_direction_bits_raw = gpio_emul_port_get_direction_bits_raw,
+	//.port_get_direction_bits_raw = gpio_emul_port_get_direction_bits_raw,
 };
 
 static int gpio_emul_init(const struct device *dev)
 {
 	struct gpio_emul_data *drv_data =
 		(struct gpio_emul_data *)dev->data;
+
+	posix_print_trace("gpio_emul_init\n");
 
 	sys_slist_init(&drv_data->callbacks);
 	return k_mutex_init(&drv_data->mu);

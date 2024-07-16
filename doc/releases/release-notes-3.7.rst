@@ -379,6 +379,9 @@ Boards & SoC Support
   * nRF54H20 PDK (pre-release) converted to :ref:`nrf54h20dk_nrf54h20`
   * PPR core target in :ref:`nrf54h20dk_nrf54h20` runs from RAM by default. A
     new ``xip`` variant has been introduced which runs from MRAM (XIP).
+  * Refactored :ref:`beagleconnect_freedom` external antenna switch handling.
+  * Fix zephyr:code-sample:`pwm-blinky` code sample to demonstrate PWM support for
+    :ref:`beagleconnect_freedom`.
 
 * Added support for these following shields:
 
